@@ -80,6 +80,11 @@ class SolveParams:
 
     allow_overtime: bool = True
     overtime_minutes: int = 120
+    #: Margin preferred before a hard deadline. Priced at ``lateness_per_minute``
+    #: rather than enforced: eating into safety margin is the same economic idea as
+    #: running late, just earlier and cheaper. The invariant checker still accepts a
+    #: plan that uses the full window, so a repair under pressure may spend it.
+    hard_window_buffer_minutes: int = 0
 
     #: Traffic bucket used to build the (pessimistic) matrix. ``None`` means
     #: "worst bucket the shift can span", which is the safe default.
@@ -115,6 +120,7 @@ class SolveParams:
             revenue_weight=business.penalties.revenue_weight.value,
             allow_overtime=allow_overtime,
             overtime_minutes=int(business.labor.overtime_max_minutes.value),
+            hard_window_buffer_minutes=int(business.scheduling.hard_window_buffer_minutes.value),
             travel_bucket=travel_bucket,
             max_solve_seconds=max_solve_seconds
             if max_solve_seconds is not None
@@ -685,8 +691,18 @@ def plan_day(
 
                 model.add(start[job.id, k] >= max(win_start, 0)).only_enforce_if(selector)
                 if window.hardness is WindowHardness.HARD:
+                    # The deadline itself is hard. The buffer is not: it is priced as
+                    # encroachment so the planner prefers margin but never refuses
+                    # work for want of it. Clamping it as a constraint looked safe and
+                    # was not - a crew cannot arrive before its shift starts, so a
+                    # generous buffer silently made feasible jobs unschedulable.
                     model.add(start[job.id, k] + duration <= win_end).only_enforce_if(selector)
-                    model.add(late[job.id, k] == 0).only_enforce_if(selector)
+                    model.add(
+                        late[job.id, k]
+                        >= start[job.id, k]
+                        + duration
+                        - (win_end - params.hard_window_buffer_minutes)
+                    ).only_enforce_if(selector)
                 else:
                     model.add(
                         late[job.id, k] >= start[job.id, k] + duration - win_end
@@ -726,6 +742,13 @@ def plan_day(
         person_minutes = model.new_int_var(0, 2 * MINUTES_PER_DAY, f"person_travel_{k}")
         model.add_multiplication_equality(person_minutes, [crew_travel, headcount_var])
         terms.append(person_minutes * labor_per_min)
+
+    # Epsilon tie-break: one cent per van index, so equal-cost plans always pick the
+    # same vans instead of reshuffling whenever an unrelated cost term shifts. Real
+    # cost differences are dollars, so this can never outvote an actual decision -
+    # but it keeps plans stable, which is what a dispatcher notices.
+    for k in range(num_crews):
+        terms.append(crew_active[k] * k)
 
     for job in jobs:
         penalty = _cents(_unserved_penalty(job, params))

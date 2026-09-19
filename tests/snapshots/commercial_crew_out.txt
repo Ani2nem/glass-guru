@@ -1,7 +1,7 @@
 SCENARIO  commercial_crew_out
 Both commercial-certified workers are out. The storefront job becomes unstaffable, and the dispatcher should be told that precisely rather than being told the day was full.
 
-!  19 of 19 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (4146f81db2cd2e56)
 ------------------------------------------------------------------------------
@@ -23,7 +23,7 @@ PLAN 2026-09-21  (4146f81db2cd2e56)
       j-401  Rodriguez Storefront       no_certified_worker
                    no available worker holds ['commercial_storefront']
 
-  not this day's work
+  not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
       j-408  Brennan Residence          window_on_another_day
@@ -38,6 +38,6 @@ PLAN 2026-09-21  (4146f81db2cd2e56)
 ------------------------------------------------------------------------------
   cost  travel $96.60   vehicle $26.37   overtime $0.00   late $0.00
         unserved $2,650.00   TOTAL $2,772.97
-  solver objective $2,791.38  (+$18.41 vs actual)   status OPTIMAL   N.NNNs
+  solver objective $2,791.43  (+$18.46 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

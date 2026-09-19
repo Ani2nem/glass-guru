@@ -1,19 +1,19 @@
 SCENARIO  traffic_spike
 A corridor-wide slowdown makes every leg 80% longer all morning.
 
-!  19 of 19 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (6ce94f36fca6a790)
+PLAN 2026-09-21  (fd1dff4500d6ebfa)
 ------------------------------------------------------------------------------
 
-  crew-van-1   Ken   [van-1]
+  crew-van-1   Marcus + Priya   [van-1]
+      06:04-08:34  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
+                   travel 13min / 1.6mi  (26 person-min)   idle 0min   on-site 92%
+
+  crew-van-2   Ken   [van-2]
       09:00-11:00  Chen Residence             residential_window_replacement  29min drive  
       11:20-12:05  Nakamura Screens           screen_repair                   20min drive  
                    travel 65min / 17.1mi  (65 person-min)   idle 0min   on-site 72%
-
-  crew-van-2   Marcus + Priya   [van-2]
-      06:04-08:34  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
-                   travel 13min / 1.6mi  (26 person-min)   idle 0min   on-site 92%
 
   crew-van-3   Alex   [van-3]
       10:00-12:30  Patel Shower Door          shower_door_install             25min drive  
@@ -23,7 +23,7 @@ PLAN 2026-09-21  (6ce94f36fca6a790)
       08:38-10:08  Okonkwo Auto Glass         auto_glass                      38min drive  
                    travel 67min / 14.8mi  (67 person-min)   idle 0min   on-site 57%
 
-  not this day's work
+  not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
       j-408  Brennan Residence          window_on_another_day
@@ -38,6 +38,6 @@ PLAN 2026-09-21  (6ce94f36fca6a790)
 ------------------------------------------------------------------------------
   cost  travel $178.48   vehicle $27.39   overtime $0.00   late $0.00
         unserved $0.00   TOTAL $205.87
-  solver objective $261.08  (+$55.21 vs actual)   status OPTIMAL   N.NNNs
+  solver objective $261.14  (+$55.27 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

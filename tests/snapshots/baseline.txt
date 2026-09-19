@@ -1,19 +1,19 @@
 SCENARIO  baseline
 An ordinary Monday with nothing going wrong.
 
-!  19 of 19 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (1f1f8dfb9af7a6dd)
+PLAN 2026-09-21  (d5ef9289316cc664)
 ------------------------------------------------------------------------------
 
-  crew-van-1   Ken   [van-1]
-      09:00-11:00  Chen Residence             residential_window_replacement  16min drive  
-      11:11-11:56  Nakamura Screens           screen_repair                   11min drive  
-                   travel 43min / 17.1mi  (43 person-min)   idle 0min   on-site 79%
-
-  crew-van-2   Marcus + Priya   [van-2]
+  crew-van-1   Marcus + Priya   [van-1]
       06:04-08:34  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
                    travel 9min / 1.6mi  (18 person-min)   idle 0min   on-site 94%
+
+  crew-van-2   Ken   [van-2]
+      08:21-09:06  Nakamura Screens           screen_repair                   21min drive  
+      09:20-11:20  Chen Residence             residential_window_replacement  14min drive  
+                   travel 47min / 17.1mi  (47 person-min)   idle 0min   on-site 78%
 
   crew-van-3   Alex   [van-3]
       10:00-12:30  Patel Shower Door          shower_door_install             14min drive  
@@ -23,7 +23,7 @@ PLAN 2026-09-21  (1f1f8dfb9af7a6dd)
       08:21-09:51  Okonkwo Auto Glass         auto_glass                      21min drive  
                    travel 37min / 14.8mi  (37 person-min)   idle 0min   on-site 71%
 
-  not this day's work
+  not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
       j-408  Brennan Residence          window_on_another_day
@@ -36,8 +36,8 @@ PLAN 2026-09-21  (1f1f8dfb9af7a6dd)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $113.16   vehicle $27.39   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $140.55
-  solver objective $160.80  (+$20.25 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $116.84   vehicle $27.39   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $144.23
+  solver objective $160.86  (+$16.63 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

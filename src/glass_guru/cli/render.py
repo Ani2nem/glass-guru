@@ -14,15 +14,16 @@ but obviously wrong" becomes obvious.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, tzinfo
+from datetime import date, datetime, tzinfo
 
 from glass_guru.config import BusinessParams, Provenance, calibration_banner
 from glass_guru.domain.enums import NOT_A_FAILURE
 from glass_guru.domain.invariants import Violation
-from glass_guru.domain.models import CostBreakdown, PlanVersion, UnservedJob
+from glass_guru.domain.models import CostBreakdown, CrewRoute, PlanVersion, UnservedJob
 from glass_guru.domain.state import WorldState
 from glass_guru.scheduler.costing import RouteCost
 from glass_guru.scheduler.day_planner import DayPlanResult
+from glass_guru.scheduler.horizon import HorizonResult
 
 RULE = "-" * 78
 
@@ -40,68 +41,56 @@ def banner(params: BusinessParams) -> list[str]:
     return [] if warning is None else [f"!  {warning}", ""]
 
 
-def render_board(
-    result: DayPlanResult,
+def _render_route(
+    route: CrewRoute,
     world: WorldState,
-    plan: PlanVersion,
-    business: BusinessParams,
     tz: tzinfo,
-    cost: CostBreakdown,
-    route_costs: Sequence[RouteCost],
-    violations: Sequence[Violation] = (),
-) -> str:
-    """The crew-by-crew day board."""
-    lines: list[str] = []
-    lines += banner(business)
-    lines.append(f"PLAN {plan.horizon_start.isoformat()}  ({plan.content_hash})")
-    lines.append(RULE)
+    rc: RouteCost | None,
+    indent: str = "  ",
+) -> list[str]:
+    """One crew's day. The columns are chosen to expose what a validity checker
+    cannot judge: crew size against need, waiting, and on-site share."""
+    names = " + ".join(world.workers[w].name if w in world.workers else w for w in route.worker_ids)
+    lines = [f"{indent}{route.crew_id}   {names}   [{route.van_id}]"]
 
-    if not result.routes:
-        lines.append("  no routes - nothing could be scheduled")
+    previous_departure: datetime | None = None
+    for stop in route.stops:
+        job = world.jobs.get(stop.job_id)
+        if job is None:
+            lines.append(f"{indent}    ?? unknown job {stop.job_id}")
+            continue
 
-    by_crew = {rc.crew_id: rc for rc in route_costs}
-    for route in result.routes:
-        names = " + ".join(
-            world.workers[w].name if w in world.workers else w for w in route.worker_ids
+        # Waiting gets its own line: arriving early and sitting outside a closed
+        # door is a real cost that the timestamps alone would hide.
+        if previous_departure is not None:
+            ready = previous_departure.timestamp() + stop.travel_minutes_from_prev * 60
+            waited = int((stop.arrival.timestamp() - ready) // 60)
+            if waited > 0:
+                lines.append(f"{indent}    {'':11}  ..waiting {waited} min")
+
+        crew_note = f"needs {job.crew_size}" if job.crew_size > 1 else ""
+        lines.append(
+            f"{indent}    {_hhmm(stop.arrival, tz)}-{_hhmm(stop.departure, tz)}  "
+            f"{job.customer_name:<26} {job.service_type.value:<30} "
+            f"{stop.travel_minutes_from_prev:>3}min drive  {crew_note}"
         )
-        rc = by_crew.get(route.crew_id)
-        lines.append("")
-        lines.append(f"  {route.crew_id}   {names}   [{route.van_id}]")
+        previous_departure = stop.departure
 
-        previous_departure: datetime | None = None
-        for stop in route.stops:
-            job = world.jobs.get(stop.job_id)
-            if job is None:
-                lines.append(f"      ?? unknown job {stop.job_id}")
-                continue
+    if rc is not None:
+        lines.append(
+            f"{indent}    {'':11}  travel {rc.travel_minutes}min / {rc.travel_miles:.1f}mi"
+            f"  ({rc.person_travel_minutes} person-min)"
+            f"   idle {rc.idle_minutes}min"
+            f"   on-site {rc.utilization:.0%}"
+            + (f"   OT {rc.overtime_minutes}min" if rc.overtime_minutes else "")
+        )
+    return lines
 
-            # Waiting shows up as its own line: arriving early and sitting outside a
-            # closed door is a real cost the timestamps alone would hide.
-            if previous_departure is not None:
-                ready = previous_departure.timestamp() + stop.travel_minutes_from_prev * 60
-                waited = int((stop.arrival.timestamp() - ready) // 60)
-                if waited > 0:
-                    lines.append(f"      {'':11}  ..waiting {waited} min")
 
-            crew_note = f"needs {job.crew_size}" if job.crew_size > 1 else ""
-            lines.append(
-                f"      {_hhmm(stop.arrival, tz)}-{_hhmm(stop.departure, tz)}  "
-                f"{job.customer_name:<26} {job.service_type.value:<30} "
-                f"{stop.travel_minutes_from_prev:>3}min drive  {crew_note}"
-            )
-            previous_departure = stop.departure
-
-        if rc is not None:
-            lines.append(
-                f"      {'':11}  travel {rc.travel_minutes}min / {rc.travel_miles:.1f}mi"
-                f"  ({rc.person_travel_minutes} person-min)"
-                f"   idle {rc.idle_minutes}min"
-                f"   on-site {rc.utilization:.0%}"
-                + (f"   OT {rc.overtime_minutes}min" if rc.overtime_minutes else "")
-            )
-
-    missed = [u for u in result.unserved if u.reason not in NOT_A_FAILURE]
-    deferred = [u for u in result.unserved if u.reason in NOT_A_FAILURE]
+def _render_unserved(unserved: Sequence[UnservedJob], world: WorldState) -> list[str]:
+    missed = [u for u in unserved if u.reason not in NOT_A_FAILURE]
+    deferred = [u for u in unserved if u.reason in NOT_A_FAILURE]
+    lines: list[str] = []
 
     def _list(title: str, items: Sequence[UnservedJob]) -> None:
         if not items:
@@ -114,36 +103,133 @@ def render_board(
             lines.append(f"      {item.job_id}  {label:<26} {item.reason.value}")
             lines.append(f"      {'':11}  {item.detail}")
 
-    # Split deliberately: "could not fit" is a problem to act on, "not today's work"
+    # Split deliberately: "could not fit" is a problem to act on, "not in scope"
     # is routine. Showing them together buries the first in the second.
     _list("UNSERVED - could not fit", missed)
-    _list("not this day's work", deferred)
+    _list("not in scope for this plan", deferred)
+    return lines
 
-    lines.append("")
-    lines.append(RULE)
-    lines.append(
+
+def _render_cost(
+    cost: CostBreakdown,
+    objective: float,
+    status: str,
+    seconds: float,
+) -> list[str]:
+    drift = objective - cost.total
+    return [
+        "",
+        RULE,
         f"  cost  travel {_money(cost.travel_labor)}"
         f"   vehicle {_money(cost.vehicle)}"
         f"   overtime {_money(cost.overtime)}"
-        f"   late {_money(cost.lateness_penalty)}"
-    )
-    lines.append(f"        unserved {_money(cost.unserved_penalty)}   TOTAL {_money(cost.total)}")
-    # Solver objective vs. materialized cost. Divergence means the pessimistic matrix
-    # is drifting from what the routes actually do.
-    drift = result.objective_cost - cost.total
-    lines.append(
-        f"  solver objective {_money(result.objective_cost)}  "
+        f"   late {_money(cost.lateness_penalty)}",
+        f"        unserved {_money(cost.unserved_penalty)}   TOTAL {_money(cost.total)}",
+        # Solver objective vs. materialized cost. Divergence means the pessimistic
+        # matrix is drifting from what the routes actually do.
+        f"  solver objective {_money(objective)}  "
         f"({'+' if drift >= 0 else ''}{_money(drift)} vs actual)   "
-        f"status {result.status}   {result.metrics.get('solve_seconds', 0):.3f}s"
-    )
+        f"status {status}   {seconds:.3f}s",
+    ]
 
-    lines.append("")
-    if violations:
-        lines.append(f"  INVARIANTS: {len(violations)} VIOLATION(S) - plan is not committable")
-        for violation in violations:
-            lines.append(f"      {violation}")
-    else:
-        lines.append("  invariants: 0 violations")
+
+def _render_violations(violations: Sequence[Violation]) -> list[str]:
+    if not violations:
+        return ["", "  invariants: 0 violations"]
+    out = ["", f"  INVARIANTS: {len(violations)} VIOLATION(S) - plan is not committable"]
+    out += [f"      {v}" for v in violations]
+    return out
+
+
+def render_board(
+    result: DayPlanResult,
+    world: WorldState,
+    plan: PlanVersion,
+    business: BusinessParams,
+    tz: tzinfo,
+    cost: CostBreakdown,
+    route_costs: Sequence[RouteCost],
+    violations: Sequence[Violation] = (),
+) -> str:
+    """The crew-by-crew board for a single day."""
+    lines: list[str] = []
+    lines += banner(business)
+    lines.append(f"PLAN {plan.horizon_start.isoformat()}  ({plan.content_hash})")
+    lines.append(RULE)
+
+    if not result.routes:
+        lines.append("  no routes - nothing could be scheduled")
+
+    for route, rc in zip(result.routes, route_costs, strict=False):
+        lines.append("")
+        lines += _render_route(route, world, tz, rc)
+
+    lines += _render_unserved(result.unserved, world)
+    lines += _render_cost(
+        cost, result.objective_cost, result.status, result.metrics.get("solve_seconds", 0.0)
+    )
+    lines += _render_violations(violations)
+    return "\n".join(lines)
+
+
+def render_horizon(
+    result: HorizonResult,
+    world: WorldState,
+    plan: PlanVersion,
+    business: BusinessParams,
+    tz: tzinfo,
+    cost: CostBreakdown,
+    route_costs: Sequence[RouteCost],
+    violations: Sequence[Violation] = (),
+) -> str:
+    """The rolling multi-day board, grouped by day.
+
+    Day totals are shown because the useful question across a horizon is usually
+    "is Tuesday overloaded while Thursday sits empty", which per-crew lines alone
+    do not answer.
+    """
+    lines: list[str] = []
+    lines += banner(business)
+    lines.append(
+        f"HORIZON {plan.horizon_start.isoformat()}..{plan.horizon_end.isoformat()}"
+        f"  ({plan.content_hash})"
+    )
+    lines.append(RULE)
+
+    by_route = dict(zip([id(r) for r in result.routes], route_costs, strict=False))
+    by_date: dict[date, list[CrewRoute]] = {}
+    for route in result.routes:
+        by_date.setdefault(route.date, []).append(route)
+
+    for on_date in sorted(by_date):
+        routes = by_date[on_date]
+        jobs = sum(len(r.stops) for r in routes)
+        costs = [by_route.get(id(r)) for r in routes]
+        travel = sum(c.travel_minutes for c in costs if c)
+        lines.append("")
+        lines.append(
+            f"  {on_date:%a %d %b}   {len(routes)} crew   {jobs} job(s)   {travel}min driving"
+        )
+        for route in routes:
+            lines.append("")
+            lines += _render_route(route, world, tz, by_route.get(id(route)), indent="    ")
+
+    if not result.routes:
+        lines.append("  no routes - nothing could be scheduled")
+
+    lines += _render_unserved(result.unserved, world)
+    objective = sum(r.objective_cost for r in result.day_results.values())
+    status = (
+        "OPTIMAL" if all(r.status == "OPTIMAL" for r in result.day_results.values()) else "MIXED"
+    )
+    lines += _render_cost(cost, objective, status, result.metrics.get("solve_seconds", 0.0))
+    lines.append(
+        f"  {int(result.metrics.get('scheduled', 0))}"
+        f"/{int(result.metrics.get('candidates', 0))} jobs placed"
+        f" across {int(result.metrics.get('days_used', 0))} day(s)"
+        f"   {result.rounds} assignment round(s)"
+    )
+    lines += _render_violations(violations)
     return "\n".join(lines)
 
 

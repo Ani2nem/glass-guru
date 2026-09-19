@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -23,6 +24,7 @@ from glass_guru.fixtures import scenarios
 from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at
 from glass_guru.scheduler.costing import cost_plan
 from glass_guru.scheduler.day_planner import DayPlanResult, SolveParams, plan_day
+from glass_guru.scheduler.horizon import HorizonParams, HorizonResult, plan_horizon
 from glass_guru.scheduler.travel.base import OverrideAdjustedProvider
 from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
 
@@ -73,11 +75,55 @@ def _solve(
     return result, plan, params
 
 
+def _render_horizon(
+    world: WorldState,
+    business: BusinessParams,
+    start: date,
+    *,
+    days: int | None = None,
+    allow_overtime: bool = True,
+) -> tuple[str, int]:
+    """Plan a rolling horizon and render it. Non-zero exit means infeasible."""
+    tz = ZoneInfo(business.meta.timezone)
+    travel = _travel_for(world, business)
+    params = SolveParams.from_business(business, tz, allow_overtime=allow_overtime)
+    horizon_params = HorizonParams.from_business(business)
+    if days is not None:
+        horizon_params = replace(horizon_params, days=days)
+
+    result: HorizonResult = plan_horizon(
+        world=world, travel=travel, start=start, params=params, horizon_params=horizon_params
+    )
+    end = date.fromordinal(start.toordinal() + horizon_params.days - 1)
+    plan = PlanVersion(
+        id=f"horizon-{start.isoformat()}",
+        created_at=world.as_of,
+        horizon_start=start,
+        horizon_end=end,
+        routes=result.routes,
+        unserved=result.unserved,
+    )
+    violations = validate_plan(
+        plan, world, travel, ValidationConfig(business_tz=tz, allow_overtime=allow_overtime)
+    )
+    cost, route_costs = cost_plan(plan, world, business, tz, result.unserved)
+    board = render.render_horizon(result, world, plan, business, tz, cost, route_costs, violations)
+    return board, (1 if violations else 0)
+
+
 def cmd_solve(args: argparse.Namespace) -> int:
     business = BusinessParams.load(args.config)
     tz = ZoneInfo(business.meta.timezone)
     world = _load_world()
     on_date = args.date or WEEK_START
+
+    if args.horizon:
+        days = None if args.horizon is True else int(args.horizon)
+        board, code = _render_horizon(
+            world, business, on_date, days=days, allow_overtime=not args.no_overtime
+        )
+        print(board)
+        return code
 
     result, plan, _ = _solve(world, business, on_date, allow_overtime=not args.no_overtime)
     travel = _travel_for(world, business)
@@ -216,6 +262,14 @@ def build_parser() -> argparse.ArgumentParser:
     solve = sub.add_parser("solve", help="solve a day and render the crew board")
     solve.add_argument("--date", type=_parse_date, default=None, help="YYYY-MM-DD")
     solve.add_argument("--no-overtime", action="store_true", help="forbid overtime")
+    solve.add_argument(
+        "--horizon",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="DAYS",
+        help="plan a rolling horizon instead of one day (default: config value)",
+    )
     solve.set_defaults(func=cmd_solve)
 
     show = sub.add_parser("show", help="show the world: workers, vans, jobs")

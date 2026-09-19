@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from glass_guru.cli.main import _render_solve
+from glass_guru.cli.main import _render_horizon, _render_solve
 from glass_guru.config import BusinessParams
 from glass_guru.fixtures import scenarios
 
@@ -39,6 +39,28 @@ def render(name: str) -> str:
     board, _ = _render_solve(scenario.world(), business, scenario.solve_date)
     header = f"SCENARIO  {scenario.name}\n{' '.join(scenario.description.split())}\n\n"
     return normalize(header + board) + "\n"
+
+
+def render_horizon_board() -> str:
+    """The rolling five-day board, which exercises day assignment as well as routing."""
+    scenario = scenarios.get("baseline")
+    business = BusinessParams.load()
+    board, _ = _render_horizon(scenario.world(), business, scenario.solve_date)
+    return normalize(board) + "\n"
+
+
+def test_horizon_board_matches_snapshot() -> None:
+    path = SNAPSHOT_DIR / "horizon.txt"
+    actual = render_horizon_board()
+    if UPDATE or not path.exists():
+        path.write_text(actual)
+        if not UPDATE:
+            pytest.skip("created missing horizon snapshot; re-run to assert against it")
+        return
+    assert actual == path.read_text(), (
+        "rendered horizon board differs from tests/snapshots/horizon.txt.\n"
+        "If the change is intended, review the diff and run: make snapshots"
+    )
 
 
 @pytest.mark.parametrize("name", sorted(scenarios.SCENARIOS))

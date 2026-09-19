@@ -1,13 +1,13 @@
 SCENARIO  customer_cancels
 The Chen job cancels at the top of the route, freeing a residential slot.
 
-!  19 of 19 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (5a24c60214d8e5d7)
+PLAN 2026-09-21  (971617681395867d)
 ------------------------------------------------------------------------------
 
   crew-van-1   Marcus + Priya   [van-1]
-      06:29-08:59  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
+      06:14-08:44  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
                    travel 9min / 1.6mi  (18 person-min)   idle 0min   on-site 94%
 
   crew-van-2   Ken   [van-2]
@@ -22,7 +22,7 @@ PLAN 2026-09-21  (5a24c60214d8e5d7)
       08:21-09:51  Okonkwo Auto Glass         auto_glass                      21min drive  
                    travel 37min / 14.8mi  (37 person-min)   idle 0min   on-site 71%
 
-  not this day's work
+  not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
       j-408  Brennan Residence          window_on_another_day
@@ -37,6 +37,6 @@ PLAN 2026-09-21  (5a24c60214d8e5d7)
 ------------------------------------------------------------------------------
   cost  travel $112.24   vehicle $26.20   overtime $0.00   late $0.00
         unserved $0.00   TOTAL $138.44
-  solver objective $151.34  (+$12.90 vs actual)   status OPTIMAL   N.NNNs
+  solver objective $151.40  (+$12.96 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

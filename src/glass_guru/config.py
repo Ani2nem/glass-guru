@@ -60,6 +60,10 @@ class VehicleParams(Section):
     cost_per_mile: Param
 
 
+class SchedulingParams(Section):
+    hard_window_buffer_minutes: Param
+
+
 class PenaltyParams(Section):
     unserved_base: Param
     deferral_escalation: Param
@@ -75,6 +79,13 @@ class TravelParams(Section):
 
 class ServiceAreaParams(Section):
     radius_miles: Param
+
+
+class HorizonParams(Section):
+    days: Param
+    day_capacity_utilization: Param
+    sector_spread_penalty: Param
+    day_delay_penalty: Param
 
 
 class SolverParams(Section):
@@ -95,9 +106,11 @@ class BusinessParams(Section):
     meta: BusinessMeta
     labor: LaborParams
     vehicle: VehicleParams
+    scheduling: SchedulingParams
     penalties: PenaltyParams
     travel: TravelParams
     service_area: ServiceAreaParams
+    horizon: HorizonParams
     solver: SolverParams
 
     @classmethod
