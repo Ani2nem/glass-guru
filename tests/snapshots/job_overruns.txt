@@ -3,32 +3,32 @@ The shower-door install runs two hours over while the crew is on site.
 
 !  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (ed3fcc92124e16f0)
+PLAN 2026-09-21  (5308d795effa926f)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      09:00-11:00  Chen Residence             residential_window_replacement  16min drive  
+      09:00-11:00  Chen Residence             residential_window_replacement  23min drive  
       11:11-11:56  Nakamura Screens           screen_repair                   11min drive  
-                   travel 43min / 17.1mi  (43 person-min)   idle 0min   on-site 79%
+                   travel 55min / 25.0mi  (55 person-min)   idle 0min   on-site 75%
 
   crew-van-2   Marcus + Priya   [van-2]
-      06:04-08:34  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
-                   travel 9min / 1.6mi  (18 person-min)   idle 0min   on-site 94%
+      06:09-08:39  Rodriguez Storefront       storefront_glass                 9min drive  needs 2
+                   travel 22min / 7.2mi  (44 person-min)   idle 0min   on-site 87%
 
   crew-van-3   Alex   [van-3]
-      10:00-14:30  Patel Shower Door          shower_door_install             14min drive  
-                   travel 25min / 8.7mi  (25 person-min)   idle 0min   on-site 92%
+      10:00-14:30  Patel Shower Door          shower_door_install             17min drive  
+                   travel 34min / 16.5mi  (34 person-min)   idle 0min   on-site 89%
 
   crew-van-4   Sofia   [van-4]
-      08:21-09:51  Okonkwo Auto Glass         auto_glass                      21min drive  
-                   travel 37min / 14.8mi  (37 person-min)   idle 0min   on-site 71%
+      08:09-09:39  Okonkwo Auto Glass         auto_glass                       9min drive  
+                   travel 16min / 4.4mi  (16 person-min)   idle 0min   on-site 85%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
       j-408  Brennan Residence          window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
-      j-409  Alvarez Screens (far)      window_on_another_day
+      j-409  Alvarez Screens            window_on_another_day
                    customer window falls on 2026-09-23, not 2026-09-21
       j-410  Tran Auto Glass            window_on_another_day
                    customer window falls on 2026-09-23, not 2026-09-21
@@ -36,8 +36,8 @@ PLAN 2026-09-21  (ed3fcc92124e16f0)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $113.16   vehicle $27.39   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $140.55
-  solver objective $160.86  (+$20.31 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $137.08   vehicle $34.48   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $171.56
+  solver objective $203.84  (+$32.28 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

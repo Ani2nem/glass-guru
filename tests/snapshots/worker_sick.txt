@@ -3,30 +3,30 @@ Ken calls in sick. He is the only worker who cannot do overtime.
 
 !  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (1bb3f05b04b7acec)
+PLAN 2026-09-21  (4eea42f13f8d64af)
 ------------------------------------------------------------------------------
 
   crew-van-1   Alex   [van-1]
-      08:21-09:06  Nakamura Screens           screen_repair                   21min drive  
-                   travel 42min / 15.3mi  (42 person-min)   idle 0min   on-site 52%
+      08:29-09:14  Nakamura Screens           screen_repair                   29min drive  
+                   travel 58min / 23.9mi  (58 person-min)   idle 0min   on-site 44%
 
   crew-van-3   Marcus + Priya   [van-3]
-      06:05-08:35  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
+      06:09-08:39  Rodriguez Storefront       storefront_glass                 9min drive  needs 2
                    ..waiting 70 min
-      10:00-12:30  Patel Shower Door          shower_door_install             15min drive  
-      12:41-14:41  Chen Residence             residential_window_replacement  11min drive  
-                   travel 42min / 15.0mi  (84 person-min)   idle 70min   on-site 79%
+      10:00-12:30  Patel Shower Door          shower_door_install             11min drive  
+      12:37-14:37  Chen Residence             residential_window_replacement   7min drive  
+                   travel 45min / 19.2mi  (90 person-min)   idle 70min   on-site 79%
 
   crew-van-4   Sofia   [van-4]
-      08:21-09:51  Okonkwo Auto Glass         auto_glass                      21min drive  
-                   travel 37min / 14.8mi  (37 person-min)   idle 0min   on-site 71%
+      08:09-09:39  Okonkwo Auto Glass         auto_glass                       9min drive  
+                   travel 16min / 4.4mi  (16 person-min)   idle 0min   on-site 85%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
       j-408  Brennan Residence          window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
-      j-409  Alvarez Screens (far)      window_on_another_day
+      j-409  Alvarez Screens            window_on_another_day
                    customer window falls on 2026-09-23, not 2026-09-21
       j-410  Tran Auto Glass            window_on_another_day
                    customer window falls on 2026-09-23, not 2026-09-21
@@ -34,8 +34,8 @@ PLAN 2026-09-21  (1bb3f05b04b7acec)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $149.96   vehicle $29.30   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $179.26
-  solver objective $202.33  (+$23.07 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $150.88   vehicle $30.90   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $181.78
+  solver objective $216.82  (+$35.04 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

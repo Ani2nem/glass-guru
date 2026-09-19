@@ -21,12 +21,13 @@ from glass_guru.domain.models import (
     CrewRoute,
     Job,
     JobId,
+    Location,
     Stop,
     VanId,
     WorkerId,
 )
 from glass_guru.domain.state import WorldState
-from glass_guru.domain.travel import TravelOracle
+from glass_guru.domain.travel import TravelLeg, TravelOracle
 
 
 def _earliest_start(job: Job, arrival: datetime) -> datetime:
@@ -45,6 +46,46 @@ def _earliest_start(job: Job, arrival: datetime) -> datetime:
         if fits and (best is None or start < best):
             best = start
     return best if best is not None else arrival
+
+
+def _depart_and_arrive(
+    travel: TravelOracle,
+    origin: Location,
+    job: Job,
+    ready_at: datetime,
+) -> tuple[TravelLeg, datetime]:
+    """Choose a departure time and the resulting arrival.
+
+    A crew that would reach a customer before their window opens does not idle on the
+    doorstep - it leaves later. That matters for more than realism: travel time depends
+    on *departure* time, so pricing a leg at the moment the crew became free while the
+    schedule implies they left forty minutes later produces a stored travel time that
+    no longer matches the road. The invariant checker recomputes each leg from
+    ``arrival - travel_minutes``, and correctly rejects the mismatch.
+
+    So the departure is solved as a fixed point: leave at ``target - travel(departure)``,
+    re-evaluating travel at that departure until it settles. Traffic buckets are coarse,
+    so this converges in a step or two; the loop is bounded and falls back to the
+    honest "leave immediately and wait" answer if it does not.
+    """
+    leg = travel.leg(origin, job.location, ready_at)
+    naive_arrival = ready_at + timedelta(minutes=leg.minutes)
+    target = _earliest_start(job, naive_arrival)
+    if target <= naive_arrival:
+        return leg, target
+
+    depart = target - timedelta(minutes=leg.minutes)
+    for _ in range(3):
+        if depart <= ready_at:
+            return leg, max(target, naive_arrival)
+        candidate = travel.leg(origin, job.location, depart)
+        next_depart = target - timedelta(minutes=candidate.minutes)
+        if next_depart == depart:
+            return candidate, target
+        depart = next_depart
+
+    settled = travel.leg(origin, job.location, max(depart, ready_at))
+    return settled, max(target, max(depart, ready_at) + timedelta(minutes=settled.minutes))
 
 
 def materialize_route(
@@ -70,8 +111,7 @@ def materialize_route(
 
     for job_id in job_sequence:
         job = world.jobs[job_id]
-        leg = travel.leg(position, job.location, clock)
-        arrival = _earliest_start(job, clock + timedelta(minutes=leg.minutes))
+        leg, arrival = _depart_and_arrive(travel, position, job, clock)
         departure = arrival + timedelta(minutes=job.estimated_duration_min)
         stops.append(
             Stop(

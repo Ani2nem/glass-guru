@@ -241,3 +241,43 @@ def test_buffer_never_makes_a_job_infeasible(world, travel, params, horizon_para
         as_plan(result, world), world, travel, ValidationConfig(business_tz=tz)
     )
     assert violations == (), summarize(violations)
+
+
+# ------------------------------------------------------- waiting and travel pricing
+
+
+def test_waiting_for_a_window_reprices_travel_at_the_real_departure(world, travel, tz):
+    """Regression: a crew that would arrive before a customer window opens leaves
+    later rather than idling on the doorstep.
+
+    Travel time depends on departure time. Pricing the leg at the moment the crew
+    became free, while the schedule implies they left forty minutes later, stores a
+    travel time that no longer matches the road - and the invariant checker, which
+    recomputes each leg from ``arrival - travel_minutes``, correctly rejects it.
+    Real geocoded coordinates surfaced this; the synthetic fixture's tighter
+    distances had kept both sides inside the same traffic bucket.
+    """
+    from datetime import timedelta
+
+    from glass_guru.scheduler.routing import materialize_route
+
+    # Chen opens at 09:00; leaving the depot at 06:00 arrives far too early.
+    route = materialize_route(
+        world=world,
+        travel=travel,
+        crew_id="test",
+        worker_ids=["w-dan"],
+        van_id="van-1",
+        on_date=WEEK_START,
+        job_sequence=["j-402"],
+        shift_start=_at(0, 6),
+    )
+    stop = route.stops[0]
+    implied_departure = stop.arrival - timedelta(minutes=stop.travel_minutes_from_prev)
+    recomputed = travel.leg(
+        world.vans["van-1"].home_depot, world.jobs["j-402"].location, implied_departure
+    )
+    assert recomputed.minutes == stop.travel_minutes_from_prev, (
+        "stored travel time does not match a leg recomputed at the implied departure"
+    )
+    assert implied_departure > _at(0, 6), "crew should leave later, not wait on site"
