@@ -1,0 +1,703 @@
+"""Single-day crew formation, van assignment, and routing, as one CP-SAT model.
+
+Why these are solved together rather than in stages: assignment quality depends on
+travel cost, and travel cost depends on assignment. Clustering jobs geographically
+and then routing each cluster locks in bad assignments before knowing what they cost.
+
+Why CP-SAT rather than the OR-Tools routing library: full depth here means a crew is
+*one or two workers plus a van*, chosen per day. Pre-enumerating crews for six workers
+and four vans gives ~84 candidate "vehicles" with no native way to say each worker and
+each van is used at most once. Expressed directly in CP-SAT, that is two lines.
+
+Crews are indexed by van - "crew k" just means "the team using van k" - which fixes
+the van-assignment decision by construction and removes a large symmetry group.
+
+Two deliberate approximations, both made safe downstream:
+
+1. **One travel matrix per solve**, not a time-dependent one. CP-SAT cannot cheaply
+   express "this leg costs more because you drive it at 16:45". The matrix is built
+   *pessimistically* (worst traffic bucket the shift can span), so real travel is at
+   worst as long as planned; a route that materializes faster only ever arrives early
+   and waits. Optimistic matrices would do the opposite and silently break hard windows.
+2. **A blended labour rate** in the objective, rather than each crew's exact mix.
+   The objective only has to *rank* routes. Once a route is materialized, its true
+   dollar cost is computed exactly by :mod:`glass_guru.scheduler.costing`.
+
+The output is a sequence, not a schedule. Concrete times come from
+:func:`~glass_guru.scheduler.routing.materialize_route`, and are then checked
+independently by :mod:`glass_guru.domain.invariants`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from datetime import date, datetime, time, timedelta, tzinfo
+
+from ortools.sat.python import cp_model
+
+from glass_guru.domain.enums import (
+    UnservedReason,
+    WindowHardness,
+)
+from glass_guru.domain.models import (
+    CrewRoute,
+    Job,
+    JobId,
+    Location,
+    UnservedJob,
+    VanId,
+    Worker,
+    WorkerId,
+)
+from glass_guru.domain.state import WorldState
+from glass_guru.domain.travel import TravelOracle
+from glass_guru.scheduler.routing import materialize_route
+from glass_guru.scheduler.travel.base import TimeBucket
+
+MINUTES_PER_DAY = 24 * 60
+
+
+@dataclass(frozen=True, slots=True)
+class SolveParams:
+    """Cost weights and search limits.
+
+    Every weight is dollars, which is what makes them arguable instead of arbitrary:
+    ``labor_rate_per_minute`` is a real loaded wage, ``unserved_penalty_base`` is what
+    the business thinks a dropped job costs in goodwill and lost revenue.
+    """
+
+    business_tz: tzinfo
+
+    labor_rate_per_minute: float = 0.92
+    unserved_penalty_base: float = 500.0
+    #: Added per prior deferral. Without this, cost minimization drops the same
+    #: far-out, low-revenue customer every single day until they leave.
+    deferral_escalation: float = 250.0
+    lateness_per_minute: float = 2.0
+    revenue_weight: float = 0.5
+
+    allow_overtime: bool = True
+    overtime_minutes: int = 120
+
+    #: Traffic bucket used to build the (pessimistic) matrix. ``None`` means
+    #: "worst bucket the shift can span", which is the safe default.
+    travel_bucket: TimeBucket | None = None
+
+    max_solve_seconds: float = 10.0
+    #: Single-threaded search makes results reproducible, which scenario replay and
+    #: eval baselines depend on. Raise only for interactive solves that are not scored.
+    search_workers: int = 1
+    random_seed: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class DayPlanResult:
+    routes: tuple[CrewRoute, ...]
+    unserved: tuple[UnservedJob, ...]
+    objective_cost: float
+    status: str
+    metrics: dict[str, float] = field(default_factory=dict)
+
+
+# --------------------------------------------------------------------------- helpers
+
+
+def _minutes_since_midnight(moment: datetime, tz: tzinfo) -> int:
+    local = moment.astimezone(tz)
+    return local.hour * 60 + local.minute
+
+
+def _day_bounds(on_date: date, tz: tzinfo) -> tuple[datetime, datetime]:
+    start = datetime.combine(on_date, time(0, 0), tzinfo=tz)
+    return start, start + timedelta(days=1)
+
+
+def _clamp_to_day(moment: datetime, day_start: datetime, tz: tzinfo) -> int | None:
+    """Minutes from local midnight, or ``None`` if the moment is on another day."""
+    delta = (moment.astimezone(tz) - day_start).total_seconds() / 60.0
+    if delta < -MINUTES_PER_DAY or delta > 2 * MINUTES_PER_DAY:
+        return None
+    return round(delta)
+
+
+def _cents(dollars: float) -> int:
+    return round(dollars * 100)
+
+
+def _panes(job: Job) -> int:
+    return job.glass_spec.pane_count if job.glass_spec else 1
+
+
+def _unserved_penalty(job: Job, params: SolveParams) -> float:
+    """What it costs to leave this job unscheduled today.
+
+    Escalates with prior deferrals so a job cannot be postponed indefinitely, and
+    scales with revenue and priority so the optimizer drops the cheapest thing first.
+    """
+    priority_multiplier = {"emergency": 6.0, "high": 2.5, "normal": 1.0, "low": 0.6}[
+        job.priority.value
+    ]
+    base = params.unserved_penalty_base * priority_multiplier
+    escalation = params.deferral_escalation * job.deferral_count
+    return base + escalation + params.revenue_weight * job.revenue
+
+
+def _worst_bucket_for_shift(start_min: int, end_min: int) -> TimeBucket:
+    """The most congested bucket a shift running ``start..end`` can touch."""
+    spans = {
+        TimeBucket.EARLY: (0, 7 * 60),
+        TimeBucket.AM_PEAK: (7 * 60, 9 * 60 + 30),
+        TimeBucket.MIDDAY: (9 * 60 + 30, 15 * 60),
+        TimeBucket.PM_PEAK: (15 * 60, 18 * 60 + 30),
+        TimeBucket.EVENING: (18 * 60 + 30, MINUTES_PER_DAY),
+    }
+    severity = {
+        TimeBucket.PM_PEAK: 5,
+        TimeBucket.AM_PEAK: 4,
+        TimeBucket.MIDDAY: 3,
+        TimeBucket.EARLY: 2,
+        TimeBucket.EVENING: 1,
+    }
+    touched = [b for b, (s, e) in spans.items() if start_min < e and s < end_min]
+    return max(touched, key=lambda b: severity[b]) if touched else TimeBucket.MIDDAY
+
+
+#: Representative departure time for each bucket, used to build the matrix.
+_BUCKET_PROBE_HOUR: dict[TimeBucket, int] = {
+    TimeBucket.EARLY: 6,
+    TimeBucket.AM_PEAK: 8,
+    TimeBucket.MIDDAY: 12,
+    TimeBucket.PM_PEAK: 16,
+    TimeBucket.EVENING: 19,
+}
+
+
+def _windows_touch_day(job: Job, day_start: datetime, tz: tzinfo) -> bool:
+    """True if any declared window overlaps this calendar day.
+
+    A job whose only window is on Thursday is not "unschedulable Monday for lack of
+    capacity" - it simply is not Monday's problem. Conflating the two sends the
+    dispatcher hunting for capacity that was never the constraint.
+    """
+    if not job.windows:
+        return True
+    day_end = day_start + timedelta(days=1)
+    return any(w.start < day_end and day_start < w.end for w in job.windows)
+
+
+def _shift_window(worker: Worker, on_date: date) -> tuple[int, int] | None:
+    hours = worker.hours_for(on_date.weekday())
+    if hours is None:
+        return None
+    return hours.start.hour * 60 + hours.start.minute, hours.end.hour * 60 + hours.end.minute
+
+
+# ------------------------------------------------------------------------ diagnosis
+
+
+def _diagnose(
+    job: Job,
+    world: WorldState,
+    eligible_workers: Sequence[Worker],
+    on_date: date,
+    day_start: datetime,
+    params: SolveParams,
+) -> UnservedJob:
+    """Explain a non-placement in terms the dispatcher can act on.
+
+    Ordered most-specific first: a job that no certified worker can do is a hiring
+    or scheduling problem, which is different advice from "the day was simply full".
+    """
+    if not _windows_touch_day(job, day_start, params.business_tz):
+        when = ", ".join(
+            w.start.astimezone(params.business_tz).date().isoformat() for w in job.windows
+        )
+        return UnservedJob(
+            job_id=job.id,
+            reason=UnservedReason.WINDOW_ON_ANOTHER_DAY,
+            detail=f"customer window falls on {when}, not {on_date.isoformat()}",
+        )
+
+    certified = [w for w in eligible_workers if job.required_certifications <= w.certifications]
+    if not certified:
+        held = {c for w in eligible_workers for c in w.certifications}
+        missing = sorted(c.value for c in job.required_certifications - held)
+        return UnservedJob(
+            job_id=job.id,
+            reason=UnservedReason.NO_CERTIFIED_WORKER,
+            detail=(
+                f"no available worker holds {missing}"
+                if missing
+                else "certified workers are all unavailable"
+            ),
+        )
+
+    if job.crew_size > len(certified):
+        return UnservedJob(
+            job_id=job.id,
+            reason=UnservedReason.CREW_SIZE_UNAVAILABLE,
+            detail=(
+                f"needs a crew of {job.crew_size} but only {len(certified)} "
+                "certified worker(s) are available"
+            ),
+        )
+
+    ready_on = job.earliest_material_date(job.requested_at.date())
+    if ready_on > on_date:
+        late = [m.part_code for m in job.materials if not m.in_stock]
+        return UnservedJob(
+            job_id=job.id,
+            reason=UnservedReason.MATERIALS_NOT_AVAILABLE,
+            detail=f"{late or ['materials']} not available until {ready_on.isoformat()}",
+        )
+
+    for window in job.hard_windows:
+        window_minutes = (window.end - window.start).total_seconds() / 60.0
+        if window_minutes < job.estimated_duration_min:
+            return UnservedJob(
+                job_id=job.id,
+                reason=UnservedReason.HARD_WINDOW_UNREACHABLE,
+                detail=(
+                    f"hard window is {int(window_minutes)} min but the job needs "
+                    f"{job.estimated_duration_min} min"
+                ),
+            )
+        shifts = [s for s in (_shift_window(w, on_date) for w in certified) if s]
+        window_start = _clamp_to_day(window.start, day_start, params.business_tz)
+        window_end = _clamp_to_day(window.end, day_start, params.business_tz)
+        if window_start is None or window_end is None:
+            continue
+        if not any(
+            shift_start <= window_end and window_start <= shift_end
+            for shift_start, shift_end in shifts
+        ):
+            return UnservedJob(
+                job_id=job.id,
+                reason=UnservedReason.HARD_WINDOW_UNREACHABLE,
+                detail="hard window does not overlap any certified worker's shift",
+            )
+
+    # Per part, not "any part": a job blocked on one missing item stays silent
+    # under an any() over every material and van.
+    for material in job.materials:
+        if not material.in_stock:
+            continue
+        if not any(
+            van.has_stock(material.part_code, material.quantity) for van in world.vans.values()
+        ):
+            return UnservedJob(
+                job_id=job.id,
+                reason=UnservedReason.VAN_CAPACITY_EXCEEDED,
+                detail=f"no van stocks {material.quantity}x {material.part_code}",
+            )
+
+    return UnservedJob(
+        job_id=job.id,
+        reason=UnservedReason.NO_CAPACITY_IN_HORIZON,
+        detail="feasible in principle, but the day had no room at an acceptable cost",
+    )
+
+
+# ---------------------------------------------------------------------------- solver
+
+
+def plan_day(
+    *,
+    world: WorldState,
+    travel: TravelOracle,
+    on_date: date,
+    candidate_job_ids: Sequence[JobId],
+    params: SolveParams,
+    locked_job_ids: Sequence[JobId] = (),
+) -> DayPlanResult:
+    """Build and solve one day.
+
+    ``locked_job_ids`` are jobs that must be served today (used by repair mode to pin
+    work already dispatched). Everything else is optional at the price of its
+    unserved penalty.
+    """
+    tz = params.business_tz
+    day_start, _ = _day_bounds(on_date, tz)
+
+    # ---------------------------------------------------------------- candidates
+    jobs: list[Job] = []
+    pre_unserved: list[UnservedJob] = []
+    for job_id in candidate_job_ids:
+        job = world.jobs.get(job_id)
+        if job is None or not job.is_active:
+            continue
+        ready_on = job.earliest_material_date(job.requested_at.date())
+        if ready_on > on_date:
+            pending_parts = [m.part_code for m in job.materials if not m.in_stock]
+            pre_unserved.append(
+                UnservedJob(
+                    job_id=job.id,
+                    reason=UnservedReason.MATERIALS_NOT_AVAILABLE,
+                    detail=(
+                        f"{pending_parts or ['materials']} not available "
+                        f"until {ready_on.isoformat()}"
+                    ),
+                )
+            )
+            continue
+        if not _windows_touch_day(job, day_start, tz):
+            when = ", ".join(w.start.astimezone(tz).date().isoformat() for w in job.windows)
+            pre_unserved.append(
+                UnservedJob(
+                    job_id=job.id,
+                    reason=UnservedReason.WINDOW_ON_ANOTHER_DAY,
+                    detail=f"customer window falls on {when}, not {on_date.isoformat()}",
+                )
+            )
+            continue
+        jobs.append(job)
+
+    # ------------------------------------------------------------------ resources
+    shift_span: dict[WorkerId, tuple[int, int]] = {}
+    workers: list[Worker] = []
+    for worker in sorted(world.workers.values(), key=lambda w: w.id):
+        span = _shift_window(worker, on_date)
+        if span is None:
+            continue
+        window_start = day_start + timedelta(minutes=span[0])
+        window_end = day_start + timedelta(minutes=span[1])
+        if not world.is_worker_available(worker.id, window_start, window_end):
+            continue
+        workers.append(worker)
+        shift_span[worker.id] = span
+
+    vans: list[VanId] = []
+    for van in sorted(world.vans.values(), key=lambda v: v.id):
+        if world.is_van_available(van.id, day_start, day_start + timedelta(days=1)):
+            vans.append(van.id)
+
+    if not jobs or not workers or not vans:
+        unserved = tuple(
+            pre_unserved + [_diagnose(j, world, workers, on_date, day_start, params) for j in jobs]
+        )
+        return DayPlanResult(
+            routes=(),
+            unserved=unserved,
+            objective_cost=sum(_unserved_penalty(world.jobs[u.job_id], params) for u in unserved),
+            status="EMPTY",
+            metrics={"candidates": float(len(jobs)), "crews": 0.0},
+        )
+
+    overtime = params.overtime_minutes if params.allow_overtime else 0
+    earliest_shift = min(s for s, _ in shift_span.values())
+    latest_shift = max(e for _, e in shift_span.values()) + overtime
+
+    # ------------------------------------------------------------- travel matrix
+    bucket = params.travel_bucket or _worst_bucket_for_shift(earliest_shift, latest_shift)
+    probe = day_start + timedelta(hours=_BUCKET_PROBE_HOUR[bucket])
+
+    depot: Location = world.vans[vans[0]].home_depot
+    nodes: list[Location] = [depot] + [j.location for j in jobs]
+    n = len(nodes)
+    travel_min = [[0] * n for _ in range(n)]
+    travel_mi = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                continue
+            leg = travel.leg(nodes[i], nodes[j], probe)
+            travel_min[i][j] = leg.minutes
+            travel_mi[i][j] = leg.miles
+
+    model = cp_model.CpModel()
+    num_crews = len(vans)
+    job_index = {job.id: idx + 1 for idx, job in enumerate(jobs)}
+    locked = set(locked_job_ids)
+
+    # ---------------------------------------------------------------- variables
+    assign = {
+        (w.id, k): model.new_bool_var(f"assign_{w.id}_{k}")
+        for w in workers
+        for k in range(num_crews)
+    }
+    visit = {
+        (job.id, k): model.new_bool_var(f"visit_{job.id}_{k}")
+        for job in jobs
+        for k in range(num_crews)
+    }
+    served = {job.id: model.new_bool_var(f"served_{job.id}") for job in jobs}
+    start = {
+        (job.id, k): model.new_int_var(0, MINUTES_PER_DAY, f"start_{job.id}_{k}")
+        for job in jobs
+        for k in range(num_crews)
+    }
+    late = {
+        (job.id, k): model.new_int_var(0, MINUTES_PER_DAY, f"late_{job.id}_{k}")
+        for job in jobs
+        for k in range(num_crews)
+    }
+    crew_active = [model.new_bool_var(f"active_{k}") for k in range(num_crews)]
+    crew_start = [
+        model.new_int_var(0, MINUTES_PER_DAY, f"crew_start_{k}") for k in range(num_crews)
+    ]
+    crew_end = [model.new_int_var(0, MINUTES_PER_DAY, f"crew_end_{k}") for k in range(num_crews)]
+
+    # --------------------------------------------------------------- assignment
+    for worker in workers:
+        model.add_at_most_one(assign[worker.id, k] for k in range(num_crews))
+
+    for k in range(num_crews):
+        headcount = sum(assign[w.id, k] for w in workers)
+        model.add(headcount <= 2)
+        model.add(headcount >= 1).only_enforce_if(crew_active[k])
+        model.add(headcount == 0).only_enforce_if(~crew_active[k])
+
+        # Crew hours are the intersection of its members' shifts, plus any overtime.
+        for worker in workers:
+            span_start, span_end = shift_span[worker.id]
+            model.add(crew_start[k] >= span_start).only_enforce_if(assign[worker.id, k])
+            allowance = overtime if worker.overtime_eligible else 0
+            model.add(crew_end[k] <= span_end + allowance).only_enforce_if(assign[worker.id, k])
+        model.add(crew_end[k] >= crew_start[k])
+
+    for job in jobs:
+        model.add(sum(visit[job.id, k] for k in range(num_crews)) == served[job.id])
+        if job.id in locked:
+            model.add(served[job.id] == 1)
+
+    # ------------------------------------------------------- crew fitness per job
+    for job in jobs:
+        for k in range(num_crews):
+            model.add_implication(visit[job.id, k], crew_active[k])
+            # A crew must be at least as large as the job demands; a two-person crew
+            # may do one-person work, never the reverse.
+            model.add(sum(assign[w.id, k] for w in workers) >= job.crew_size).only_enforce_if(
+                visit[job.id, k]
+            )
+            for cert in sorted(job.required_certifications, key=lambda c: c.value):
+                holders = [w for w in workers if cert in w.certifications]
+                if not holders:
+                    model.add(visit[job.id, k] == 0)
+                    break
+                model.add(sum(assign[w.id, k] for w in holders) >= 1).only_enforce_if(
+                    visit[job.id, k]
+                )
+
+    # -------------------------------------------------------------- van capacity
+    for k, van_id in enumerate(vans):
+        van = world.vans[van_id]
+        model.add(sum(visit[job.id, k] * _panes(job) for job in jobs) <= van.rack_slots)
+
+        part_codes = {m.part_code for job in jobs for m in job.materials if m.in_stock}
+        for part_code in sorted(part_codes):
+            demand = [
+                visit[job.id, k] * m.quantity
+                for job in jobs
+                for m in job.materials
+                if m.in_stock and m.part_code == part_code
+            ]
+            if demand:
+                model.add(sum(demand) <= van.stock.get(part_code, 0))
+
+    # -------------------------------------------------------------------- routing
+    arc_vars: dict[tuple[int, int, int], cp_model.IntVar] = {}
+    for k in range(num_crews):
+        arcs: list[cp_model.ArcT] = []
+        # Depot sits out entirely when the crew is idle.
+        arcs.append((0, 0, ~crew_active[k]))
+        for job in jobs:
+            idx = job_index[job.id]
+            arcs.append((idx, idx, ~visit[job.id, k]))
+
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    continue
+                arc = model.new_bool_var(f"arc_{k}_{i}_{j}")
+                arc_vars[k, i, j] = arc
+                arcs.append((i, j, arc))
+
+                if i == 0:
+                    job = jobs[j - 1]
+                    model.add(start[job.id, k] >= crew_start[k] + travel_min[0][j]).only_enforce_if(
+                        arc
+                    )
+                elif j == 0:
+                    job = jobs[i - 1]
+                    model.add(
+                        crew_end[k]
+                        >= start[job.id, k] + job.estimated_duration_min + travel_min[i][0]
+                    ).only_enforce_if(arc)
+                else:
+                    from_job, to_job = jobs[i - 1], jobs[j - 1]
+                    model.add(
+                        start[to_job.id, k]
+                        >= start[from_job.id, k]
+                        + from_job.estimated_duration_min
+                        + travel_min[i][j]
+                    ).only_enforce_if(arc)
+        model.add_circuit(arcs)
+
+    # -------------------------------------------------------------- time windows
+    for job in jobs:
+        duration = job.estimated_duration_min
+        for k in range(num_crews):
+            model.add(start[job.id, k] >= crew_start[k]).only_enforce_if(visit[job.id, k])
+            model.add(start[job.id, k] + duration <= crew_end[k]).only_enforce_if(visit[job.id, k])
+
+            if not job.windows:
+                model.add(late[job.id, k] == 0)
+                continue
+
+            selectors = []
+            for w_idx, window in enumerate(job.windows):
+                win_start = _clamp_to_day(window.start, day_start, tz)
+                win_end = _clamp_to_day(window.end, day_start, tz)
+                selector = model.new_bool_var(f"win_{job.id}_{k}_{w_idx}")
+                selectors.append(selector)
+
+                if (
+                    win_start is None
+                    or win_end is None
+                    or win_end <= 0
+                    or win_start >= MINUTES_PER_DAY
+                ):
+                    model.add(selector == 0)
+                    continue
+
+                model.add(start[job.id, k] >= max(win_start, 0)).only_enforce_if(selector)
+                if window.hardness is WindowHardness.HARD:
+                    model.add(start[job.id, k] + duration <= win_end).only_enforce_if(selector)
+                    model.add(late[job.id, k] == 0).only_enforce_if(selector)
+                else:
+                    model.add(
+                        late[job.id, k] >= start[job.id, k] + duration - win_end
+                    ).only_enforce_if(selector)
+
+            model.add(sum(selectors) == visit[job.id, k])
+            model.add(late[job.id, k] == 0).only_enforce_if(~visit[job.id, k])
+
+    # ------------------------------------------------------------------ objective
+    labor_per_min = _cents(params.labor_rate_per_minute)
+    late_per_min = _cents(params.lateness_per_minute)
+
+    terms: list[cp_model.LinearExpr] = []
+    for k, van_id in enumerate(vans):
+        van_cost_per_mile = world.vans[van_id].cost_per_mile
+
+        # Vehicle cost is per van-mile regardless of who is aboard.
+        vehicle_terms = [
+            arc_vars[k, i, j] * _cents(travel_mi[i][j] * van_cost_per_mile)
+            for i in range(n)
+            for j in range(n)
+            if i != j and _cents(travel_mi[i][j] * van_cost_per_mile)
+        ]
+        terms.extend(vehicle_terms)
+
+        # Labour is per person-minute. Modelled as crew_minutes x headcount so an
+        # oversized crew is priced honestly instead of riding along for free.
+        crew_travel = model.new_int_var(0, MINUTES_PER_DAY, f"crew_travel_{k}")
+        model.add(
+            crew_travel
+            == sum(
+                arc_vars[k, i, j] * travel_min[i][j] for i in range(n) for j in range(n) if i != j
+            )
+        )
+        headcount_var = model.new_int_var(0, 2, f"headcount_{k}")
+        model.add(headcount_var == sum(assign[w.id, k] for w in workers))
+        person_minutes = model.new_int_var(0, 2 * MINUTES_PER_DAY, f"person_travel_{k}")
+        model.add_multiplication_equality(person_minutes, [crew_travel, headcount_var])
+        terms.append(person_minutes * labor_per_min)
+
+    for job in jobs:
+        penalty = _cents(_unserved_penalty(job, params))
+        terms.append((1 - served[job.id]) * penalty)
+        for k in range(num_crews):
+            terms.append(late[job.id, k] * late_per_min)
+
+    model.minimize(sum(terms))
+
+    # --------------------------------------------------------------------- solve
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = params.max_solve_seconds
+    solver.parameters.num_search_workers = params.search_workers
+    solver.parameters.random_seed = params.random_seed
+    status = solver.solve(model)
+    status_name = solver.status_name(status)
+
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        unserved = tuple(
+            pre_unserved + [_diagnose(j, world, workers, on_date, day_start, params) for j in jobs]
+        )
+        return DayPlanResult(
+            routes=(),
+            unserved=unserved,
+            objective_cost=sum(_unserved_penalty(world.jobs[u.job_id], params) for u in unserved),
+            status=status_name,
+            metrics={"candidates": float(len(jobs)), "crews": float(num_crews)},
+        )
+
+    # ------------------------------------------------------------------ extract
+    routes: list[CrewRoute] = []
+    scheduled: set[JobId] = set()
+    for k, van_id in enumerate(vans):
+        if not solver.boolean_value(crew_active[k]):
+            continue
+        crew_workers = [w.id for w in workers if solver.boolean_value(assign[w.id, k])]
+        sequence = sorted(
+            (job for job in jobs if solver.boolean_value(visit[job.id, k])),
+            key=lambda job: solver.value(start[job.id, k]),
+        )
+        if not sequence or not crew_workers:
+            continue
+        scheduled.update(job.id for job in sequence)
+        shift_start_min = solver.value(crew_start[k])
+        routes.append(
+            materialize_route(
+                world=world,
+                travel=travel,
+                crew_id=f"crew-{van_id}",
+                worker_ids=crew_workers,
+                van_id=van_id,
+                on_date=on_date,
+                job_sequence=[job.id for job in sequence],
+                shift_start=day_start + timedelta(minutes=shift_start_min),
+            )
+        )
+
+    unserved_out = list(pre_unserved)
+    for job in jobs:
+        if job.id not in scheduled:
+            unserved_out.append(_diagnose(job, world, workers, on_date, day_start, params))
+
+    return DayPlanResult(
+        routes=tuple(routes),
+        unserved=tuple(unserved_out),
+        objective_cost=solver.objective_value / 100.0,
+        status=status_name,
+        metrics={
+            "candidates": float(len(jobs)),
+            "crews": float(len(routes)),
+            "scheduled": float(len(scheduled)),
+            "solve_seconds": solver.wall_time,
+            "best_bound": solver.best_objective_bound / 100.0,
+            "travel_bucket_severity": float(list(TimeBucket).index(bucket)),
+        },
+    )
+
+
+def unserved_are_expected(result: DayPlanResult) -> bool:
+    """True when nothing was dropped for a reason the business would call surprising."""
+    return all(
+        u.reason
+        in {
+            UnservedReason.MATERIALS_NOT_AVAILABLE,
+            UnservedReason.NO_CAPACITY_IN_HORIZON,
+            UnservedReason.WINDOW_ON_ANOTHER_DAY,
+        }
+        for u in result.unserved
+    )
+
+
+__all__ = [
+    "DayPlanResult",
+    "SolveParams",
+    "plan_day",
+    "unserved_are_expected",
+]
