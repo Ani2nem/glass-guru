@@ -14,7 +14,7 @@ but obviously wrong" becomes obvious.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime, tzinfo
+from datetime import date, datetime, timedelta, tzinfo
 
 from glass_guru.config import BusinessParams, Provenance, calibration_banner
 from glass_guru.domain.enums import NOT_A_FAILURE
@@ -60,13 +60,16 @@ def _render_route(
             lines.append(f"{indent}    ?? unknown job {stop.job_id}")
             continue
 
-        # Waiting gets its own line: arriving early and sitting outside a closed
-        # door is a real cost that the timestamps alone would hide.
+        # Slack between jobs gets its own line. The crew leaves late rather than
+        # idling on a doorstep, so the useful facts are how big the gap is and when
+        # they actually pull away - not a "waiting" label that no longer describes
+        # what the materializer does.
         if previous_departure is not None:
-            ready = previous_departure.timestamp() + stop.travel_minutes_from_prev * 60
-            waited = int((stop.arrival.timestamp() - ready) // 60)
-            if waited > 0:
-                lines.append(f"{indent}    {'':11}  ..waiting {waited} min")
+            free_at = previous_departure + timedelta(minutes=stop.travel_minutes_from_prev)
+            gap = int((stop.arrival - free_at).total_seconds() // 60)
+            if gap > 0:
+                leaves = stop.arrival - timedelta(minutes=stop.travel_minutes_from_prev)
+                lines.append(f"{indent}    {'':11}  ..{gap} min gap, leaves {_hhmm(leaves, tz)}")
 
         crew_note = f"needs {job.crew_size}" if job.crew_size > 1 else ""
         lines.append(

@@ -25,8 +25,8 @@ from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at
 from glass_guru.scheduler.costing import cost_plan
 from glass_guru.scheduler.day_planner import DayPlanResult, SolveParams, plan_day
 from glass_guru.scheduler.horizon import HorizonParams, HorizonResult, plan_horizon
-from glass_guru.scheduler.travel.base import OverrideAdjustedProvider
-from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+from glass_guru.scheduler.travel.base import OverrideAdjustedProvider, TravelProvider
+from glass_guru.scheduler.travel.factory import TravelMode, build_travel, describe
 
 
 def _load_world(as_of: datetime | None = None) -> WorldState:
@@ -35,13 +35,17 @@ def _load_world(as_of: datetime | None = None) -> WorldState:
     return fold(events, as_of=as_of or default_as_of)
 
 
+#: Travel source for this process, set once from --travel.
+_TRAVEL_MODE: TravelMode = TravelMode.AUTO
+
+
 def _travel_for(world: WorldState, business: BusinessParams) -> TravelOracle:
     """Travel provider with the world's recorded traffic delays layered on top.
 
     Providers stay pure; a ``TrafficDelay`` event affects routing without any
     provider knowing the event log exists.
     """
-    base = SyntheticTravelProvider.from_business(business)
+    base = build_travel(business, _TRAVEL_MODE)
     if not world.traffic_overrides:
         return base
     return OverrideAdjustedProvider(base, world.traffic_multiplier)
@@ -246,6 +250,47 @@ def cmd_scenario(args: argparse.Namespace) -> int:
     return code
 
 
+def cmd_travel(args: argparse.Namespace) -> int:
+    """Report the travel source, and optionally compare the three against each other."""
+    business = BusinessParams.load(args.config)
+    world = _load_world()
+    print(f"travel source: {describe(_TRAVEL_MODE)}")
+
+    if not args.compare:
+        oracle = build_travel(business, _TRAVEL_MODE)
+        depot = world.vans["van-1"].home_depot
+        probe = next(iter(world.active_jobs()))
+        leg = oracle.leg(depot, probe.location, world.as_of)
+        print(f"  sample leg depot -> {probe.customer_name}: {leg.minutes}min / {leg.miles}mi")
+        return 0
+
+    from glass_guru.scheduler.travel.cache import CacheMiss
+    from glass_guru.scheduler.travel.osrm import OsrmUnavailable
+
+    modes: list[tuple[str, TravelProvider]] = []
+    for mode in (TravelMode.SYNTHETIC, TravelMode.FROZEN, TravelMode.OSRM):
+        try:
+            modes.append((mode.value, build_travel(business, mode)))
+        except FileNotFoundError as exc:
+            print(f"  {mode.value}: unavailable ({exc.args[0].splitlines()[0]})")
+
+    depot = world.vans["van-1"].home_depot
+    at = world.as_of
+    header = "  ".join(f"{name:>18}" for name, _ in modes)
+    print()
+    print(f"{'job':<8} {'customer':<22} {header}")
+    for job in world.active_jobs():
+        cells = []
+        for _, oracle in modes:
+            try:
+                leg = oracle.leg(depot, job.location, at)
+                cells.append(f"{leg.minutes:>7}min {leg.miles:>6.1f}mi")
+            except (CacheMiss, OsrmUnavailable):
+                cells.append(f"{'unavailable':>18}")
+        print(f"{job.id:<8} {job.customer_name:<22} {'  '.join(cells)}")
+    return 0
+
+
 def _parse_date(text: str) -> date:
     return datetime.strptime(text, "%Y-%m-%d").date()
 
@@ -256,6 +301,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config", default=None, help="path to business_params.yaml (default: repo config/)"
+    )
+    parser.add_argument(
+        "--travel",
+        choices=[m.value for m in TravelMode],
+        default=TravelMode.AUTO.value,
+        help="travel-time source (default: auto - frozen snapshot when present)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -278,6 +329,12 @@ def build_parser() -> argparse.ArgumentParser:
     params = sub.add_parser("params", help="business parameters and their provenance")
     params.set_defaults(func=cmd_params)
 
+    travel = sub.add_parser("travel", help="show or compare the travel-time source")
+    travel.add_argument(
+        "--compare", action="store_true", help="compare synthetic, frozen and live OSRM"
+    )
+    travel.set_defaults(func=cmd_travel)
+
     scenario = sub.add_parser("scenario", help="run a named disruption scenario")
     scenario.add_argument("name", nargs="?", default="list", help="scenario name, or 'list'")
     scenario.set_defaults(func=cmd_scenario)
@@ -291,7 +348,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    global _TRAVEL_MODE
     args = build_parser().parse_args(argv)
+    _TRAVEL_MODE = TravelMode(args.travel)
     result: int = args.func(args)
     return result
 

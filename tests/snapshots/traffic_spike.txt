@@ -3,25 +3,23 @@ A corridor-wide slowdown makes every leg 80% longer all morning.
 
 !  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (a50ee0218bbc6806)
+PLAN 2026-09-21  (34ca4c98f80a6eac)
 ------------------------------------------------------------------------------
 
-  crew-van-1   Marcus + Priya   [van-1]
-      06:09-08:39  Rodriguez Storefront       storefront_glass                 9min drive  needs 2
-                   travel 32min / 7.2mi  (64 person-min)   idle 0min   on-site 82%
+  crew-van-1   Ken   [van-1]
+      08:52-09:37  Nakamura Screens           screen_repair                   52min drive  
+      10:02-12:02  Chen Residence             residential_window_replacement  25min drive  
+                   travel 99min / 23.0mi  (99 person-min)   idle 0min   on-site 62%
 
-  crew-van-2   Ken   [van-2]
-      09:00-11:00  Chen Residence             residential_window_replacement  41min drive  
-      11:20-12:05  Nakamura Screens           screen_repair                   20min drive  
-                   travel 82min / 25.0mi  (82 person-min)   idle 0min   on-site 67%
+  crew-van-3   Marcus + Priya   [van-3]
+      06:10-08:40  Rodriguez Storefront       storefront_glass                10min drive  needs 2
+                   ..58 min gap, leaves 09:38
+      10:00-12:30  Patel Shower Door          shower_door_install             22min drive  
+                   travel 50min / 14.9mi  (100 person-min)   idle 58min   on-site 74%
 
-  crew-van-3   Alex   [van-3]
-      10:00-12:30  Patel Shower Door          shower_door_install             40min drive  
-                   travel 57min / 16.5mi  (57 person-min)   idle 0min   on-site 72%
-
-  crew-van-4   Sofia   [van-4]
-      08:16-09:46  Okonkwo Auto Glass         auto_glass                      16min drive  
-                   travel 29min / 4.4mi  (29 person-min)   idle 0min   on-site 76%
+  crew-van-4   Alex   [van-4]
+      08:20-09:50  Okonkwo Auto Glass         auto_glass                      20min drive  
+                   travel 52min / 12.0mi  (52 person-min)   idle 0min   on-site 63%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
@@ -36,8 +34,8 @@ PLAN 2026-09-21  (a50ee0218bbc6806)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $213.44   vehicle $34.48   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $247.92
-  solver objective $346.80  (+$98.88 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $230.92   vehicle $32.43   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $263.35
+  solver objective $417.73  (+$154.38 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

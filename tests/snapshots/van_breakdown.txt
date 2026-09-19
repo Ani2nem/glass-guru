@@ -3,25 +3,23 @@ Van 2 will not start from 10:40. The morning storefront job already used it, so 
 
 !  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (c587533098f74585)
+PLAN 2026-09-21  (acc3d533acaa2ed6)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
       08:29-09:14  Nakamura Screens           screen_repair                   29min drive  
-      09:28-11:28  Chen Residence             residential_window_replacement  14min drive  
-                   travel 61min / 25.0mi  (61 person-min)   idle 0min   on-site 73%
+      09:33-11:33  Chen Residence             residential_window_replacement  19min drive  
+                   travel 70min / 23.0mi  (70 person-min)   idle 0min   on-site 70%
 
-  crew-van-2   Marcus + Priya   [van-2]
-      06:11-08:41  Rodriguez Storefront       storefront_glass                 9min drive  needs 2
-                   travel 22min / 7.2mi  (44 person-min)   idle 0min   on-site 87%
-
-  crew-van-3   Alex   [van-3]
-      10:00-12:30  Patel Shower Door          shower_door_install             17min drive  
-                   travel 34min / 16.5mi  (34 person-min)   idle 0min   on-site 82%
+  crew-van-3   Marcus + Priya   [van-3]
+      06:10-08:40  Rodriguez Storefront       storefront_glass                10min drive  needs 2
+                   ..68 min gap, leaves 09:48
+      10:00-12:30  Patel Shower Door          shower_door_install             12min drive  
+                   travel 40min / 14.9mi  (80 person-min)   idle 68min   on-site 74%
 
   crew-van-4   Sofia   [van-4]
-      08:09-09:39  Okonkwo Auto Glass         auto_glass                       9min drive  
-                   travel 16min / 4.4mi  (16 person-min)   idle 0min   on-site 85%
+      08:11-09:41  Okonkwo Auto Glass         auto_glass                      11min drive  
+                   travel 29min / 12.0mi  (29 person-min)   idle 0min   on-site 76%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
@@ -36,8 +34,8 @@ PLAN 2026-09-21  (c587533098f74585)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $142.60   vehicle $34.48   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $177.08
-  solver objective $203.84  (+$26.76 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $164.68   vehicle $32.43   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $197.11
+  solver objective $244.09  (+$46.98 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

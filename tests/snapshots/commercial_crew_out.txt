@@ -3,21 +3,21 @@ Both commercial-certified workers are out. The storefront job becomes unstaffabl
 
 !  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (7f0dfa84ff63f892)
+PLAN 2026-09-21  (6ef19ad44cc42f2a)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      09:00-11:00  Chen Residence             residential_window_replacement  23min drive  
-      11:11-11:56  Nakamura Screens           screen_repair                   11min drive  
-                   travel 55min / 25.0mi  (55 person-min)   idle 0min   on-site 75%
+      08:29-09:14  Nakamura Screens           screen_repair                   29min drive  
+      09:33-11:33  Chen Residence             residential_window_replacement  19min drive  
+                   travel 70min / 23.0mi  (70 person-min)   idle 0min   on-site 70%
 
   crew-van-3   Alex   [van-3]
       10:00-12:30  Patel Shower Door          shower_door_install             17min drive  
-                   travel 34min / 16.5mi  (34 person-min)   idle 0min   on-site 82%
+                   travel 35min / 13.6mi  (35 person-min)   idle 0min   on-site 81%
 
   crew-van-4   Sofia   [van-4]
-      08:09-09:39  Okonkwo Auto Glass         auto_glass                       9min drive  
-                   travel 16min / 4.4mi  (16 person-min)   idle 0min   on-site 85%
+      08:11-09:41  Okonkwo Auto Glass         auto_glass                      11min drive  
+                   travel 29min / 12.0mi  (29 person-min)   idle 0min   on-site 76%
 
   UNSERVED - could not fit
       j-401  Rodriguez Storefront       no_certified_worker
@@ -36,8 +36,8 @@ PLAN 2026-09-21  (7f0dfa84ff63f892)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $96.60   vehicle $29.81   overtime $0.00   late $0.00
-        unserved $2,650.00   TOTAL $2,776.41
-  solver objective $2,801.31  (+$24.90 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $123.28   vehicle $31.58   overtime $0.00   late $0.00
+        unserved $2,650.00   TOTAL $2,804.86
+  solver objective $2,833.44  (+$28.58 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

@@ -2,7 +2,8 @@ VENV := .venv
 PY   := $(VENV)/bin/python
 GG   := $(VENV)/bin/glass-guru
 
-.PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots params world clean
+.PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
+        params world travel osrm-setup osrm-up freeze-travel geocode clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -36,6 +37,21 @@ scenario:  ## Run one disruption scenario, e.g. make scenario NAME=van_breakdown
 
 scenarios:  ## List the available scenarios
 	$(GG) scenario list
+
+osrm-setup:  ## One-time: download and prepare the OSRM road network (~69MB)
+	./scripts/setup_osrm.sh
+
+osrm-up:  ## Start the local OSRM backend
+	docker compose up -d osrm
+
+travel:  ## Compare synthetic, frozen and live OSRM travel times
+	$(GG) travel --compare
+
+freeze-travel:  ## Re-freeze the committed travel snapshot from live OSRM
+	$(PY) scripts/freeze_travel.py
+
+geocode:  ## Re-resolve fixture addresses and report coordinate drift
+	$(PY) scripts/geocode_fixture.py
 
 snapshots:  ## Regenerate golden board snapshots (review the diff before committing)
 	UPDATE_SNAPSHOTS=1 $(PY) -m pytest tests/unit/test_cli_snapshots.py -q
