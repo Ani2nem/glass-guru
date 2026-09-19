@@ -2,8 +2,9 @@
 
 Pure function of its inputs - no network, no clock, no randomness - so unit tests and
 golden scenarios replay identically and cost nothing. Routes are geometrically naive
-(it cannot know about bridges or one-ways), so it is the test default, not the
-dev/production default; :mod:`glass_guru.scheduler.travel.osrm` handles real roads.
+(it cannot know about bridges or one-ways), so it is the test default. Real road
+networks arrive with the OSRM provider in a later increment; until then every
+distance in this system is a straight line times a constant.
 
 Speed rises with trip length, which is the single most important non-linearity to
 capture: a one-mile urban hop averages ~24 mph while a 25-mile run uses highway and
@@ -17,6 +18,7 @@ import math
 from collections.abc import Sequence
 from datetime import datetime
 
+from glass_guru.config import BusinessParams
 from glass_guru.domain.models import Location
 from glass_guru.domain.travel import TravelLeg
 from glass_guru.scheduler.travel.base import (
@@ -58,6 +60,19 @@ class SyntheticTravelProvider:
         self._road_factor = road_factor
         self._approach_minutes = approach_minutes
         self._profile = dict(traffic_profile or TRAFFIC_PROFILE)
+
+    @classmethod
+    def from_business(cls, business: BusinessParams) -> SyntheticTravelProvider:
+        """Build from ``config/business_params.yaml`` so the road factor and
+        traffic profile are auditable alongside every other business number."""
+        return cls(
+            road_factor=business.travel.road_factor.value,
+            approach_minutes=int(business.travel.approach_minutes.value),
+            traffic_profile={
+                TimeBucket(name): param.value
+                for name, param in business.travel.traffic_multipliers.items()
+            },
+        )
 
     def _miles(self, origin: Location, dest: Location) -> float:
         return origin.haversine_miles(dest) * self._road_factor

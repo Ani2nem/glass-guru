@@ -1,0 +1,132 @@
+# Business parameters for the scheduling objective.
+#
+# Every value carries a `source`:
+#   estimated  - a plausible guess. Not validated against this business.
+#   measured   - derived from the business's own historical data.
+#   confirmed  - a human at the business said this number is right.
+#
+# As of this writing everything is `estimated`. That is deliberate and visible:
+# the objective is priced in dollars so its trade-offs are arguable, and that
+# argument is only worth having once these are real. `glass-guru params` prints
+# this table, and any plan built on estimates is rendered with a warning banner.
+
+meta:
+  name: "Sample Glass Co (fixture)"
+  timezone: "America/Los_Angeles"
+  currency: "USD"
+
+labor:
+  loaded_rate_per_minute:
+    value: 0.92
+    source: estimated
+    note: >-
+      ~$55/hr fully loaded. Needs the real figure: base wage plus payroll tax,
+      workers' comp, insurance, benefits and non-billable time. This term
+      usually dominates the objective, so it is the first number to get right.
+
+  overtime_multiplier:
+    value: 1.5
+    source: estimated
+    note: "Standard US time-and-a-half. Verify against actual payroll practice."
+
+  overtime_max_minutes:
+    value: 120
+    source: estimated
+    note: "How far past shift end a crew may be pushed before the day is refused."
+
+vehicle:
+  cost_per_mile:
+    value: 0.65
+    source: estimated
+    note: >-
+      Fuel, tyres, maintenance, depreciation. Near the IRS business mileage rate,
+      which is a reasonable proxy but not this fleet's actual cost.
+
+penalties:
+  unserved_base:
+    value: 500.0
+    source: estimated
+    note: >-
+      What leaving a normal-priority job unscheduled costs in goodwill and
+      deferred revenue. Scaled by priority, then added to revenue_weight x revenue.
+
+  deferral_escalation:
+    value: 250.0
+    source: estimated
+    note: >-
+      Added per prior deferral. Load-bearing: without it, cost minimisation drops
+      the same far-out, low-revenue customer every single day until they leave.
+      Should be large enough that ~3 deferrals make a job effectively mandatory.
+
+  lateness_per_minute:
+    value: 2.0
+    source: estimated
+    note: "Cost of finishing past a soft window. Hard windows are not priced, they are enforced."
+
+  revenue_weight:
+    value: 0.5
+    source: estimated
+    note: >-
+      How much a job's revenue counts toward its unserved penalty. At 1.0 the
+      optimiser serves purely by ticket size and neglects small jobs.
+
+travel:
+  road_factor:
+    value: 1.3
+    source: estimated
+    note: >-
+      Straight-line to road-distance ratio, used only by the synthetic provider.
+      Becomes irrelevant once OSRM supplies real network distances.
+
+  approach_minutes:
+    value: 2
+    source: estimated
+    note: "Parking, approach, walking to the door. Per leg."
+
+  traffic_multipliers:
+    early:
+      value: 0.95
+      source: estimated
+      note: "Before 07:00."
+    am_peak:
+      value: 1.45
+      source: estimated
+      note: "07:00-09:30. Replace with sampled Google corridor data."
+    midday:
+      value: 1.05
+      source: estimated
+      note: "09:30-15:00."
+    pm_peak:
+      value: 1.50
+      source: estimated
+      note: "15:00-18:30. Replace with sampled Google corridor data."
+    evening:
+      value: 0.90
+      source: estimated
+      note: "After 18:30."
+
+service_area:
+  radius_miles:
+    value: 30.0
+    source: estimated
+    note: >-
+      Beyond this a single job burns 2+ hours of drive time. Treated as a business
+      rule rather than something the objective rediscovers every morning.
+
+solver:
+  max_solve_seconds:
+    value: 10.0
+    source: estimated
+    note: "Ceiling per day-solve. The hot path needs sub-second; this is the batch bound."
+
+  search_workers:
+    value: 1
+    source: estimated
+    note: >-
+      Single-threaded keeps results reproducible, which scenario replay and eval
+      baselines depend on. Raise only for interactive solves that are not scored.
+
+  random_seed:
+    value: 0
+    source: estimated
+    note: "Fixed so identical input yields an identical plan."
