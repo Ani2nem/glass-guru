@@ -30,12 +30,13 @@ independently by :mod:`glass_guru.domain.invariants`.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, tzinfo
 
 from ortools.sat.python import cp_model
 
+from glass_guru.config import BusinessParams
 from glass_guru.domain.enums import (
     UnservedReason,
     WindowHardness,
@@ -50,7 +51,7 @@ from glass_guru.domain.models import (
     Worker,
     WorkerId,
 )
-from glass_guru.domain.state import WorldState
+from glass_guru.domain.state import Unavailability, WorldState
 from glass_guru.domain.travel import TravelOracle
 from glass_guru.scheduler.routing import materialize_route
 from glass_guru.scheduler.travel.base import TimeBucket
@@ -89,6 +90,38 @@ class SolveParams:
     #: eval baselines depend on. Raise only for interactive solves that are not scored.
     search_workers: int = 1
     random_seed: int = 0
+
+    @classmethod
+    def from_business(
+        cls,
+        business: BusinessParams,
+        business_tz: tzinfo,
+        *,
+        allow_overtime: bool = True,
+        travel_bucket: TimeBucket | None = None,
+        max_solve_seconds: float | None = None,
+    ) -> SolveParams:
+        """Build solve weights from ``config/business_params.yaml``.
+
+        Keeping the numbers out of code is what makes their provenance auditable;
+        see :mod:`glass_guru.config`.
+        """
+        return cls(
+            business_tz=business_tz,
+            labor_rate_per_minute=business.labor.loaded_rate_per_minute.value,
+            unserved_penalty_base=business.penalties.unserved_base.value,
+            deferral_escalation=business.penalties.deferral_escalation.value,
+            lateness_per_minute=business.penalties.lateness_per_minute.value,
+            revenue_weight=business.penalties.revenue_weight.value,
+            allow_overtime=allow_overtime,
+            overtime_minutes=int(business.labor.overtime_max_minutes.value),
+            travel_bucket=travel_bucket,
+            max_solve_seconds=max_solve_seconds
+            if max_solve_seconds is not None
+            else business.solver.max_solve_seconds.value,
+            search_workers=int(business.solver.search_workers.value),
+            random_seed=int(business.solver.random_seed.value),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,15 +176,19 @@ def _unserved_penalty(job: Job, params: SolveParams) -> float:
     return base + escalation + params.revenue_weight * job.revenue
 
 
+#: Local-minute span of each traffic bucket.
+_BUCKET_SPANS: dict[TimeBucket, tuple[int, int]] = {
+    TimeBucket.EARLY: (0, 7 * 60),
+    TimeBucket.AM_PEAK: (7 * 60, 9 * 60 + 30),
+    TimeBucket.MIDDAY: (9 * 60 + 30, 15 * 60),
+    TimeBucket.PM_PEAK: (15 * 60, 18 * 60 + 30),
+    TimeBucket.EVENING: (18 * 60 + 30, MINUTES_PER_DAY),
+}
+
+
 def _worst_bucket_for_shift(start_min: int, end_min: int) -> TimeBucket:
     """The most congested bucket a shift running ``start..end`` can touch."""
-    spans = {
-        TimeBucket.EARLY: (0, 7 * 60),
-        TimeBucket.AM_PEAK: (7 * 60, 9 * 60 + 30),
-        TimeBucket.MIDDAY: (9 * 60 + 30, 15 * 60),
-        TimeBucket.PM_PEAK: (15 * 60, 18 * 60 + 30),
-        TimeBucket.EVENING: (18 * 60 + 30, MINUTES_PER_DAY),
-    }
+    spans = _BUCKET_SPANS
     severity = {
         TimeBucket.PM_PEAK: 5,
         TimeBucket.AM_PEAK: 4,
@@ -184,6 +221,78 @@ def _windows_touch_day(job: Job, day_start: datetime, tz: tzinfo) -> bool:
         return True
     day_end = day_start + timedelta(days=1)
     return any(w.start < day_end and day_start < w.end for w in job.windows)
+
+
+def _largest_free_interval(
+    outages: Iterable[Unavailability],
+    day_start: datetime,
+    span_start: int,
+    span_end: int,
+) -> tuple[int, int] | None:
+    """Longest stretch of ``[span_start, span_end)`` (minutes from midnight) not under outage.
+
+    A resource that goes down mid-shift is still usable for whichever side of the
+    outage is longer. Taking the single largest window rather than modelling every
+    fragment keeps the CP-SAT model to one contiguous shift per crew, which is worth
+    far more than the sliver of capacity it gives up.
+    """
+    blocked: list[tuple[int, int]] = []
+    for outage in outages:
+        start = (outage.from_time - day_start).total_seconds() / 60.0
+        end = (
+            (outage.until_time - day_start).total_seconds() / 60.0
+            if outage.until_time is not None
+            else float(MINUTES_PER_DAY)
+        )
+        lo, hi = max(span_start, int(start)), min(span_end, int(end))
+        if lo < hi:
+            blocked.append((lo, hi))
+
+    if not blocked:
+        return (span_start, span_end) if span_start < span_end else None
+
+    blocked.sort()
+    merged: list[tuple[int, int]] = []
+    for lo, hi in blocked:
+        if merged and lo <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], hi))
+        else:
+            merged.append((lo, hi))
+
+    best: tuple[int, int] | None = None
+    cursor = span_start
+    for lo, hi in [*merged, (span_end, span_end)]:
+        if lo > cursor and (best is None or lo - cursor > best[1] - best[0]):
+            best = (cursor, lo)
+        cursor = max(cursor, hi)
+    return best
+
+
+def _probe_times(
+    day_start: datetime,
+    shift_start: int,
+    shift_end: int,
+    forced: TimeBucket | None,
+) -> list[datetime]:
+    """Departure times at which to sample travel, one per bucket the shift touches.
+
+    The matrix is built by taking the worst leg across these probes. Sampling a single
+    "pessimistic" hour is not enough: a ``TrafficDelay`` event scoped to 07:00-12:00 is
+    completely invisible to a matrix probed at 16:00, and the solver then plans around
+    congestion it does not know exists.
+
+    Cost is bounded - at most five probes, and legs are cached - and the payoff is a
+    matrix that never *under*-estimates, which is what keeps materialized routes
+    feasible against hard windows.
+    """
+    if forced is not None:
+        return [day_start + timedelta(hours=_BUCKET_PROBE_HOUR[forced])]
+    touched = [
+        bucket for bucket, (lo, hi) in _BUCKET_SPANS.items() if shift_start < hi and lo < shift_end
+    ]
+    if not touched:
+        touched = [TimeBucket.MIDDAY]
+    return [day_start + timedelta(hours=_BUCKET_PROBE_HOUR[b]) for b in touched]
 
 
 def _shift_window(worker: Worker, on_date: date) -> tuple[int, int] | None:
@@ -354,23 +463,33 @@ def plan_day(
         jobs.append(job)
 
     # ------------------------------------------------------------------ resources
+    # Outages are intersected with the shift rather than used as an on/off filter.
+    # A van that dies at 10:40 was perfectly usable at 06:00, and excluding it from
+    # the whole day throws away a morning of capacity for no reason.
     shift_span: dict[WorkerId, tuple[int, int]] = {}
     workers: list[Worker] = []
     for worker in sorted(world.workers.values(), key=lambda w: w.id):
         span = _shift_window(worker, on_date)
         if span is None:
             continue
-        window_start = day_start + timedelta(minutes=span[0])
-        window_end = day_start + timedelta(minutes=span[1])
-        if not world.is_worker_available(worker.id, window_start, window_end):
+        usable = _largest_free_interval(
+            world.worker_outages.get(worker.id, ()), day_start, span[0], span[1]
+        )
+        if usable is None:
             continue
         workers.append(worker)
-        shift_span[worker.id] = span
+        shift_span[worker.id] = usable
 
+    van_window: dict[VanId, tuple[int, int]] = {}
     vans: list[VanId] = []
     for van in sorted(world.vans.values(), key=lambda v: v.id):
-        if world.is_van_available(van.id, day_start, day_start + timedelta(days=1)):
-            vans.append(van.id)
+        usable = _largest_free_interval(
+            world.van_outages.get(van.id, ()), day_start, 0, MINUTES_PER_DAY
+        )
+        if usable is None:
+            continue
+        vans.append(van.id)
+        van_window[van.id] = usable
 
     if not jobs or not workers or not vans:
         unserved = tuple(
@@ -389,8 +508,7 @@ def plan_day(
     latest_shift = max(e for _, e in shift_span.values()) + overtime
 
     # ------------------------------------------------------------- travel matrix
-    bucket = params.travel_bucket or _worst_bucket_for_shift(earliest_shift, latest_shift)
-    probe = day_start + timedelta(hours=_BUCKET_PROBE_HOUR[bucket])
+    probes = _probe_times(day_start, earliest_shift, latest_shift, params.travel_bucket)
 
     depot: Location = world.vans[vans[0]].home_depot
     nodes: list[Location] = [depot] + [j.location for j in jobs]
@@ -401,9 +519,9 @@ def plan_day(
         for j in range(n):
             if i == j:
                 continue
-            leg = travel.leg(nodes[i], nodes[j], probe)
-            travel_min[i][j] = leg.minutes
-            travel_mi[i][j] = leg.miles
+            legs = [travel.leg(nodes[i], nodes[j], probe) for probe in probes]
+            travel_min[i][j] = max(leg.minutes for leg in legs)
+            travel_mi[i][j] = max(leg.miles for leg in legs)
 
     model = cp_model.CpModel()
     num_crews = len(vans)
@@ -454,6 +572,10 @@ def plan_day(
             model.add(crew_start[k] >= span_start).only_enforce_if(assign[worker.id, k])
             allowance = overtime if worker.overtime_eligible else 0
             model.add(crew_end[k] <= span_end + allowance).only_enforce_if(assign[worker.id, k])
+        # The crew cannot start before its van is available or finish after it goes down.
+        usable_start, usable_end = van_window[vans[k]]
+        model.add(crew_start[k] >= usable_start)
+        model.add(crew_end[k] <= usable_end)
         model.add(crew_end[k] >= crew_start[k])
 
     for job in jobs:
@@ -677,7 +799,7 @@ def plan_day(
             "scheduled": float(len(scheduled)),
             "solve_seconds": solver.wall_time,
             "best_bound": solver.best_objective_bound / 100.0,
-            "travel_bucket_severity": float(list(TimeBucket).index(bucket)),
+            "travel_probes": float(len(probes)),
         },
     )
 

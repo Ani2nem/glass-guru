@@ -5,8 +5,8 @@ The cost model that keeps this affordable::
     travel_time(A -> B, t) = free_flow_time(A -> B) x traffic_multiplier(corridor, t)
 
 ``free_flow_time`` is road-network geometry and essentially never changes, so it comes
-from a free, deterministic source (synthetic in tests, self-hosted OSRM in dev and
-production). ``traffic_multiplier`` is the only thing a paid maps API knows that OSRM
+from a free, deterministic source (synthetic today; self-hosted OSRM once that
+provider lands). ``traffic_multiplier`` is the only thing a paid maps API knows that OSRM
 does not, and it is low-dimensional - a corridor and a time bucket, not a leg - which
 is why calibration costs a few hundred elements a week instead of tens of thousands
 per solve.

@@ -110,6 +110,18 @@ class UnservedReason(StrEnum):
     COST_EXCEEDS_VALUE = "cost_exceeds_value"
 
 
+#: Reasons that are structural exclusions rather than failures to serve.
+#: A job whose window falls on another day, or whose glass has not arrived, was
+#: never this solve's to place - charging it an unserved penalty would make the
+#: day's cost meaningless and defeat cross-day comparison.
+NOT_A_FAILURE: frozenset[UnservedReason] = frozenset(
+    {
+        UnservedReason.WINDOW_ON_ANOTHER_DAY,
+        UnservedReason.MATERIALS_NOT_AVAILABLE,
+    }
+)
+
+
 class ViolationCode(StrEnum):
     """Invariant breaches. Any of these blocks a plan from being committed."""
 

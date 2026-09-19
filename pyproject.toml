@@ -28,6 +28,9 @@ dependencies = [
     "opentelemetry-sdk>=1.27",
 ]
 
+[project.scripts]
+glass-guru = "glass_guru.cli.main:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3",
