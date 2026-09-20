@@ -1,0 +1,410 @@
+"""Agent tests.
+
+Every one runs against a scripted provider: no network, no credentials, no spend, and
+the same answer each time. A suite that needed a live model would be slow, flaky and
+expensive enough that people would stop running it.
+
+The cases that matter are the misbehaving ones. "Does the happy path work" is the
+least interesting question about a small model; "what happens when it returns an
+invalid enum three times running, or names a van that does not exist" is the question
+the whole validate-and-repair design exists to answer.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from zoneinfo import ZoneInfo
+
+import pytest
+from pydantic import BaseModel, ConfigDict, Field
+
+from glass_guru.agents.coordinator import choose_repair
+from glass_guru.agents.llm.base import LLMError, LLMResponse, LLMUsage
+from glass_guru.agents.llm.scripted import CallbackLLMProvider, ScriptedLLMProvider
+from glass_guru.agents.structured import Example, extract, json_schema_for
+from glass_guru.agents.triage import TriageOutcome, TriageResult, triage
+from glass_guru.domain.autonomy import AutonomyPolicy
+from glass_guru.domain.state import Unavailability
+from glass_guru.fixtures.sample_business import WEEK_START, _at
+from glass_guru.obs.correlation import dispatch
+
+TZ = ZoneInfo("America/Los_Angeles")
+
+
+class Person(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    crew_size: int = Field(ge=1, le=2)
+
+
+# ------------------------------------------------------------------ the schema
+
+
+def test_schema_is_self_contained():
+    """Constrained-decoding paths vary in how well they follow $ref, and a schema a
+    provider cannot fully honour silently becomes a weaker constraint."""
+    import json
+
+    schema = json_schema_for(TriageOutcome)
+    assert "$ref" not in json.dumps(schema)
+    assert "$defs" not in schema
+
+
+def test_schema_forbids_unknown_fields():
+    assert json_schema_for(Person)["additionalProperties"] is False
+
+
+def test_enums_reach_the_schema_as_enums():
+    """The model picks from a list rather than inventing a string."""
+    schema = json_schema_for(TriageOutcome)
+    kinds = schema["properties"]["events"]["items"]["properties"]["kind"]
+    assert "van-unavailable" in kinds["enum"]
+
+
+# ------------------------------------------------------------ validate and repair
+
+
+def test_a_valid_first_answer_costs_one_attempt():
+    provider = ScriptedLLMProvider.returning({"name": "Dan", "crew_size": 1})
+    result = extract(provider, Person, system="s", text="t")
+    assert result.ok and result.attempts == 1 and result.repairs == 0
+
+
+def test_an_invalid_answer_is_repaired():
+    provider = ScriptedLLMProvider.returning(
+        {"name": "Dan", "crew_size": 4},
+        {"name": "Dan", "crew_size": 2},
+    )
+    result = extract(provider, Person, system="s", text="t")
+    assert result.ok and result.attempts == 2 and result.repairs == 1
+
+
+def test_the_repair_prompt_names_the_actual_error():
+    """ "That was not valid, try again" gives a small model nothing to work with."""
+    provider = ScriptedLLMProvider.returning(
+        {"name": "Dan", "crew_size": 4},
+        {"name": "Dan", "crew_size": 2},
+    )
+    extract(provider, Person, system="s", text="t")
+    repair_prompt = provider.last_user_text()
+    assert "crew_size" in repair_prompt
+    assert "4" in repair_prompt
+
+
+def test_a_stuck_model_escalates_instead_of_looping():
+    """A model repeating one wrong answer will keep repeating it. Burning ten calls to
+    arrive nowhere is worse than handing a dispatcher a clear question."""
+    provider = ScriptedLLMProvider.always({"name": "Dan", "crew_size": 9})
+    result = extract(provider, Person, system="s", text="t", max_attempts=3)
+    assert result.escalated
+    assert result.attempts == 3
+    assert provider.call_count == 3
+    assert "crew_size" in result.errors[0]
+
+
+def test_prose_containing_json_is_rescued_once():
+    """A model that ignored the schema often still has the content right."""
+    provider = ScriptedLLMProvider(
+        responses=[
+            LLMResponse(
+                text='Sure! Here you go:\n```json\n{"name": "Dan", "crew_size": 1}\n```',
+                stop_reason="end_turn",
+            )
+        ]
+    )
+    result = extract(provider, Person, system="s", text="t")
+    assert result.ok and result.value is not None and result.value.name == "Dan"
+
+
+def test_a_provider_failure_stops_rather_than_retrying_blindly():
+    provider = ScriptedLLMProvider(responses=[LLMError("bedrock unreachable")])
+    result = extract(provider, Person, system="s", text="t")
+    assert result.escalated
+    assert "unreachable" in result.errors[0]
+
+
+def test_examples_reach_the_system_prompt():
+    provider = ScriptedLLMProvider.returning({"name": "Dan", "crew_size": 1})
+    extract(
+        provider,
+        Person,
+        system="base",
+        text="t",
+        examples=[Example(text="Dan alone", output=Person(name="Dan", crew_size=1))],
+    )
+    assert "Example input" in provider.requests[0].system
+
+
+def test_usage_accumulates_across_repairs():
+    """Repairs are not free, and the cost of a flaky model should be visible."""
+    provider = ScriptedLLMProvider.returning(
+        {"name": "Dan", "crew_size": 4},
+        {"name": "Dan", "crew_size": 2},
+    )
+    result = extract(provider, Person, system="s", text="t")
+    assert result.usage.input_tokens == 240
+    assert result.usage.output_tokens == 80
+
+
+def test_extraction_requires_a_value_or_raises():
+    provider = ScriptedLLMProvider.always({"name": "Dan", "crew_size": 9})
+    result = extract(provider, Person, system="s", text="t", max_attempts=2)
+    with pytest.raises(LLMError, match="no valid result"):
+        result.require()
+
+
+# --------------------------------------------------------------------- triage
+
+
+def run_triage(world, *payloads, text: str = "Dan called, van 3 won't start") -> TriageResult:
+    provider = ScriptedLLMProvider.returning(*payloads)
+    with dispatch("d-test"):
+        return triage(provider, world, text, on_date=WEEK_START, tz=TZ)
+
+
+def test_triage_builds_typed_events(world):
+    result = run_triage(
+        world,
+        {
+            "events": [
+                {
+                    "kind": "van-unavailable",
+                    "target": "van-3",
+                    "at": "10:40",
+                    "reason": "wont start",
+                }
+            ],
+            "question": "",
+            "summary": "Van 3 out from 10:40.",
+        },
+    )
+    assert len(result.events) == 1
+    event = result.events[0]
+    assert event.type == "van_unavailable"
+    assert event.van_id == "van-3"
+    assert event.from_time.astimezone(TZ).hour == 10
+    assert not result.needs_dispatcher
+
+
+def test_triage_catches_an_invented_id(world):
+    """A hallucinated van is caught by a dictionary lookup. Nothing about the model's
+    confidence would have caught it."""
+    result = run_triage(
+        world,
+        {
+            "events": [{"kind": "van-unavailable", "target": "van-7"}],
+            "question": "",
+            "summary": "x",
+        },
+    )
+    assert result.events == ()
+    assert result.unknown_targets == ("van-7",)
+    assert "van-7" in result.question
+    assert result.needs_dispatcher
+
+
+def test_triage_never_invents_a_missing_required_detail(world):
+    """An over-run needs a number. Guessing it would put a fabricated fact into an
+    append-only log, where it would propagate into every plan that follows."""
+    result = run_triage(
+        world,
+        {
+            "events": [{"kind": "job-overran", "target": "j-403"}],
+            "question": "",
+            "summary": "Patel long.",
+        },
+        text="Patel job running long",
+    )
+    assert result.events == ()
+    assert result.rejected
+    assert result.needs_dispatcher
+
+
+def test_triage_passes_through_a_clarifying_question(world):
+    result = run_triage(
+        world,
+        {"events": [], "question": "Which van is Dan on?", "summary": "Possible fault."},
+    )
+    assert result.question == "Which van is Dan on?"
+    assert result.needs_dispatcher
+
+
+def test_triage_grounds_the_prompt_in_the_real_roster(world):
+    """The model picks from a list instead of inventing from memory - the cheapest way
+    to make a small model reliable at this."""
+    provider = ScriptedLLMProvider.returning({"events": [], "question": "", "summary": ""})
+    with dispatch("d-test"):
+        triage(provider, world, "something happened", on_date=WEEK_START, tz=TZ)
+    system = provider.requests[0].system
+    assert "van-3" in system
+    assert "w-marcus (Marcus)" in system
+    assert "j-402" in system
+
+
+def test_triage_escalates_when_the_model_cannot_answer(world):
+    result = run_triage(world, *([{"events": [{"kind": "nonsense"}]}] * 3))
+    assert result.events == ()
+    assert result.extraction.escalated
+    assert result.needs_dispatcher
+
+
+def test_triage_events_carry_the_dispatch_id(world):
+    with dispatch("d-correlated"):
+        provider = ScriptedLLMProvider.returning(
+            {
+                "events": [{"kind": "van-unavailable", "target": "van-3"}],
+                "question": "",
+                "summary": "",
+            }
+        )
+        result = triage(provider, world, "van 3 down", on_date=WEEK_START, tz=TZ)
+    assert result.events[0].dispatch_id == "d-correlated"
+
+
+# ---------------------------------------------------------------- coordinator
+
+
+@pytest.fixture
+def repair_options(world, travel, business_params):
+    from glass_guru.domain.models import PlanVersion
+    from glass_guru.scheduler.day_planner import SolveParams
+    from glass_guru.scheduler.horizon import HorizonParams, plan_horizon
+    from glass_guru.scheduler.repair import repair_plan
+
+    params = SolveParams.from_business(business_params, TZ)
+    horizon_params = HorizonParams.from_business(business_params)
+    base = plan_horizon(
+        world=world,
+        travel=travel,
+        start=WEEK_START,
+        params=params,
+        horizon_params=horizon_params,
+    )
+    baseline = PlanVersion(
+        id="committed",
+        created_at=_at(0, 6),
+        horizon_start=WEEK_START,
+        horizon_end=date.fromordinal(WEEK_START.toordinal() + 4),
+        routes=base.routes,
+    )
+    world.van_outages["van-1"] = [
+        Unavailability(from_time=_at(0, 10, 40), until_time=None, reason="wont start")
+    ]
+    return repair_plan(
+        world=world,
+        travel=travel,
+        baseline=baseline,
+        start=WEEK_START,
+        params=params,
+        horizon_params=horizon_params,
+    )
+
+
+@pytest.fixture
+def business_params():
+    from glass_guru.config import BusinessParams
+
+    return BusinessParams.load()
+
+
+@pytest.fixture
+def policy(business_params):
+    return AutonomyPolicy.from_business(business_params)
+
+
+def test_coordinator_picks_a_named_strategy(repair_options, policy):
+    provider = ScriptedLLMProvider.returning(
+        {
+            "chosen_strategy": "most_jobs",
+            "rationale": "two more jobs, nobody to call",
+            "confidence": "high",
+            "wants_human_review": False,
+        }
+    )
+    decision = choose_repair(provider, repair_options, policy)
+    assert decision.candidate is not None
+    assert decision.candidate.strategy.name == "most_jobs"
+    assert decision.rationale
+
+
+def test_an_invented_strategy_cannot_survive_validation(repair_options, policy):
+    """The answer is an enum, so a strategy the engine never offered fails to parse
+    rather than propagating into a plan."""
+    provider = ScriptedLLMProvider.always(
+        {
+            "chosen_strategy": "wing_it",
+            "rationale": "trust me",
+            "confidence": "high",
+            "wants_human_review": False,
+        }
+    )
+    decision = choose_repair(provider, repair_options, policy, max_attempts=2)
+    assert decision.extraction.escalated
+    # The engine's own recommendation stands rather than nothing happening.
+    assert decision.candidate is not None
+    assert "could not choose" in decision.rationale
+
+
+def test_the_model_cannot_talk_its_way_past_the_autonomy_policy(
+    repair_options, policy, monkeypatch
+):
+    """The deterministic rules decide. A model able to authorise a customer-visible
+    change silently would make the whole autonomy layer decorative."""
+    from glass_guru.domain import autonomy as autonomy_module
+
+    forced = autonomy_module.AutonomyDecision(
+        autonomy_module.Decision.ESCALATE, ("customer would need telling",)
+    )
+    monkeypatch.setattr(autonomy_module, "decide", lambda *a, **k: forced)
+    monkeypatch.setattr("glass_guru.agents.coordinator.decide", lambda *a, **k: forced)
+
+    provider = ScriptedLLMProvider.returning(
+        {
+            "chosen_strategy": "most_jobs",
+            "rationale": "fine",
+            "confidence": "high",
+            "wants_human_review": False,
+        }
+    )
+    decision = choose_repair(provider, repair_options, policy)
+    assert decision.needs_human
+
+
+def test_the_model_may_ask_for_more_review_than_the_rules_require(repair_options, policy):
+    """It can only ever raise the bar, never lower it."""
+    provider = ScriptedLLMProvider.returning(
+        {
+            "chosen_strategy": "least_disruption",
+            "rationale": "options are close",
+            "confidence": "low",
+            "wants_human_review": True,
+        }
+    )
+    decision = choose_repair(provider, repair_options, policy)
+    assert decision.needs_human
+
+
+def test_the_coordinator_is_told_the_costed_facts_not_the_plan(repair_options, policy):
+    """It ranks a short list. Handing it a whole schedule would invite it to reason
+    over the wrong part of it."""
+    captured: list[str] = []
+
+    def handler(request):
+        captured.append(request.messages[-1].text)
+        return LLMResponse(
+            structured={
+                "chosen_strategy": "most_jobs",
+                "rationale": "r",
+                "confidence": "high",
+                "wants_human_review": False,
+            },
+            stop_reason="tool_use",
+            usage=LLMUsage(),
+        )
+
+    choose_repair(CallbackLLMProvider(handler=handler), repair_options, policy)
+    prompt = captured[0]
+    assert "jobs served" in prompt
+    assert "customers who must be phoned" in prompt
+    assert "arrival" not in prompt.lower()

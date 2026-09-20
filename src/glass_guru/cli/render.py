@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta, tzinfo
 
+from glass_guru.agents.a2a.types import Task
 from glass_guru.config import BusinessParams, Provenance, calibration_banner
 from glass_guru.domain.autonomy import AutonomyDecision, AutonomyPolicy, decide
 from glass_guru.domain.diff import PlanDiff
@@ -433,4 +434,43 @@ def render_diff(
     if not diff.changes:
         lines.append("  (identical)")
     lines += ["", RULE, f"  {decision.explain()}"]
+    return "\n".join(lines)
+
+
+def render_triage(task: Task, payload: dict[str, object]) -> str:
+    """What the agent made of a note, and what still needs a person.
+
+    Repairs are shown because they are the health signal worth watching with a small
+    model: a rising repair rate means it is drifting from what the prompt and schema
+    expect, long before anyone notices a bad schedule.
+    """
+    lines = [RULE, f"  task {task.id}   state: {task.state.value}"]
+    if summary := payload.get("summary"):
+        lines.append(f"  {summary}")
+
+    events = payload.get("events") or []
+    if isinstance(events, list) and events:
+        lines.append("")
+        lines.append("  EVENTS")
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            target = event.get("van_id") or event.get("worker_id") or event.get("job_id") or ""
+            lines.append(f"      {event.get('type', '?'):<22} {target}")
+            if reason := event.get("reason"):
+                lines.append(f"      {'':22} {reason}")
+
+    for label, key in (("unrecognised ids", "unknown_targets"), ("could not record", "rejected")):
+        values = payload.get(key) or []
+        if isinstance(values, list) and values:
+            lines.append("")
+            lines.append(f"  {label}: {', '.join(str(v) for v in values)}")
+
+    if task.needs_input and task.status.message:
+        lines += ["", f"  NEEDS A DISPATCHER: {task.status.message.text_content}"]
+
+    repairs = payload.get("repairs")
+    if isinstance(repairs, int) and repairs:
+        lines += ["", f"  note: the model needed {repairs} repair attempt(s)"]
+    lines.append(RULE)
     return "\n".join(lines)

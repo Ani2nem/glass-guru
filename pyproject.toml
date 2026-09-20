@@ -65,7 +65,7 @@ files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["ortools.*", "pygeohash.*"]
+module = ["ortools.*", "pygeohash.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 # Test bodies stay strict about real type errors but are not required to annotate
