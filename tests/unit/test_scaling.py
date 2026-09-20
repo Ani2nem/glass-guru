@@ -166,13 +166,21 @@ def test_the_untouched_day_is_solved_once_across_quotes(business: BusinessParams
     assert cache.hits == 2
 
 
-def test_booking_the_same_job_twice_gives_the_same_answer(business: BusinessParams, tz: ZoneInfo):
-    """A cache that changed the answer would be worse than none."""
+def test_the_cached_baseline_matches_a_freshly_solved_one(business: BusinessParams, tz: ZoneInfo):
+    """The property that makes the cache safe, asserted on the cache itself.
+
+    An earlier version compared two whole quote pipelines and expected identical
+    prices. That turned out to measure the solver rather than the cache: a solve
+    stopped by its budget gives a budget-dependent answer, so two quotes can differ
+    for reasons that have nothing to do with caching. Checking the stored baseline
+    against a fresh solve of the same day tests the invariant directly and is not
+    subject to that at all.
+    """
     world = synthetic_world(jobs=10, workers=6, vans=4)
-    params = SolveParams.from_business(business, tz)
+    params = SolveParams.from_business(business, tz, reproducible=True)
     cache = BaselineCache()
 
-    first = suggest_booking_slots(
+    suggest_booking_slots(
         world=world,
         travel=TRAVEL,
         draft=draft(0),
@@ -181,16 +189,18 @@ def test_booking_the_same_job_twice_gives_the_same_answer(business: BusinessPara
         business=business,
         cache=cache,
     )
-    second = suggest_booking_slots(
+    stored = cache.get(WEEK_START, sorted(world.jobs), params.max_solve_seconds)
+    assert stored is not None, "the baseline was never cached"
+
+    fresh = plan_day(
         world=world,
         travel=TRAVEL,
-        draft=draft(0),
-        horizon=[WEEK_START],
+        on_date=WEEK_START,
+        candidate_job_ids=sorted(world.jobs),
         params=params,
-        business=business,
-        cache=cache,
     )
-    assert [s.marginal_cost for s in first.slots] == [s.marginal_cost for s in second.slots]
+    assert stored.served == frozenset(job_id for route in fresh.routes for job_id in route.job_ids)
+    assert stored.travel_minutes == sum(r.total_travel_minutes for r in fresh.routes)
 
 
 def test_a_changed_day_invalidates_the_cache(business: BusinessParams, tz: ZoneInfo):

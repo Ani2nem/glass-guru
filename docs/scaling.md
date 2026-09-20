@@ -86,3 +86,27 @@ Memory, concurrent solves, and the cost of a cold travel cache against live OSRM
 frozen snapshot makes travel free in these numbers; a genuinely new service area pays
 for its geography once, which `make freeze-travel` does deliberately rather than
 discovering under load.
+
+## A solve stopped by the clock is not reproducible
+
+Measured: the same ten-job problem at a 1.5 second budget produced two different
+objectives across three runs; at thirty seconds it produced one. When the clock stops
+the search rather than the search exhausting itself, the answer depends on how fast the
+machine happened to be at that moment.
+
+That is fine for a dispatcher, who wants a guaranteed response time. It is fatal for an
+eval baseline or a committed snapshot, which would churn on a busy CI runner and look
+exactly like a regression - and intermittently, which is worse than always.
+
+CP-SAT's `max_deterministic_time` bounds the search by work rather than wall clock. It
+only helps when it is the *binding* limit, which took a second attempt to get right:
+a budget larger than what the wall clock allowed changed nothing. With budgets that
+differ forty-fold:
+
+| | objectives |
+|---|---|
+| wall clock only | 913.01, 547.41, 547.41 |
+| deterministic budget | 547.41, 547.41, 547.41 |
+
+The eval runners and the regression tests ask for reproducibility; the interactive
+paths do not, because a bounded wait matters more there than a stable answer.

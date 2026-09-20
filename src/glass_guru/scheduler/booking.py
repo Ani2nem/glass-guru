@@ -182,7 +182,12 @@ def suggest_booking_slots(
     # A quote is two solves per day with a caller waiting, so it gets its own ceiling.
     # Inheriting the batch budget made a twenty-five job day take twenty seconds to
     # answer, which is not a feature anybody would use.
-    params = replace(params, max_solve_seconds=business.solver.quote_solve_seconds.value)
+    #
+    # Unless reproducibility was asked for. Clamping the wall clock below a
+    # deterministic budget makes the clock the binding limit again and quietly undoes
+    # it - a caller who wants the same answer every time has accepted the longer wait.
+    if params.max_deterministic_time is None:
+        params = replace(params, max_solve_seconds=business.solver.quote_solve_seconds.value)
 
     slots: list[SlotSuggestion] = []
     unavailable: list[UnavailableDay] = []

@@ -1,7 +1,7 @@
 SCENARIO  commercial_crew_out
 Both commercial-certified workers are out. The storefront job becomes unstaffable, and the dispatcher should be told that precisely rather than being told the day was full.
 
-!  34 of 34 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (6ef19ad44cc42f2a)
 ------------------------------------------------------------------------------

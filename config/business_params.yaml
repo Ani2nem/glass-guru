@@ -244,6 +244,16 @@ solver:
       a quote take twenty seconds, which is not a feature anybody would use. A good
       enough answer now beats a better one after the caller has hung up.
 
+  deterministic_budget:
+    value: 8.0
+    source: estimated
+    note: >-
+      Solver work units, used where the same input must give the same answer: eval
+      baselines and committed snapshots. Unlike a wall-clock limit this does not vary
+      with machine speed or load, so a busy CI runner does not produce what looks like
+      a regression. Not used on the interactive path, which wants a guaranteed response
+      time more than a reproducible one.
+
   search_workers:
     value: 1
     source: estimated

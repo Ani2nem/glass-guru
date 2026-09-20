@@ -123,6 +123,19 @@ class SolveParams:
     prune_above: int = 25
 
     max_solve_seconds: float = 10.0
+    #: A budget measured in solver work rather than wall clock.
+    #:
+    #: A wall-clock limit is not reproducible: when the clock stops the search rather
+    #: than the search exhausting itself, the answer depends on how fast the machine
+    #: happened to be. Measured - ten jobs at a 1.5 second budget gave two different
+    #: objectives across three runs, while the same problem at thirty seconds gave one.
+    #: That is fine for a dispatcher, who wants a guaranteed response time, and fatal
+    #: for an eval baseline or a committed snapshot, which would churn on a loaded CI
+    #: machine and look like a regression.
+    #:
+    #: Set it where the same input must give the same answer; leave it unset where a
+    #: bounded wait matters more. Both limits apply when both are set.
+    max_deterministic_time: float | None = None
     #: Single-threaded search makes results reproducible, which scenario replay and
     #: eval baselines depend on. Raise only for interactive solves that are not scored.
     search_workers: int = 1
@@ -157,6 +170,7 @@ class SolveParams:
         allow_overtime: bool = True,
         travel_bucket: TimeBucket | None = None,
         max_solve_seconds: float | None = None,
+        reproducible: bool = False,
     ) -> SolveParams:
         """Build solve weights from ``config/business_params.yaml``.
 
@@ -174,11 +188,23 @@ class SolveParams:
             overtime_minutes=int(business.labor.overtime_max_minutes.value),
             hard_window_buffer_minutes=int(business.scheduling.hard_window_buffer_minutes.value),
             travel_bucket=travel_bucket,
-            max_solve_seconds=max_solve_seconds
-            if max_solve_seconds is not None
-            else business.solver.max_solve_seconds.value,
+            # When reproducibility is what matters, the deterministic budget must be
+            # the limit that binds; the wall clock becomes a safety net against a
+            # pathological problem rather than the thing shaping the answer.
+            max_solve_seconds=(
+                max_solve_seconds
+                if max_solve_seconds is not None
+                else (
+                    business.solver.deterministic_budget.value * 5
+                    if reproducible
+                    else business.solver.max_solve_seconds.value
+                )
+            ),
             search_workers=int(business.solver.search_workers.value),
             random_seed=int(business.solver.random_seed.value),
+            max_deterministic_time=(
+                business.solver.deterministic_budget.value if reproducible else None
+            ),
         )
 
 
@@ -938,6 +964,8 @@ def plan_day(
     # --------------------------------------------------------------------- solve
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = params.max_solve_seconds
+    if params.max_deterministic_time is not None:
+        solver.parameters.max_deterministic_time = params.max_deterministic_time
     solver.parameters.num_search_workers = params.search_workers
     solver.parameters.random_seed = params.random_seed
     status = solver.solve(model)

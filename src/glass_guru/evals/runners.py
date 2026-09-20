@@ -69,7 +69,7 @@ def run_invariants() -> list[CaseResult]:
     """
     business = _business()
     travel = build_travel(business, TravelMode.FROZEN)
-    params = SolveParams.from_business(business, _tz())
+    params = SolveParams.from_business(business, _tz(), reproducible=True)
     results: list[CaseResult] = []
 
     for name, scenario in sorted(scenario_library.SCENARIOS.items()):
@@ -228,7 +228,7 @@ def _coordinator_case(provider: LLMProvider) -> CaseResult:
     """The coordinator must pick a strategy the engine actually offered."""
     business = _business()
     travel = build_travel(business, TravelMode.FROZEN)
-    params = SolveParams.from_business(business, _tz())
+    params = SolveParams.from_business(business, _tz(), reproducible=True)
     horizon_params = HorizonParams.from_business(business)
 
     scenario = scenario_library.get("van_breakdown")
@@ -289,7 +289,7 @@ def run_scenarios() -> list[CaseResult]:
     """End to end, asserting outcomes rather than prose."""
     business = _business()
     travel = build_travel(business, TravelMode.FROZEN)
-    params = SolveParams.from_business(business, _tz())
+    params = SolveParams.from_business(business, _tz(), reproducible=True)
     results: list[CaseResult] = []
 
     for case in _load("scenarios")["cases"]:
@@ -359,7 +359,7 @@ def run_quality(provider: LLMProvider) -> list[CaseResult]:
     """
     business = _business()
     travel = build_travel(business, TravelMode.FROZEN)
-    params = SolveParams.from_business(business, _tz())
+    params = SolveParams.from_business(business, _tz(), reproducible=True)
     horizon_params = HorizonParams.from_business(business)
     results: list[CaseResult] = []
 
@@ -568,7 +568,7 @@ def run_checker_detection() -> list[CaseResult]:
     """
     business = _business()
     travel = build_travel(business, TravelMode.FROZEN)
-    params = SolveParams.from_business(business, _tz())
+    params = SolveParams.from_business(business, _tz(), reproducible=True)
     config = ValidationConfig(business_tz=_tz())
     results: list[CaseResult] = []
 
