@@ -35,13 +35,15 @@ Two implementations of the same calculation agreeing is the whole safety argumen
 
 ```bash
 make install
-make check                 # 351 tests, mypy strict, ruff
+make check                 # 373 tests, mypy strict, ruff
 make board                 # render a day's schedule
 make dev                   # the dispatch board at http://127.0.0.1:5173
 ```
 
 No credentials and no network are needed for any of that.
 Travel times come from a committed OSRM snapshot, so a fresh clone gets real road distances offline and for free.
+
+[docs/walkthrough.md](docs/walkthrough.md) is the by-hand tour: take a call, price it, break a van, repair the day.
 
 For the agents, see [docs/aws-setup.md](docs/aws-setup.md) - Amazon Nova Lite on Bedrock, behind an interface that makes the model a config value.
 
@@ -53,7 +55,7 @@ For the agents, see [docs/aws-setup.md](docs/aws-setup.md) - Amazon Nova Lite on
 
 **The numbers say where they came from.** Every rate and duration carries a provenance tag (`make params`). All thirty-five are currently `estimated`, and the board says so at the top of every board it prints.
 
-**Nothing deploys itself.** CI can replace the running image and nothing else - it holds no credential that can edit infrastructure or delete the event log. See [infra/](infra/).
+**Nothing deploys itself.** CI can replace the running image and nothing else - it holds no credential that can edit infrastructure or delete the event log. The application's own role has no `s3:DeleteObject`, because an append-only log never needs one. See [infra/](infra/).
 
 ## Layout
 
@@ -65,7 +67,7 @@ src/glass_guru/
   mcp_server/    the tool surface agents see
   api/  cli/     HTTP and terminal front ends
   evals/         tiers, datasets, scoring, the tone judge
-infra/           terraform: bootstrap (OIDC, roles) and app (ECS, ALB, EFS)
+infra/           terraform: bootstrap (OIDC, roles) and app (Lambda, S3)
 web/             the dispatch board
 docs/            design notes and operational guides
 ```
@@ -73,6 +75,7 @@ docs/            design notes and operational guides
 ## Status
 
 The machine works, the evals gate it, and the pipeline deploys it.
-The application stack is written and validated but not applied - it costs about $37 a month, and `infra/app/README.md` has the apply and teardown.
+The application stack - a container on Lambda behind a function URL, with the event log on S3 - is written and validated but not applied.
+About **$3 a month**, nothing when idle; [`infra/app/README.md`](infra/app/README.md) has the apply, the teardown, and why it is not ECS.
 
 Known and deliberate: every business parameter is still an estimate; the tone labels are mine rather than the business's, which calibrates the judge against clear-cut cases but not against real taste; and Nova Lite asks a clarifying question on a handful of triage notes, which is left failing because a gate adjusted until it passes measures nothing.

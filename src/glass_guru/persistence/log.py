@@ -37,6 +37,10 @@ from glass_guru.domain.models import PlanVersion
 _EVENT_ADAPTER: TypeAdapter[Event] = TypeAdapter(Event)
 
 
+def _is_s3(root: Path | str) -> bool:
+    return isinstance(root, str) and root.startswith("s3://")
+
+
 class PlanConflict(RuntimeError):
     """The plan head moved while this change was being prepared.
 
@@ -95,6 +99,10 @@ class PlanStore(Protocol):
     def get(self, plan_id: str) -> PlanVersion | None: ...
     def commit(self, plan: PlanVersion, expected_parent: str | None) -> PlanVersion: ...
     def history(self) -> list[PlanVersion]: ...
+    # Part of the contract, and omitted here until a second implementation made that
+    # obvious: the CLI and the API both walk the parent chain, and they were reaching
+    # through the protocol to a concrete class to do it.
+    def ancestry(self, plan_id: str | None = None) -> list[PlanVersion]: ...
 
 
 class JsonPlanStore:
@@ -170,16 +178,38 @@ def _atomic_write(path: Path, text: str) -> None:
 
 
 class Workspace:
-    """A directory holding one business's log and plan history."""
+    """One business's log and plan history, on disk or on S3.
+
+    The location decides the backend: an ``s3://bucket/prefix`` root gets the S3
+    stores, anything else gets the filesystem ones. Everything above this class holds
+    the ``EventLog`` and ``PlanStore`` protocols and cannot tell which it has, which is
+    what lets the same tests run against both and what let the application move to
+    Lambda without the scheduler noticing.
+    """
 
     def __init__(self, root: Path | str = ".glass-guru") -> None:
-        self.root = Path(root)
-        self.events = JsonlEventLog(self.root / "events.jsonl")
-        self.plans = JsonPlanStore(self.root / "plans")
+        self.root = root if _is_s3(root) else Path(root)
+        self.events: EventLog
+        self.plans: PlanStore
+
+        if _is_s3(root):
+            from glass_guru.persistence.s3 import S3EventLog, S3PlanStore, parse_uri
+
+            bucket, prefix = parse_uri(str(root))
+            self.events = S3EventLog(bucket, f"{prefix}/events.jsonl".lstrip("/"))
+            self.plans = S3PlanStore(bucket, f"{prefix}/plans".lstrip("/"))
+        else:
+            self.events = JsonlEventLog(Path(root) / "events.jsonl")
+            self.plans = JsonPlanStore(Path(root) / "plans")
 
     @property
     def exists(self) -> bool:
-        return (self.root / "events.jsonl").exists()
+        """Whether this workspace has been initialised.
+
+        Asked as "are there any events", not "is there a file", so it means the same
+        thing on both backends.
+        """
+        return len(self.events) > 0
 
     def seed(self, events: Iterable[Event]) -> int:
         """Initialise an empty workspace. Refuses to overwrite an existing one."""

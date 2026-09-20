@@ -124,14 +124,30 @@ def _fail(exc: Exception, status: int = 400, remedy: str = "") -> HTTPException:
 # --------------------------------------------------------------------------- health
 
 
+def stream_mode() -> str:
+    """``sse`` or ``poll``. How the board should find out that something changed.
+
+    This is a cost decision, not a technical one. Server-sent events are the better
+    mechanism and are free on a server that is running anyway. On Lambda the function
+    is billed for as long as the stream is held open, so one board left open for a
+    working day costs about $29 a month against about $0.58 for polling every ten
+    seconds - and left open overnight, more than the always-on container it replaced.
+    """
+    return os.environ.get("GLASS_GURU_STREAM", "sse")
+
+
 @app.get("/api/health")
 def health() -> dict[str, str]:
     """Liveness. Deliberately does no work at all.
 
     A liveness probe that touches the solver restarts a healthy task whenever a solve
     is holding the worker threads, which turns a slow minute into an outage.
+
+    It also tells the board how to watch for changes, because that is the one thing
+    the client cannot work out for itself - a stream that is expensive still works,
+    so there is no failure to fall back from.
     """
-    return {"status": "ok", "version": app.version}
+    return {"status": "ok", "version": app.version, "stream": stream_mode()}
 
 
 @app.get("/api/ready")
@@ -576,6 +592,17 @@ def get_history() -> list[dict[str, Any]]:
 @app.get("/api/stream")
 async def stream() -> StreamingResponse:
     """Server-sent events, so a board reflects a change made from the CLI or an agent."""
+    if stream_mode() != "sse":
+        # Refused rather than quietly served. An old tab that kept its connection would
+        # go on billing for it, and a bill is a bad way to find out.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "StreamingDisabled",
+                "detail": "this deployment is billed per second of open connection",
+                "remedy": "the board polls instead; reload it to pick up the right mode",
+            },
+        )
     return StreamingResponse(
         broadcaster.stream(),
         media_type="text/event-stream",

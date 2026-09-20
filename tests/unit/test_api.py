@@ -319,3 +319,25 @@ def test_the_osrm_url_is_configurable(monkeypatch):
     monkeypatch.setenv("GLASS_GURU_OSRM_URL", "http://osrm.internal:5000")
     provider = build_travel(BusinessParams.load(), TravelMode.OSRM)
     assert "osrm.internal" in repr(provider.__dict__), "the env var was not honoured"
+
+
+def test_the_board_is_told_how_to_watch_for_changes(client: TestClient, monkeypatch):
+    """The client cannot work this out for itself.
+
+    A stream works perfectly well on Lambda; it is just billed for every second it
+    stays open, so there is no failure to detect and fall back from. The server has to
+    say, and the default is the one that is right locally.
+    """
+    assert client.get("/api/health").json()["stream"] == "sse"
+
+    monkeypatch.setenv("GLASS_GURU_STREAM", "poll")
+    assert client.get("/api/health").json()["stream"] == "poll"
+
+
+def test_streaming_is_refused_when_it_is_billed_by_the_second(client: TestClient, monkeypatch):
+    """An old tab that kept its connection would go on costing money, and a bill is a
+    bad way to find out. Refused with a remedy rather than quietly served."""
+    monkeypatch.setenv("GLASS_GURU_STREAM", "poll")
+    response = client.get("/api/stream")
+    assert response.status_code == 409
+    assert "poll" in response.json()["detail"]["remedy"]

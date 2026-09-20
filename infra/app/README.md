@@ -1,40 +1,66 @@
 # The application stack
 
-Everything that costs money.
+A container on Lambda, and an S3 bucket holding the business's history.
+That is the whole thing.
+
 Apply it by hand, read the plan first, and destroy it when you are done looking at it.
 
 ## What it costs
 
 | | per month |
 |---|---|
-| Application load balancer | ~$16 |
-| Fargate, 1 task, 1 vCPU / 2GB, ARM64 | ~$18 |
-| EFS for the event log | ~$1 |
-| CloudWatch logs and ECR storage | ~$2 |
-| **Total** | **~$37** |
+| Lambda, 2GB, roughly 2,000 requests a day | ~$2.50 |
+| S3 (event log and plan versions), ECR, CloudWatch logs | ~$0.50 |
+| Function URL | free |
+| **Total** | **~$3** |
 
-No NAT gateway, which would be $32 a month on its own and is the single largest line item in a naive VPC.
-No RDS and no ElastiCache, because nothing in the application uses them yet.
-No OSRM task, because travel comes from the committed snapshot.
+Idle cost is zero.
+Reproduce it from the published us-east-1 rates: $0.0000166667 per GB-second and $0.20 per million requests.
 
-The load balancer is the largest cost and it exists to give the board a stable URL.
+Absent, and each a deliberate saving: no NAT gateway (-$32), no load balancer (-$16), no RDS (-$15), no ElastiCache (-$11), no OSRM task (-$29).
 
-## Why this shape and not the one in the plan
+## Why this shape and not the one it replaced
 
-**One task, and an EFS volume.**
-The event log is append-only JSONL with exactly one writer by design.
-Two tasks would fork it.
-At one business and 25 jobs a day that is not a limitation to engineer around, it is the correct model, and the honest way to deploy it is a filesystem that outlives a task and a `desired_count` of 1.
-Postgres becomes the right answer when there are genuinely concurrent writers, or when the pgvector catalog lands - until then it would be a persistence-layer rewrite to support concurrency nothing needs.
+This stack was ECS Fargate behind an application load balancer, because the project plan said ECS Fargate.
+That was the wrong default, and it took writing the monthly figure down to see it.
 
-**Public subnets, strict security groups, no NAT gateway.**
-A NAT gateway exists to give private subnets outbound internet.
-The task needs to reach ECR, CloudWatch and Bedrock, all of which it can reach directly, and nothing needs to reach the task except the load balancer.
-The security group enforces that by referencing the load balancer's group rather than a CIDR, which is the control that actually matters: a private subnet with a permissive group is not safer than a public subnet with a strict one.
-What a public subnet does cost is a public IP on the task; if that is unacceptable, the change is to add private subnets and a NAT gateway, and the security groups do not move.
+One business, twenty-five jobs a day, one dispatcher.
+An always-on task and a load balancer bill 730 hours a month to serve perhaps two hours of work - about **$47** - and neither scales to zero.
+Lambda bills for what runs.
+
+Two things had to be true before that worked, and both were checked rather than assumed.
+
+**The event log had to leave local disk.**
+A Lambda has none that survives an invocation, and two invocations must see the same history.
+It is on S3 now, which also made committing a plan properly atomic: the filesystem store reads the head, compares, then writes, and a second writer landing between the read and the write silently discards the first customer's booking.
+On one machine that window is never lost, so the race is invisible; behind a function URL it is a matter of traffic.
+`If-Match` on the head object makes it a real compare-and-swap.
+
+**The board had to stop holding a stream open.**
+Lambda bills for every second of an open connection.
+
+| one board open for a working day | |
+|---|---|
+| server-sent events | **$28.80/month** |
+| polling every ten seconds | **$0.58/month** |
+
+Left open overnight the streaming figure passes $86, which is more than the container it replaced.
+So the deployed board polls and the API refuses to open a stream, while local development keeps server-sent events, where they are free and nicer.
+This is the single change without which "serverless is cheaper" would have been false.
+
+### Other choices worth stating
+
+**No VPC.**
+The function reaches Bedrock and S3 over their public endpoints.
+A Lambda inside a VPC cannot reach anything without a NAT gateway, and a NAT gateway costs more than all the compute here.
+
+**No API Gateway.**
+Its HTTP APIs cap an integration at 30 seconds and the limit cannot be raised; a five-day horizon at sixty jobs measured 39.
+REST APIs can exceed 29 seconds only through a quota increase that reduces the account's throttle limit in exchange.
+A function URL has a fifteen-minute ceiling, gives HTTPS without a certificate to manage, and costs nothing.
 
 **Frozen travel.**
-Real road distances from the committed snapshot, no routing backend to keep alive, and a cache miss raises rather than silently falling back to something worse.
+Real road distances from the committed snapshot, so there is no routing backend to keep alive, and a cache miss raises rather than silently falling back to something worse.
 A deployment that quotes arbitrary new addresses sets `travel_mode = "warm"` and points `osrm_url` at a routing service.
 Both are variables, not edits.
 
@@ -53,8 +79,8 @@ terraform -chdir=infra/app plan \
 Read the plan, then `apply` the same arguments.
 `terraform -chdir=infra/app output board_url` prints where the board is.
 
-The image must be given by digest, not by tag.
-A variable validation enforces it: `:latest` means the running task and the commit that produced it can only be correlated by timestamp, and a rollback becomes a guess.
+The image must be given by digest, not by tag, and a variable validation enforces it.
+A tag means the running function and the commit that produced it can only be correlated by timestamp, and a rollback becomes a guess.
 
 To push a first image before any deploy has run:
 
@@ -64,15 +90,27 @@ docker buildx build --platform linux/arm64 --provenance=false \
   -t "$(terraform -chdir=infra/bootstrap output -raw ecr_repository_url):bootstrap" --push .
 ```
 
+### Two things to measure on the first deploy
+
+Neither has a number yet, and both are honest gaps rather than estimates.
+
+**Cold start.** Importing the app measures about half a second locally, but pulling an 850MB image is the larger part and cannot be measured from here.
+If it is unacceptable, SnapStart now covers container images; it pairs awkwardly with the Web Adapter, so try it and measure rather than assuming.
+
+**The real monthly bill.** The figure above is arithmetic, not experience.
+
 ## Why CI cannot apply this
 
 The deploy workflow can replace the running image and nothing else.
-It cannot create a VPC, edit an IAM policy, or delete the filesystem holding the event log, because the role it assumes has no such permissions - it can push to one ECR repository and roll one ECS service.
+It cannot change the function's configuration, its URL, its permissions, or the bucket holding the event log, because the role it assumes has no such permission - it can push to one ECR repository and call `UpdateFunctionCode` on one function.
 
 That is deliberate.
 A pipeline that can apply arbitrary Terraform is a pipeline that can destroy the business's history, and "every change is reviewed" is a weaker control than "the credential cannot do it".
 
-It also means the first apply is a human one: this stack creates the IAM roles that CI later uses.
+The application's own role is worth reading for the same reason: it may invoke two named models, read and write one bucket, and write its own logs.
+It has no `s3:DeleteObject`, because the log is append-only and plan versions are immutable, so a bug that tries to remove one fails loudly instead of quietly erasing a day's bookings.
+
+It also means the first apply is a human one: this stack creates the role CI later uses.
 
 ## Tearing it down
 
@@ -80,5 +118,5 @@ It also means the first apply is a human one: this stack creates the IAM roles t
 terraform -chdir=infra/app destroy
 ```
 
-This deletes the EFS volume, and with it every event the deployed system recorded.
-Nothing else in the account is touched - the bootstrap stack, the registry and the roles survive, so bringing it back is one `apply`.
+The workspace bucket carries `prevent_destroy`, so this will refuse until you remove that guard deliberately.
+That is the intent: everything else here is disposable, and the bucket is every booking, disruption and plan the business ever recorded.

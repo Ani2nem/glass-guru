@@ -3,7 +3,7 @@
 # This workflow can replace the running image and nothing else. It cannot create a
 # VPC, touch an IAM policy, or destroy a database, because the role it assumes cannot:
 # the deploy role's permissions stop at pushing to one ECR repository and rolling one
-# ECS service. Infrastructure changes are a human running `terraform apply`, reading a
+# Lambda function. Infrastructure changes are a human running `terraform apply`, reading a
 # plan first.
 #
 # That split is deliberate rather than an omission. A pipeline that can apply arbitrary
@@ -83,31 +83,21 @@ jobs:
           echo "image=${REGISTRY}/${REPOSITORY}@${digest}" >> "$GITHUB_OUTPUT"
           echo "Deploying ${REGISTRY}/${REPOSITORY}@${digest}"
 
-      - name: roll the service onto the new image
-        id: roll
+      - name: point the function at the new image
         env:
           IMAGE: ${{ steps.build.outputs.image }}
-          CLUSTER: glass-guru
-          SERVICE: glass-guru
+          FUNCTION: glass-guru
         run: |
           set -euo pipefail
-          # Take the live task definition and change exactly one field. Rendering a new
-          # one from scratch here would mean this workflow quietly owned settings that
-          # terraform believes it owns, and the two would drift.
-          aws ecs describe-task-definition --task-definition "$SERVICE" \
-            --query 'taskDefinition' > live.json
-          jq --arg image "$IMAGE" '
-            .containerDefinitions[0].image = $image
-            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
-                  .compatibilities, .registeredAt, .registeredBy)
-          ' live.json > next.json
-          arn=$(aws ecs register-task-definition --cli-input-json file://next.json \
-            --query 'taskDefinition.taskDefinitionArn' --output text)
-          echo "registered $arn"
-          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
-            --task-definition "$arn" >/dev/null
-          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
-          echo "service stable"
+          # Code only. This role cannot change the function's configuration, its URL or
+          # its permissions - those are terraform's, and a human reads the plan first.
+          aws lambda update-function-code \
+            --function-name "$FUNCTION" --image-uri "$IMAGE" >/dev/null
+          aws lambda wait function-updated --function-name "$FUNCTION"
+          running=$(aws lambda get-function --function-name "$FUNCTION" \
+            --query 'Code.ImageUri' --output text)
+          echo "running $running"
+          [ "$running" = "$IMAGE" ] || { echo "the function is not on the image we pushed"; exit 1; }
 
       - name: smoke test
         env:
@@ -119,9 +109,10 @@ jobs:
             echo "Set it to the stack's board_url output to turn this step on."
             exit 0
           fi
-          # Readiness, not liveness: the question is whether the new task can plan, and
-          # a deploy that rolled cleanly onto a container missing its travel snapshot
-          # would pass every other check in this workflow.
+          # Readiness, not liveness: the question is whether the new code can plan, and
+          # a deploy that landed cleanly on an image missing its travel snapshot would
+          # pass every other check in this workflow. This is also the first request
+          # after a deploy, so it pays the cold start and proves it is survivable.
           for attempt in $(seq 1 10); do
             body=$(curl -fsS --max-time 10 "${BOARD_URL}/api/ready") && break
             echo "attempt $attempt: not ready yet"; sleep 10

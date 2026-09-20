@@ -32,7 +32,7 @@ It treats a skipped job as acceptable and any other non-success as blocking - `n
 Merging to `main` does not deploy; someone triggers it and types `deploy` to confirm.
 
 It can replace the running image and nothing else.
-It cannot create a VPC, edit an IAM policy, or delete the filesystem holding the event log, because the role it assumes has no such permission.
+It cannot change the function's configuration, its URL, its permissions, or the bucket holding the event log, because the role it assumes has no such permission - it can push to one ECR repository and call `UpdateFunctionCode` on one function.
 Infrastructure changes are a human running `terraform apply` after reading a plan.
 
 A pipeline that can apply arbitrary Terraform is a pipeline that can destroy the business's history, and "every change is reviewed" is a weaker control than "the credential cannot do it".
@@ -52,7 +52,7 @@ Two roles, and the split is enforced twice - in the trust policy by which ref ma
 | Role | Assumable from | May |
 |---|---|---|
 | `glass-guru-ci` | any branch or pull request in this repo | invoke two named Bedrock models |
-| `glass-guru-deploy` | `refs/heads/main` only | push to one ECR repository, roll one ECS service |
+| `glass-guru-deploy` | `refs/heads/main` only | push to one ECR repository, replace the code of one Lambda function |
 
 ### The one that will waste your afternoon
 
@@ -98,9 +98,9 @@ make image-run    # run it and print what its health endpoints say
 Two, and the difference matters.
 
 `/api/health` is liveness and deliberately does no work.
-A liveness probe that touches the solver restarts a healthy task whenever a solve is holding the worker threads, turning a slow minute into an outage.
-This is what ECS restarts a container on.
+A liveness probe that touches the solver would stall whenever a solve is holding the worker threads, turning a slow minute into a restart.
+It is also what the Lambda Web Adapter waits for before forwarding the first request, so a cold start cannot serve a half-started app.
 
 `/api/ready` is readiness: the process is up, but can it plan?
 It checks the three things the image copies selectively and could stop copying - business parameters, the travel snapshot, and the built board - and returns 503 if any is missing.
-This is what the load balancer decides to send traffic on, and what the deploy smoke test asserts.
+This is what the deploy smoke test asserts, and being the first request after a deploy, it also pays the cold start and proves it is survivable.
