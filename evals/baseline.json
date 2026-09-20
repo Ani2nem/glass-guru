@@ -1,11 +1,11 @@
 {
-  "duration_seconds": 0.73,
-  "model_id": "no model",
+  "duration_seconds": 37.96,
+  "model_id": "BedrockLLMProvider (us.amazon.nova-lite-v1:0)",
   "passed": true,
-  "started_at": "2026-09-20T02:49:20.116311+00:00",
+  "started_at": "2026-09-20T03:07:52.256561+00:00",
   "tiers": [
     {
-      "cases": 14,
+      "cases": 15,
       "failures": [],
       "label": "invariants",
       "passed": true,
@@ -14,13 +14,57 @@
       "tier": 0
     },
     {
-      "cases": 7,
+      "cases": 22,
+      "failures": [
+        {
+          "case_id": "triage-van-down",
+          "detail": "asks_question: expected False, got True"
+        },
+        {
+          "case_id": "triage-worker-sick",
+          "detail": "asks_question: expected False, got True"
+        },
+        {
+          "case_id": "triage-two-events",
+          "detail": "asks_question: expected False, got True"
+        },
+        {
+          "case_id": "triage-traffic",
+          "detail": "asks_question: expected False, got True"
+        }
+      ],
+      "label": "extraction",
+      "passed": true,
+      "score": 0.9477,
+      "threshold": 0.85,
+      "tier": 1
+    },
+    {
+      "cases": 11,
+      "failures": [],
+      "label": "action",
+      "passed": true,
+      "score": 1.0,
+      "threshold": 0.9,
+      "tier": 2
+    },
+    {
+      "cases": 8,
       "failures": [],
       "label": "scenario",
       "passed": true,
       "score": 1.0,
       "threshold": 0.95,
       "tier": 3
+    },
+    {
+      "cases": 1,
+      "failures": [],
+      "label": "quality",
+      "passed": true,
+      "score": 1.0,
+      "threshold": 0.7,
+      "tier": 4
     }
   ]
 }

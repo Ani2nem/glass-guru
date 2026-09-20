@@ -30,7 +30,12 @@ from glass_guru.domain.state import WorldState, fold
 from glass_guru.evals.core import CaseResult, Tier
 from glass_guru.evals.scoring import CALL_FIELDS, TRIAGE_FIELDS, score_fields
 from glass_guru.fixtures import scenarios as scenario_library
-from glass_guru.fixtures.sample_business import WEEK_START, _at, sample_world_at
+from glass_guru.fixtures.sample_business import (
+    WEEK_START,
+    _at,
+    sample_world_at,
+    seed_events,
+)
 from glass_guru.obs.correlation import dispatch
 from glass_guru.scheduler.day_planner import SolveParams, plan_day
 from glass_guru.scheduler.horizon import HorizonParams, plan_horizon
@@ -358,11 +363,17 @@ def run_quality(provider: LLMProvider) -> list[CaseResult]:
     horizon_params = HorizonParams.from_business(business)
     results: list[CaseResult] = []
 
-    for name in ("van_breakdown", "commercial_crew_out"):
+    for name in ("promise_broken", "van_breakdown"):
         scenario = scenario_library.get(name)
         world = scenario.world()
+
+        # The committed plan is what was promised *before* anything went wrong.
+        # Repairing against a baseline that already absorbed the disruption gives
+        # an empty diff, because the damage is present on both sides of it - which
+        # is why this tier silently scored nothing at all until now.
+        undisturbed = fold(seed_events(), as_of=world.as_of)
         base = plan_horizon(
-            world=world,
+            world=undisturbed,
             travel=travel,
             start=WEEK_START,
             params=params,
@@ -391,7 +402,11 @@ def run_quality(provider: LLMProvider) -> list[CaseResult]:
 
         with dispatch(f"eval-comms-{name}"):
             drafted = draft_customer_messages(
-                provider, candidate.diff, tz=_tz(), reason="a van broke down"
+                provider,
+                candidate.diff,
+                tz=_tz(),
+                reason=scenario.description,
+                now=world.as_of,
             )
 
         issues = [f"{i.phrase}: {i.detail}" for i in drafted.issues]

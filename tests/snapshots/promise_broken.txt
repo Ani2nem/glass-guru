@@ -1,0 +1,44 @@
+SCENARIO  promise_broken
+Chen was given a nine-to-half-eleven window and arranged her morning around it. Everyone who could do the work is then unavailable until half ten, so the promise cannot be kept. The only scenario where a customer has to be telephoned - without one, the comms agent is never exercised and the quality tier scores nothing.
+
+!  33 of 33 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+
+PLAN 2026-09-21  (ec0f447e0d214f0a)
+------------------------------------------------------------------------------
+
+  crew-van-1   Ken   [van-1]
+      10:51-11:36  Nakamura Screens           screen_repair                   21min drive  
+                   travel 43min / 22.1mi  (43 person-min)   idle 0min   on-site 51%
+
+  crew-van-3   Alex   [van-3]
+      10:47-13:17  Patel Shower Door          shower_door_install             17min drive  
+                   travel 35min / 13.6mi  (35 person-min)   idle 0min   on-site 81%
+
+  crew-van-4   Sofia   [van-4]
+      10:38-12:08  Okonkwo Auto Glass         auto_glass                       8min drive  
+                   travel 26min / 12.0mi  (26 person-min)   idle 0min   on-site 78%
+
+  UNSERVED - could not fit
+      j-401  Rodriguez Storefront       no_capacity_in_horizon
+                   feasible in principle, but the day had no room at an acceptable cost
+      j-402  Chen Residence             hard_window_unreachable
+                   nobody certified is free for long enough inside the promised window 09:00-11:30; keeping it would need the customer telephoned
+
+  not in scope for this plan
+      j-407  Delgado Storefront         window_on_another_day
+                   customer window falls on 2026-09-22, not 2026-09-21
+      j-408  Brennan Residence          window_on_another_day
+                   customer window falls on 2026-09-22, not 2026-09-21
+      j-409  Alvarez Screens            window_on_another_day
+                   customer window falls on 2026-09-23, not 2026-09-21
+      j-410  Tran Auto Glass            window_on_another_day
+                   customer window falls on 2026-09-23, not 2026-09-21
+      j-406  Whitfield Tempered         materials_not_available
+                   ['tempered_custom'] not available until 2026-09-24
+
+------------------------------------------------------------------------------
+  cost  travel $95.68   vehicle $31.03   overtime $0.00   late $0.00
+        unserved $3,540.00   TOTAL $3,666.71
+  solver objective $3,703.55  (+$36.84 vs actual)   status OPTIMAL   N.NNNs
+
+  invariants: 0 violations

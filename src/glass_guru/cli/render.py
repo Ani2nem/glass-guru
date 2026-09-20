@@ -400,6 +400,12 @@ def render_repair(
             lines.append(f"      {flag} {change.describe()}")
         if len(candidate.diff.changes) > 6:
             lines.append(f"      ... {len(candidate.diff.changes) - 6} more")
+        if candidate.released_promises:
+            names = ", ".join(
+                world.jobs[j].customer_name if j in world.jobs else j
+                for j in candidate.released_promises
+            )
+            lines.append(f"      BREAKS A PROMISE: {names}")
         lines.append(f"      -> {decision.explain()}")
 
     lines.append("")

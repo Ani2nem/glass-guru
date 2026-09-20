@@ -3,12 +3,24 @@
 Two choices worth explaining.
 
 **Structured output comes from a forced tool call, not from asking for JSON.** The
-request declares one tool whose input schema is the shape we want, marks it ``strict``,
-and sets ``toolChoice`` to that tool by name. The model then has no way to return
-anything but a conforming object - no prose wrapper, no fenced code block, no cheerful
-preamble to strip. For a small model this is the difference between an extraction
-layer that mostly works and one that does. Parsing JSON out of prose is a retry loop
-waiting to happen.
+request declares one tool whose input schema is the shape we want and sets
+``toolChoice`` to that tool by name, so the model has no way to return prose, a fenced
+code block, or a cheerful preamble to strip. For a small model this is the difference
+between an extraction layer that mostly works and one that does. Parsing JSON out of
+prose is a retry loop waiting to happen.
+
+The ``strict`` flag on a tool specification is a further guarantee - the model is
+constrained to emit a conforming object rather than merely asked to - but it is
+**off by default**, because Nova Lite rejects it outright::
+
+    ValidationException: This model doesn't support the strict field.
+
+The field is in the Converse API shape; supporting it is a per-model matter, and
+availability in the shape is not support by the model. That is a distinction only a
+live call reveals, and it is why the validate-and-repair loop in
+:mod:`glass_guru.agents.structured` carries real weight rather than being belt and
+braces: without ``strict``, a malformed answer is a thing that happens, and the repair
+prompt is what turns it into a correct one.
 
 **Credentials come from the ambient AWS chain.** Nothing here takes an API key, so
 deployment is an IAM task-role policy rather than a secret to distribute and rotate.
@@ -37,6 +49,17 @@ from glass_guru.agents.llm.base import (
 DEFAULT_MODEL_ID = "us.amazon.nova-lite-v1:0"
 DEFAULT_REGION = "us-east-1"
 
+#: Model families known to accept ``strict`` on a tool specification. Deliberately an
+#: allow-list rather than a deny-list: an unknown model gets the conservative request
+#: that works everywhere, and the repair loop handles what strictness would have
+#: prevented. Guessing the other way turns a new model id into a hard failure on the
+#: first call.
+STRICT_TOOL_MODELS: tuple[str, ...] = ("anthropic.claude", "us.anthropic.claude")
+
+
+def supports_strict_tools(model_id: str) -> bool:
+    return any(model_id.startswith(prefix) for prefix in STRICT_TOOL_MODELS)
+
 
 class BedrockLLMProvider:
     """Converse-API provider."""
@@ -47,10 +70,14 @@ class BedrockLLMProvider:
         region: str = DEFAULT_REGION,
         *,
         client: Any | None = None,
+        strict_tools: bool | None = None,
     ) -> None:
         self._model_id = model_id
         self._region = region
         self._client = client
+        self._strict_tools = (
+            supports_strict_tools(model_id) if strict_tools is None else strict_tools
+        )
 
     @property
     def model_id(self) -> str:
@@ -89,7 +116,9 @@ class BedrockLLMProvider:
                             "description": request.schema_description
                             or "Return the extracted result.",
                             "inputSchema": {"json": request.schema},
-                            "strict": True,
+                            # Only where the model accepts it. Nova Lite returns a
+                            # ValidationException for the field rather than ignoring it.
+                            **({"strict": True} if self._strict_tools else {}),
                         }
                     }
                 ],

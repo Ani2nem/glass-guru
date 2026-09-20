@@ -18,11 +18,13 @@ from datetime import date, datetime
 from glass_guru.domain.events import (
     Event,
     JobCancelled,
+    JobConfirmed,
     JobOverran,
     TrafficDelay,
     VanUnavailable,
     WorkerUnavailable,
 )
+from glass_guru.domain.models import TimeWindow
 from glass_guru.domain.state import WorldState, fold
 from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
 
@@ -118,6 +120,40 @@ SCENARIOS: dict[str, Scenario] = {
                 dispatch_id="scenario",
                 job_id="j-402",
                 reason="customer cancelled",
+            ),
+        ),
+    ),
+    "promise_broken": Scenario(
+        name="promise_broken",
+        description=(
+            "Chen was given a nine-to-half-eleven window and arranged her morning "
+            "around it. Everyone who could do the work is then unavailable until "
+            "half ten, so the promise cannot be kept. The only scenario where a "
+            "customer has to be telephoned - without one, the comms agent is never "
+            "exercised and the quality tier scores nothing."
+        ),
+        events=(
+            JobConfirmed(
+                event_id="sc-confirm",
+                occurred_at=_at(0, 7),
+                recorded_at=_at(0, 7),
+                dispatch_id="scenario",
+                job_id="j-402",
+                window=TimeWindow(start=_at(0, 9), end=_at(0, 11, 30)),
+                commitment_cost=250.0,
+            ),
+            *(
+                WorkerUnavailable(
+                    event_id=f"sc-late-{worker}",
+                    occurred_at=_at(0, 6),
+                    recorded_at=_at(0, 6),
+                    dispatch_id="scenario",
+                    worker_id=worker,
+                    from_time=_at(0, 0),
+                    until_time=_at(0, 10, 30),
+                    reason="held up",
+                )
+                for worker in ("w-marcus", "w-priya", "w-dan", "w-ken")
             ),
         ),
     ),

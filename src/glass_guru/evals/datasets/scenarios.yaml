@@ -66,3 +66,12 @@ cases:
     expect:
       min_jobs_served: 4
       feasible: true
+
+  - scenario: promise_broken
+    why: >-
+      The only scenario where a promise cannot be kept, and therefore the only one
+      that exercises the comms agent at all. Without it the quality tier scores
+      nothing, and a tier that never runs is a tier that cannot fail.
+    expect:
+      min_jobs_served: 3
+      feasible: true

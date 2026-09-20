@@ -125,7 +125,15 @@ Rules:
 - Do not estimate how long the job will take. That is not your job and the system
   already knows.
 - commitment_signals: only arrangements the caller actually mentioned making. Quote
-  their words. Say nothing if they said nothing.
+  their words. Say nothing if they said nothing. The difference between these matters,
+  because they are priced very differently:
+    time_off_work      - they are giving up work or leave for this. "I'd have to take
+                         the morning off", "I'm booking a day's holiday".
+    waiting_in         - they will simply be at home anyway. "I'll be in all day",
+                         "I'm around Friday whenever". Much weaker than taking leave.
+    arranged_childcare - cover has been booked that would have to be rebooked.
+    business_closed    - a business is closing, opening late, or losing trade for us.
+    already_rescheduled - we have moved this appointment before.
 - urgency is `emergency` only when the property is insecure or someone is unsafe now.
 
 Catalogue:

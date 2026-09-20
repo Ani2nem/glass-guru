@@ -9,6 +9,20 @@
 meta:
   labelled_by: author
   note: Synthetic, written alongside the prompts.
+  measured: >-
+    Nova Lite asks a clarifying question on three or four of these regardless of how
+    the instruction is phrased - "when did the van go off the road?", "when will Priya
+    be back?". Two prompt revisions did not move it, and the events themselves are
+    always correct (the action tier scores 100%), so this is a characteristic of the
+    model rather than a defect to tune away. It is left failing on purpose: a gate
+    that has been adjusted until it passes measures nothing.
+
+    The questions were also right about something. They kept asking for times, and an
+    unstated time used to default to 08:00 - so a van reported off the road at two in
+    the afternoon was recorded as unavailable since breakfast, retroactively
+    invalidating the work it had already done. The default is now the moment the note
+    was typed. The model noticing before I did is the most useful thing this dataset
+    has produced.
 
 cases:
   - id: triage-van-down

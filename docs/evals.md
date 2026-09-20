@@ -70,3 +70,53 @@ The report carries mean repair attempts and escalation rate. With a small model,
 rising repair rate means it is drifting from what the prompt and schema expect, long
 before a schedule looks wrong. Provider failure is tracked separately from bad output —
 an unreachable endpoint is an operator's problem, a malformed answer is a prompt's.
+
+## Measured: Nova Lite, live
+
+The first live run against `us.amazon.nova-lite-v1:0`, and what it changed.
+
+| Tier | Score | Gate |
+|---|---|---|
+| 0 invariants | 100% (15 cases) | 100% |
+| 1 extraction | 94.8% (22 cases) | 85% |
+| 2 action | 100% (11 cases) | 90% |
+| 3 scenario | 100% (8 cases) | 95% |
+| 4 quality | 100% (1 case) | 70% |
+
+Fifty-seven cases in about 42 seconds, escalation rate zero. Nova Lite is comfortably
+good enough for every task it is given here - which is the answer the `LLMProvider`
+abstraction was built to make cheap to obtain, and it took one command rather than an
+argument.
+
+### Four things the live run found
+
+**Nova Lite rejects `strict` on a tool specification.** The field is in the Converse
+API shape, which is where I read it from; supporting it is a per-model matter.
+`ValidationException: This model doesn't support the strict field.` Availability in the
+shape is not support by the model, and only a live call shows the difference. Strict
+tools are now an opt-in allow-list, and the validate-and-repair loop carries the weight
+instead - which is what it was for.
+
+**Tier 4 had been scoring nothing at all.** No scenario in the library confirmed a
+customer window, so nothing was ever customer-visible, so no message was ever drafted.
+A tier that never runs cannot fail - the same shape of gap as tier 0 before the
+detection cases. There is now a scenario where a promise genuinely cannot be kept.
+
+**A released promise was something the solver could do silently.** Given the chance,
+the model moved a confirmed appointment and the checker rejected the result, because
+it had no way to know a release had been authorised. Breaking a promise is now off by
+default, available only in repair, reported on the candidate, and accepted by the
+checker only when explicitly passed in. It cannot be something a solver does quietly
+and a checker infers.
+
+**The model's "unnecessary" questions were right.** It kept asking when things
+happened, against an instruction not to. An unstated time defaulted to 08:00, so a van
+reported off the road at two in the afternoon was recorded as unavailable since
+breakfast, retroactively invalidating the work it had already done. The default is now
+the moment the note was typed.
+
+Those three or four question cases still fail, and are left failing. Two prompt
+revisions did not move them and the extracted events are always correct, so it is a
+characteristic of the model rather than a defect to tune away. Continuing to adjust
+prompts against twenty-two cases written by the same person who wrote the prompts is
+how a suite stops measuring anything.

@@ -108,6 +108,14 @@ class SolveParams:
     #: Scales ``commitment_cost`` when a promised window has to be released. Strategies
     #: vary this to trade promises against throughput.
     reschedule_penalty_multiplier: float = 1.0
+    #: Whether the model may break a promise at all.
+    #:
+    #: Off for ordinary planning: a promised window is simply a constraint, and a
+    #: morning solve that quietly moved an appointment somebody arranged their day
+    #: around would be doing the one thing this system exists to prevent. Repair
+    #: turns it on, because under pressure breaking a promise is sometimes the least
+    #: bad option - but the release is then reported, priced, and put to a human.
+    allow_promise_release: bool = False
 
     @classmethod
     def from_business(
@@ -149,6 +157,9 @@ class DayPlanResult:
     unserved: tuple[UnservedJob, ...]
     objective_cost: float
     status: str
+    #: Promises this plan breaks. Never silent: the checker refuses a plan that
+    #: moves a confirmed window unless told the release was authorised.
+    released_promises: tuple[JobId, ...] = ()
     metrics: dict[str, float] = field(default_factory=dict)
 
 
@@ -408,6 +419,44 @@ def _diagnose(
 
     # Per part, not "any part": a job blocked on one missing item stays silent
     # under an any() over every material and van.
+    if job.commitment_state is CommitmentState.CONFIRMED and job.windows:
+        # A promised window is binding during ordinary planning, so a job that cannot
+        # be fitted inside it is not "the day was full" - it is "we could not keep the
+        # promise", which is what a dispatcher has to ring somebody about.
+        promised = job.windows[0]
+        opens = _clamp_to_day(promised.start, day_start, params.business_tz)
+        closes = _clamp_to_day(promised.end, day_start, params.business_tz)
+        if opens is not None and closes is not None:
+            # Usable time, not declared shift: a worker held up until half ten is
+            # not available at eight, and checking the roster rather than the
+            # outages made this branch unreachable.
+            usable = [
+                _largest_free_interval(
+                    world.worker_outages.get(worker.id, ()),
+                    day_start,
+                    span[0],
+                    span[1],
+                )
+                for worker in certified
+                if (span := _shift_window(worker, on_date)) is not None
+            ]
+            reachable = any(
+                max(window[0], opens) + job.estimated_duration_min <= min(window[1], closes)
+                for window in usable
+                if window
+            )
+            if not reachable:
+                return UnservedJob(
+                    job_id=job.id,
+                    reason=UnservedReason.HARD_WINDOW_UNREACHABLE,
+                    detail=(
+                        "nobody certified is free for long enough inside the promised "
+                        f"window {promised.start.astimezone(params.business_tz):%H:%M}"
+                        f"-{promised.end.astimezone(params.business_tz):%H:%M}; "
+                        "keeping it would need the customer telephoned"
+                    ),
+                )
+
     for material in job.materials:
         if not material.in_stock:
             continue
@@ -614,6 +663,9 @@ def plan_day(
         model.add(sum(visit[job.id, k] for k in range(num_crews)) == served[job.id])
         if job.id in locked:
             model.add(served[job.id] == 1)
+
+        if not params.allow_promise_release:
+            model.add(released[job.id] == 0)
 
         placement = incumbent.get(job.id)
         if placement is None:
@@ -879,9 +931,16 @@ def plan_day(
         if job.id not in scheduled:
             unserved_out.append(_diagnose(job, world, workers, on_date, day_start, params))
 
+    released_promises = tuple(
+        job.id
+        for job in jobs
+        if job.commitment_state is CommitmentState.CONFIRMED and solver.value(released[job.id])
+    )
+
     return DayPlanResult(
         routes=tuple(routes),
         unserved=tuple(unserved_out),
+        released_promises=released_promises,
         objective_cost=solver.objective_value / 100.0,
         status=status_name,
         metrics={

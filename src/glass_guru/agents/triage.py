@@ -91,10 +91,15 @@ You convert a dispatcher's note about a glass-fitting business into typed events
 Rules:
 - Use only the event kinds and ids listed below. Never invent an id.
 - Extract only what the message actually says. Do not infer a time that was not given.
-- If something material is ambiguous and guessing could be wrong, leave the events you
-  are sure of and put one short question in `question`.
+- Ask a question only when you cannot record an event without the answer: no id to
+  attach it to, or a required number like an over-run's minutes. If the event can be
+  recorded correctly as it stands, leave `question` empty. Colour and context - whether
+  a tow is en route, how bad the damage looks - do not change what gets recorded, and
+  asking about them buries the questions that do.
 - Times are 24-hour HH:MM. "half ten" is 10:30, "quarter to noon" is 11:45.
 - job-overran needs `minutes`. traffic-delay needs `multiplier`.
+- If no time is given, leave `at` empty. It defaults to now, which is almost always
+  what the dispatcher meant, so there is no need to ask.
 """
 
 
@@ -189,9 +194,19 @@ def triage(
     *,
     on_date: date,
     tz: tzinfo,
+    now: datetime | None = None,
     max_attempts: int = 3,
 ) -> TriageResult:
-    """Turn a dispatcher's note into events the engine can act on."""
+    """Turn a dispatcher's note into events the engine can act on.
+
+    ``now`` is when the note was typed, and it is the default for any event whose time
+    was not stated. That default used to be 08:00, which is wrong in a consequential
+    direction: a van reported off the road at two in the afternoon was recorded as
+    unavailable since breakfast, retroactively invalidating the work it had already
+    done that morning. The model kept asking "when did this happen?" - which read as
+    over-caution until it became clear the answer genuinely mattered and our silent
+    assumption was wrong.
+    """
     with span("agent.triage", chars=len(text)) as active:
         extraction = extract(
             provider,
@@ -230,11 +245,20 @@ def triage(
         unknown: list[str] = []
         rejected: list[str] = []
 
-        def moment(clock: str, fallback: time) -> datetime:
+        reported_at = (now or world.as_of).astimezone(tz)
+
+        def moment(clock: str, fallback: time | None = None) -> datetime:
+            """A stated time, or when the note was typed."""
+            if not clock:
+                return (
+                    datetime.combine(on_date, fallback, tzinfo=tz)
+                    if fallback is not None
+                    else reported_at
+                )
             try:
-                parsed = datetime.strptime(clock, "%H:%M").time() if clock else fallback
+                parsed = datetime.strptime(clock, "%H:%M").time()
             except ValueError:
-                parsed = fallback
+                return reported_at
             return datetime.combine(on_date, parsed, tzinfo=tz)
 
         for item in outcome.events:
@@ -248,9 +272,9 @@ def triage(
                     build_event(
                         item.kind,
                         item.target or None,
-                        at=moment(item.at, time(8, 0)),
+                        at=moment(item.at),
                         dispatch_id=dispatch_id,
-                        until=moment(item.until, time(17, 0)) if item.until else None,
+                        until=moment(item.until) if item.until else None,
                         minutes=item.minutes,
                         multiplier=item.multiplier,
                         reason=item.reason,
