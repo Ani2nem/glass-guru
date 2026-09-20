@@ -738,7 +738,13 @@ def plan_day(
                     continue
 
                 model.add(start[job.id, k] >= max(win_start, 0)).only_enforce_if(selector)
-                if window.hardness is WindowHardness.HARD:
+                # A promise binds like a hard window. Releasing it is possible and
+                # priced (see `released`), but never free and never silent.
+                binding = (
+                    window.hardness is WindowHardness.HARD
+                    or job.commitment_state is CommitmentState.CONFIRMED
+                )
+                if binding:
                     # The deadline itself is hard. The buffer is not: it is priced as
                     # encroachment so the planner prefers margin but never refuses
                     # work for want of it. Clamping it as a constraint looked safe and

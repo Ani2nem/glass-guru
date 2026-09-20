@@ -375,3 +375,66 @@ def test_events_drive_the_checks_end_to_end(plan_builder: PlanBuilder, travel, c
     )
     after = fold(events, as_of=moment(0, 11))
     assert ViolationCode.VAN_UNAVAILABLE in codes(validate_plan(plan, after, travel, config))
+
+
+# --------------------------------------------------- window kinds, and promises
+
+
+def test_a_soft_window_may_be_served_late(plan_builder: PlanBuilder, world, travel, config):
+    """Lateness against a soft window is priced by the objective, not refused.
+
+    Treating it as infeasible quietly turns every soft window into a hard one: a
+    customer who said "Tuesday morning would suit" would become unschedulable the
+    moment the morning filled up, rather than simply more expensive to serve later.
+    Found by a property test over generated worlds, not by anyone reasoning about it.
+    """
+    job = world.jobs["j-402"]
+    world.jobs["j-402"] = job.model_copy(
+        update={"windows": (TimeWindow(start=moment(0, 9), end=moment(0, 11)),)}
+    )
+    plan_builder.route("A", ["w-dan"], "van-3", ["j-402"], day=0, start_hour=13)
+    violations = validate_plan(plan_builder.build(), world, travel, config)
+    assert ViolationCode.HARD_WINDOW_VIOLATED not in codes(violations)
+
+
+def test_arriving_before_any_window_opens_is_still_refused(
+    plan_builder: PlanBuilder, world, travel, config
+):
+    """Late is a cost; early is impossible - nobody is there to let the crew in.
+
+    The stop is constructed rather than materialized because the materializer already
+    does the right thing: it waits for the window. This checks the guard behind it,
+    for a plan that arrived some other way.
+    """
+    job = world.jobs["j-405"]
+    world.jobs["j-405"] = job.model_copy(
+        update={"windows": (TimeWindow(start=moment(0, 14), end=moment(0, 16)),)}
+    )
+    route = plan_builder.route("C", ["w-ken"], "van-2", ["j-405"], day=0, start_hour=13)
+    stop = route.stops[0]
+    early = stop.model_copy(update={"arrival": moment(0, 9), "departure": moment(0, 9, 45)})
+    plan = plan_builder.build()
+    broken = plan.model_copy(update={"routes": (route.model_copy(update={"stops": (early,)}),)})
+    violations = validate_plan(broken, world, travel, config)
+    assert ViolationCode.HARD_WINDOW_VIOLATED in codes(violations)
+    assert any("before any window opens" in v.detail for v in violations)
+
+
+def test_a_confirmed_soft_window_binds_like_a_hard_one(
+    plan_builder: PlanBuilder, world, travel, config
+):
+    """hardness says what the customer needs; CONFIRMED says what we promised. Once
+    someone has been told "between nine and eleven", that window stops being a
+    preference the optimiser may spend, however soft it began."""
+    job = world.jobs["j-402"]
+    world.jobs["j-402"] = job.model_copy(
+        update={
+            "commitment_state": CommitmentState.CONFIRMED,
+            "commitment_cost": 180.0,
+            "windows": (TimeWindow(start=moment(0, 9), end=moment(0, 11)),),
+        }
+    )
+    plan_builder.route("A", ["w-dan"], "van-3", ["j-402"], day=0, start_hour=13)
+    violations = validate_plan(plan_builder.build(), world, travel, config)
+    assert ViolationCode.CONFIRMED_WINDOW_MOVED in codes(violations)
+    assert any("promised window" in v.detail for v in violations)
