@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import uuid
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date, datetime, time
@@ -29,6 +28,8 @@ from glass_guru.domain.travel import TravelOracle
 from glass_guru.fixtures import scenarios
 from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at, seed_events
 from glass_guru.geocoding import GeocodeError, Geocoder
+from glass_guru.obs.correlation import dispatch, require_dispatch_id
+from glass_guru.obs.tracing import configure, span
 from glass_guru.persistence.log import PlanConflict, Workspace
 from glass_guru.scheduler.booking import suggest_booking_slots
 from glass_guru.scheduler.costing import cost_plan
@@ -382,7 +383,7 @@ def cmd_event(args: argparse.Namespace) -> int:
             args.kind,
             args.target,
             at=moment(args.at, time(8, 0)),
-            dispatch_id=args.dispatch_id or f"cli-{uuid.uuid4().hex[:8]}",
+            dispatch_id=require_dispatch_id(),
             until=moment(args.until, time(17, 0)) if args.until else None,
             window_start=moment(args.window_start, time(8, 0)) if args.window_start else None,
             window_end=moment(args.window_end, time(17, 0)) if args.window_end else None,
@@ -589,6 +590,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--config", default=None, help="path to business_params.yaml (default: repo config/)"
     )
     parser.add_argument(
+        "--dispatch-id",
+        default=None,
+        help="correlation id to trace under; minted per invocation when omitted",
+    )
+    parser.add_argument(
         "--workspace",
         default=".glass-guru",
         help="directory holding the event log and plan history",
@@ -635,7 +641,6 @@ def build_parser() -> argparse.ArgumentParser:
     event.add_argument("--multiplier", type=float, default=None)
     event.add_argument("--commitment-cost", type=float, default=0.0)
     event.add_argument("--reason", default="")
-    event.add_argument("--dispatch-id", default=None, help="correlation id for tracing")
     event.set_defaults(func=cmd_event)
 
     commit = sub.add_parser("commit", help="plan the horizon and commit it as the head")
@@ -695,7 +700,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _TRAVEL_MODE = TravelMode(args.travel)
     _WORKSPACE = Path(args.workspace)
-    result: int = args.func(args)
+
+    configure(service="glass-guru-cli")
+    # One id per invocation, so a command's solves, commits and writes are one trace -
+    # the same shape an agent's episode will have.
+    with (
+        dispatch(args.dispatch_id) as dispatch_id,
+        span(f"cli.{args.command}", dispatch_id=dispatch_id),
+    ):
+        result: int = args.func(args)
     return result
 
 

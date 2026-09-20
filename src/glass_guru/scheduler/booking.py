@@ -110,6 +110,10 @@ def _reason_for(
     """Explain the price in the terms a dispatcher would use on the phone."""
     if dedicated:
         return f"a dedicated trip out and back, +{added_minutes} min driving"
+    if neighbours and added_minutes == 0:
+        # Same ~150m cell as work already booked: below the travel cache's resolution,
+        # so the detour genuinely is free. Saying "+0 min" reads like a bug.
+        return f"on the same block as {neighbours} stop(s) already booked that day"
     if neighbours and added_minutes <= 20:
         near = "stop" if neighbours == 1 else "stops"
         return f"already {neighbours} {near} nearby that day, +{added_minutes} min detour"
