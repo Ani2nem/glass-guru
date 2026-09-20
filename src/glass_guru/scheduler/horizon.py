@@ -97,6 +97,8 @@ class HorizonResult:
     day_results: dict[date, DayPlanResult]
     assignment: dict[JobId, date]
     rounds: int
+    #: Promises broken across the horizon, so a caller can authorise them.
+    released_promises: tuple[JobId, ...] = ()
     metrics: dict[str, float] = field(default_factory=dict)
 
     @property
@@ -502,6 +504,9 @@ def plan_horizon(
     return HorizonResult(
         routes=routes,
         unserved=tuple(unserved),
+        released_promises=tuple(
+            sorted({j for r in day_results.values() for j in r.released_promises})
+        ),
         day_results=day_results,
         assignment=assignment,
         rounds=rounds,

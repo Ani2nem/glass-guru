@@ -247,7 +247,15 @@ def apply_repair(strategy: str = Query(...), force: bool = Query(default=False))
 
         travel = svc.travel(world)
         violations = validate_plan(
-            candidate.plan, world, travel, ValidationConfig(business_tz=svc.tz)
+            candidate.plan,
+            world,
+            travel,
+            # Promises this candidate breaks are authorised by the act of applying it;
+            # `force` above is where a dispatcher agreed to that.
+            ValidationConfig(
+                business_tz=svc.tz,
+                released_job_ids=frozenset(candidate.released_promises),
+            ),
         )
         if violations:
             # A plan that fails its own invariants never reaches storage, whoever asked.
@@ -279,8 +287,8 @@ def record_event(request: EventRequest) -> dict[str, str]:
     svc = service()
     with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.record_event"):
         try:
-            at = _clock(svc, request.at, time(8, 0))
-            assert at is not None  # a fallback is always supplied
+            at = _clock(svc, request.at, None, default_now=True)
+            assert at is not None  # default_now always yields a moment
             event = build_event(
                 request.kind,
                 request.target or None,
@@ -525,12 +533,22 @@ def _default_start(svc: DispatchService) -> date:
     return WEEK_START
 
 
-def _clock(svc: DispatchService, value: Any, fallback: time | None) -> datetime | None:
-    if not value and fallback is None:
-        return None
-    parsed = datetime.strptime(str(value), "%H:%M").time() if value else fallback
-    if parsed is None:
-        return None
+def _clock(
+    svc: DispatchService, value: Any, fallback: time | None, *, default_now: bool = False
+) -> datetime | None:
+    """A stated HH:MM, or - for the moment an event happened - when it was reported.
+
+    Not 08:00. A van reported off the road at two in the afternoon was recorded as
+    unavailable since breakfast, retroactively invalidating the work it had already
+    done that morning.
+    """
+    if not value:
+        if default_now:
+            return svc.world().as_of
+        if fallback is None:
+            return None
+        return datetime.combine(_default_start(svc), fallback, tzinfo=svc.tz)
+    parsed = datetime.strptime(str(value), "%H:%M").time()
     return datetime.combine(_default_start(svc), parsed, tzinfo=svc.tz)
 
 

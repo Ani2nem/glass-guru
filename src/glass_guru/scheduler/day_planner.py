@@ -91,6 +91,37 @@ class SolveParams:
     #: "worst bucket the shift can span", which is the safe default.
     travel_bucket: TimeBucket | None = None
 
+    #: Only the k nearest destinations get an arc out of each stop.
+    #:
+    #: The model has one boolean per crew per ordered pair, so arcs grow as
+    #: crews x n squared - and growing the crew to match the volume makes it worse,
+    #: not better. Measured: 25 jobs solves in tens of milliseconds, 50 returns UNKNOWN
+    #: inside five seconds, 100 likewise. Pruning is what makes the difference between
+    #: a model that answers and one that does not.
+    #:
+    #: A van will never drive from one stop to a job forty miles away when thirty
+    #: closer ones are waiting, so the arcs removed are ones no good route would use.
+    #: ``None`` keeps every arc, which is right below the threshold where the full
+    #: model is fast anyway.
+    #:
+    #: Six is aggressive, and deliberately so. Pruning only applies above
+    #: ``prune_above``, and in that range the honest comparison is not "pruned versus
+    #: unpruned" but "a plan versus none": at 35 jobs k=12 returns UNKNOWN and k=6
+    #: serves 27. There is no quality being traded away, because there is no
+    #: alternative answer to trade it against.
+    k_nearest: int | None = 6
+    #: Below this many stops, keep every arc.
+    #:
+    #: Measured at a ten-second budget. Unpruned: 25 jobs serves 23, and 28 already
+    #: returns UNKNOWN - the full model falls off a cliff rather than degrading. Pruned
+    #: at k=6: 32 serves 23 and 40 serves 18.
+    #:
+    #: So the threshold sits exactly at the real business size, which is the last point
+    #: the full model answers. An earlier value of 28 left a hole: a 28-job day was
+    #: above the size the full model could handle and below the size that triggered
+    #: pruning, so it returned nothing while a 32-job day planned fine.
+    prune_above: int = 25
+
     max_solve_seconds: float = 10.0
     #: Single-threaded search makes results reproducible, which scenario replay and
     #: eval baselines depend on. Raise only for interactive solves that are not scored.
@@ -108,6 +139,14 @@ class SolveParams:
     #: Scales ``commitment_cost`` when a promised window has to be released. Strategies
     #: vary this to trade promises against throughput.
     reschedule_penalty_multiplier: float = 1.0
+    #: Whether the model may break a promise at all.
+    #:
+    #: Off for ordinary planning: a promised window is simply a constraint, and a
+    #: morning solve that quietly moved an appointment somebody arranged their day
+    #: around would be doing the one thing this system exists to prevent. Repair
+    #: turns it on, because under pressure breaking a promise is sometimes the least
+    #: bad option - but the release is then reported, priced, and put to a human.
+    allow_promise_release: bool = False
 
     @classmethod
     def from_business(
@@ -149,6 +188,9 @@ class DayPlanResult:
     unserved: tuple[UnservedJob, ...]
     objective_cost: float
     status: str
+    #: Promises this plan breaks. Never silent: the checker refuses a plan that
+    #: moves a confirmed window unless told the release was authorised.
+    released_promises: tuple[JobId, ...] = ()
     metrics: dict[str, float] = field(default_factory=dict)
 
 
@@ -287,6 +329,33 @@ def _largest_free_interval(
     return best
 
 
+def _prunable_arcs(travel_min: list[list[int]], params: SolveParams) -> set[tuple[int, int]]:
+    """Which ordered pairs the routing model may use.
+
+    Every arc to and from the depot is kept: a crew must be able to start and finish
+    anywhere, and removing that is how pruning turns a feasible day infeasible. Between
+    stops, each keeps an arc to its ``k`` nearest neighbours by travel time.
+
+    Asymmetry is deliberate. A is among B's nearest without B being among A's, and
+    keeping only mutual pairs would strand the outlying stop - so the union is taken,
+    which costs a few arcs and removes a whole class of surprise.
+    """
+    n = len(travel_min)
+    stops = n - 1
+    if params.k_nearest is None or stops <= params.prune_above:
+        return {(i, j) for i in range(n) for j in range(n) if i != j}
+
+    allowed = {(0, j) for j in range(1, n)} | {(j, 0) for j in range(1, n)}
+    for i in range(1, n):
+        nearest = sorted((j for j in range(1, n) if j != i), key=lambda j: travel_min[i][j])[
+            : params.k_nearest
+        ]
+        for j in nearest:
+            allowed.add((i, j))
+            allowed.add((j, i))
+    return allowed
+
+
 def _probe_times(
     day_start: datetime,
     shift_start: int,
@@ -408,6 +477,44 @@ def _diagnose(
 
     # Per part, not "any part": a job blocked on one missing item stays silent
     # under an any() over every material and van.
+    if job.commitment_state is CommitmentState.CONFIRMED and job.windows:
+        # A promised window is binding during ordinary planning, so a job that cannot
+        # be fitted inside it is not "the day was full" - it is "we could not keep the
+        # promise", which is what a dispatcher has to ring somebody about.
+        promised = job.windows[0]
+        opens = _clamp_to_day(promised.start, day_start, params.business_tz)
+        closes = _clamp_to_day(promised.end, day_start, params.business_tz)
+        if opens is not None and closes is not None:
+            # Usable time, not declared shift: a worker held up until half ten is
+            # not available at eight, and checking the roster rather than the
+            # outages made this branch unreachable.
+            usable = [
+                _largest_free_interval(
+                    world.worker_outages.get(worker.id, ()),
+                    day_start,
+                    span[0],
+                    span[1],
+                )
+                for worker in certified
+                if (span := _shift_window(worker, on_date)) is not None
+            ]
+            reachable = any(
+                max(window[0], opens) + job.estimated_duration_min <= min(window[1], closes)
+                for window in usable
+                if window
+            )
+            if not reachable:
+                return UnservedJob(
+                    job_id=job.id,
+                    reason=UnservedReason.HARD_WINDOW_UNREACHABLE,
+                    detail=(
+                        "nobody certified is free for long enough inside the promised "
+                        f"window {promised.start.astimezone(params.business_tz):%H:%M}"
+                        f"-{promised.end.astimezone(params.business_tz):%H:%M}; "
+                        "keeping it would need the customer telephoned"
+                    ),
+                )
+
     for material in job.materials:
         if not material.in_stock:
             continue
@@ -615,6 +722,9 @@ def plan_day(
         if job.id in locked:
             model.add(served[job.id] == 1)
 
+        if not params.allow_promise_release:
+            model.add(released[job.id] == 0)
+
         placement = incumbent.get(job.id)
         if placement is None:
             continue
@@ -672,6 +782,9 @@ def plan_day(
                 model.add(sum(demand) <= van.stock.get(part_code, 0))
 
     # -------------------------------------------------------------------- routing
+    # Which arcs the model is allowed to use at all.
+    allowed_arcs = _prunable_arcs(travel_min, params)
+
     arc_vars: dict[tuple[int, int, int], cp_model.IntVar] = {}
     for k in range(num_crews):
         arcs: list[cp_model.ArcT] = []
@@ -683,7 +796,7 @@ def plan_day(
 
         for i in range(n):
             for j in range(n):
-                if i == j:
+                if i == j or (i, j) not in allowed_arcs:
                     continue
                 arc = model.new_bool_var(f"arc_{k}_{i}_{j}")
                 arc_vars[k, i, j] = arc
@@ -738,7 +851,13 @@ def plan_day(
                     continue
 
                 model.add(start[job.id, k] >= max(win_start, 0)).only_enforce_if(selector)
-                if window.hardness is WindowHardness.HARD:
+                # A promise binds like a hard window. Releasing it is possible and
+                # priced (see `released`), but never free and never silent.
+                binding = (
+                    window.hardness is WindowHardness.HARD
+                    or job.commitment_state is CommitmentState.CONFIRMED
+                )
+                if binding:
                     # The deadline itself is hard. The buffer is not: it is priced as
                     # encroachment so the planner prefers margin but never refuses
                     # work for want of it. Clamping it as a constraint looked safe and
@@ -773,9 +892,8 @@ def plan_day(
         # Vehicle cost is per van-mile regardless of who is aboard.
         vehicle_terms = [
             arc_vars[k, i, j] * _cents(travel_mi[i][j] * van_cost_per_mile)
-            for i in range(n)
-            for j in range(n)
-            if i != j and _cents(travel_mi[i][j] * van_cost_per_mile)
+            for (i, j) in allowed_arcs
+            if _cents(travel_mi[i][j] * van_cost_per_mile)
         ]
         terms.extend(vehicle_terms)
 
@@ -783,10 +901,7 @@ def plan_day(
         # oversized crew is priced honestly instead of riding along for free.
         crew_travel = model.new_int_var(0, MINUTES_PER_DAY, f"crew_travel_{k}")
         model.add(
-            crew_travel
-            == sum(
-                arc_vars[k, i, j] * travel_min[i][j] for i in range(n) for j in range(n) if i != j
-            )
+            crew_travel == sum(arc_vars[k, i, j] * travel_min[i][j] for (i, j) in allowed_arcs)
         )
         headcount_var = model.new_int_var(0, 2, f"headcount_{k}")
         model.add(headcount_var == sum(assign[w.id, k] for w in workers))
@@ -837,7 +952,16 @@ def plan_day(
             unserved=unserved,
             objective_cost=sum(_unserved_penalty(world.jobs[u.job_id], params) for u in unserved),
             status=status_name,
-            metrics={"candidates": float(len(jobs)), "crews": float(num_crews)},
+            # Report the model's size even when it ran out of time. A solve that gave
+            # up is precisely when its shape is worth knowing, and omitting the arc
+            # counts here means the only run you cannot inspect is the failing one.
+            metrics={
+                "candidates": float(len(jobs)),
+                "crews": float(num_crews),
+                "arcs_per_crew": float(len(allowed_arcs)),
+                "arcs_pruned": float(max(0, n * (n - 1) - len(allowed_arcs))),
+                "travel_probes": float(len(probes)),
+            },
         )
 
     # ------------------------------------------------------------------ extract
@@ -873,9 +997,16 @@ def plan_day(
         if job.id not in scheduled:
             unserved_out.append(_diagnose(job, world, workers, on_date, day_start, params))
 
+    released_promises = tuple(
+        job.id
+        for job in jobs
+        if job.commitment_state is CommitmentState.CONFIRMED and solver.value(released[job.id])
+    )
+
     return DayPlanResult(
         routes=tuple(routes),
         unserved=tuple(unserved_out),
+        released_promises=released_promises,
         objective_cost=solver.objective_value / 100.0,
         status=status_name,
         metrics={
@@ -885,6 +1016,8 @@ def plan_day(
             "solve_seconds": solver.wall_time,
             "best_bound": solver.best_objective_bound / 100.0,
             "travel_probes": float(len(probes)),
+            "arcs_per_crew": float(len(allowed_arcs)),
+            "arcs_pruned": float(max(0, n * (n - 1) - len(allowed_arcs))),
             "moved": float(sum(1 for v in stay.values() if not solver.boolean_value(v))),
             "promises_released": float(
                 sum(

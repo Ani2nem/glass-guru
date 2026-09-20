@@ -374,17 +374,31 @@ def cmd_event(args: argparse.Namespace) -> int:
     business = BusinessParams.load(args.config)
     tz = ZoneInfo(business.meta.timezone)
 
-    def moment(clock: str | None, fallback: time) -> datetime:
-        parsed = datetime.strptime(clock, "%H:%M").time() if clock else fallback
+    reported_at = _load_world().as_of.astimezone(tz)
+
+    def moment(clock: str | None, fallback: time | None = None) -> datetime:
+        """A stated time, or when the note was typed.
+
+        Not 08:00. A van reported off the road at two in the afternoon was recorded as
+        unavailable since breakfast, retroactively invalidating the work it had
+        already done.
+        """
+        if not clock:
+            return (
+                datetime.combine(on_date, fallback, tzinfo=tz)
+                if fallback is not None
+                else reported_at
+            )
+        parsed = datetime.strptime(clock, "%H:%M").time()
         return datetime.combine(on_date, parsed, tzinfo=tz)
 
     try:
         event = build_event(
             args.kind,
             args.target,
-            at=moment(args.at, time(8, 0)),
+            at=moment(args.at),
             dispatch_id=require_dispatch_id(),
-            until=moment(args.until, time(17, 0)) if args.until else None,
+            until=moment(args.until) if args.until else None,
             window_start=moment(args.window_start, time(8, 0)) if args.window_start else None,
             window_end=moment(args.window_end, time(17, 0)) if args.window_end else None,
             minutes=args.minutes,
@@ -487,7 +501,15 @@ def cmd_repair(args: argparse.Namespace) -> int:
         print("re-run with --force to apply anyway, once a dispatcher has agreed")
         return 1
 
-    violations = validate_plan(recommended.plan, world, travel, ValidationConfig(business_tz=tz))
+    violations = validate_plan(
+        recommended.plan,
+        world,
+        travel,
+        ValidationConfig(
+            business_tz=tz,
+            released_job_ids=frozenset(recommended.released_promises),
+        ),
+    )
     if violations:
         print(summarize(violations), file=sys.stderr)
         return 1

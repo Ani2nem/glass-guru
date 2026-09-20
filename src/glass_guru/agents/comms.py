@@ -47,6 +47,17 @@ _TIME_PATTERNS = (
     re.compile(r"\b(?:today|tomorrow)\b", re.IGNORECASE),
 )
 
+#: A bare hour range - "9-11", "between 2 and 4". Checked separately because each
+#: endpoint must be verified on its own: a model restating a 09:00-11:30 window as
+#: "9-11" gets the opening right and the closing wrong, and quoting a customer a
+#: window narrower than the one they were given is its own kind of broken promise.
+_HOUR_RANGE = re.compile(
+    # Both dash characters are deliberate: a model that types the longer one is
+    # making the same claim, and only one of them would be checked otherwise.
+    r"(?<![:\d])\b(\d{1,2})\s*(?:-|–|to|and)\s*(\d{1,2})\b(?!\d)",  # noqa: RUF001
+    re.IGNORECASE,
+)
+
 
 class DraftMessage(BaseModel):
     """One message to one customer."""
@@ -135,8 +146,13 @@ class CommsResult:
         return next((d for d in self.drafts if d.job_id == job_id), None)
 
 
-def _facts_for(change: JobChange, tz: tzinfo) -> tuple[str, set[str]]:
-    """The brief for one customer, and the phrases a draft may legitimately contain."""
+def _facts_for(change: JobChange, tz: tzinfo, now: datetime | None = None) -> tuple[str, set[str]]:
+    """The brief for one customer, and the phrases a draft may legitimately contain.
+
+    ``now`` resolves "today" and "tomorrow". Without it those words cannot be checked
+    at all: they are true or false only relative to when the message is sent, and a
+    checker that flags a correct "today" trains a dispatcher to ignore it.
+    """
     allowed: set[str] = set()
 
     def note(moment: datetime) -> str:
@@ -152,7 +168,16 @@ def _facts_for(change: JobChange, tz: tzinfo) -> tuple[str, set[str]]:
         allowed.add(f"{local:%A}".lower())
         allowed.add(f"{local:%-I:%M}{local:%p}".lower())
         if local.minute == 0:
+            # A bare hour is only an exact statement on the hour. Adding it for 15:10
+            # would wave through "3pm", and for 15:55 a message nearly an hour wrong.
             allowed.add(f"{local:%-I}{local:%p}".lower())
+            allowed.add(f"{local:%-I}")
+        if now is not None:
+            days = (local.date() - now.astimezone(tz).date()).days
+            if days == 0:
+                allowed.add("today")
+            elif days == 1:
+                allowed.add("tomorrow")
         return f"{local:%A} {local:%H:%M}"
 
     name = change.customer_name or change.job_id
@@ -160,18 +185,26 @@ def _facts_for(change: JobChange, tz: tzinfo) -> tuple[str, set[str]]:
         was = note(change.before.arrival)
         line = f"{name} ({change.job_id}): was {was}, cannot be done that day."
     elif change.before and change.after:
-        was, now = note(change.before.arrival), note(change.after.arrival)
-        line = f"{name} ({change.job_id}): was {was}, now {now}."
+        was, becomes = note(change.before.arrival), note(change.after.arrival)
+        line = f"{name} ({change.job_id}): was {was}, now {becomes}."
     elif change.after:
         line = f"{name} ({change.job_id}): now booked for {note(change.after.arrival)}."
     else:
         line = f"{name} ({change.job_id}): appointment changed."
 
     if change.promised_window:
-        # The customer was given a window, so a message may legitimately restate it.
+        # State the window rather than merely mentioning that one exists. Without the
+        # times, a model restates them from the old arrival - 09:33 became "a 9-11
+        # window" against a real 09:00-11:30 - and quoting a customer a narrower
+        # window than they were given is its own kind of broken promise.
+        opens = change.promised_window.start.astimezone(tz)
+        closes = change.promised_window.end.astimezone(tz)
         note(change.promised_window.start)
         note(change.promised_window.end)
-        line += " Customer was given a window and may have arranged their day around it."
+        line += (
+            f" They were promised {opens:%H:%M}-{closes:%H:%M} and may have arranged"
+            " their day around it."
+        )
     return line, allowed
 
 
@@ -183,6 +216,23 @@ def verify_grounding(draft: DraftMessage, allowed: set[str]) -> tuple[GroundingI
     """
     issues: list[GroundingIssue] = []
     seen: set[str] = set()
+    flat = {a.replace(" ", "").lower() for a in allowed}
+
+    for match in _HOUR_RANGE.finditer(draft.body):
+        for hour in match.groups():
+            if hour.lstrip("0") not in flat and f"{hour}:00" not in flat:
+                issues.append(
+                    GroundingIssue(
+                        job_id=draft.job_id,
+                        phrase=match.group(0).strip(),
+                        detail=(
+                            f"the window quoted here does not match the one on file "
+                            f"({hour} is not a time this change supports)"
+                        ),
+                    )
+                )
+                break
+
     for pattern in _TIME_PATTERNS:
         for match in pattern.finditer(draft.body):
             phrase = match.group(0).strip().lower()
@@ -190,7 +240,7 @@ def verify_grounding(draft: DraftMessage, allowed: set[str]) -> tuple[GroundingI
             if normalised in seen:
                 continue
             seen.add(normalised)
-            if normalised not in {a.replace(" ", "").lower() for a in allowed}:
+            if normalised not in flat:
                 issues.append(
                     GroundingIssue(
                         job_id=draft.job_id,
@@ -207,6 +257,7 @@ def draft_customer_messages(
     *,
     tz: tzinfo,
     reason: str = "",
+    now: datetime | None = None,
     max_attempts: int = 3,
 ) -> CommsResult:
     """Draft a message per affected customer, then check every claim in it."""
@@ -218,7 +269,7 @@ def draft_customer_messages(
         briefs: list[str] = []
         allowed_by_job: dict[str, set[str]] = {}
         for change in changes:
-            line, allowed = _facts_for(change, tz)
+            line, allowed = _facts_for(change, tz, now)
             briefs.append(line)
             allowed_by_job[change.job_id] = allowed
 

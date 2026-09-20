@@ -82,6 +82,10 @@ class ValidationConfig:
     business_tz: tzinfo
     travel_slack_minutes: int = 1
     allow_overtime: bool = True
+    #: Promises a human has agreed to break. A plan that moves a confirmed window
+    #: without its job appearing here is rejected - the release has to be a decision
+    #: somebody made, not something a solver did quietly and a checker inferred.
+    released_job_ids: frozenset[JobId] = frozenset()
 
 
 # --------------------------------------------------------------------------- helpers
@@ -105,14 +109,48 @@ def _overlaps(a: tuple[datetime, datetime], b: tuple[datetime, datetime]) -> boo
     return a[0] < b[1] and b[0] < a[1]
 
 
-def _matching_window(job: Job, stop: Stop) -> TimeWindow | None:
-    """The first declared window this stop actually satisfies, if any."""
+def _is_binding(job: Job, window: TimeWindow, released: frozenset[JobId] = frozenset()) -> bool:
+    """Whether this window must contain the whole service.
+
+    Two independent reasons it might. ``hardness`` says what the customer *needs* - a
+    storefront that can only be worked on before it opens. ``CONFIRMED`` says what we
+    *promised*, and a promise binds even when the underlying preference was soft:
+    once someone has been told "between nine and eleven" and arranged their morning
+    around it, that window stops being a preference the optimiser may spend.
+    """
+    if job.id in released:
+        # A human has agreed to break this promise, so what remains is whatever the
+        # customer originally needed. A solver cannot reach this state on its own -
+        # the release has to be a decision somebody made and passed in, which is what
+        # keeps "we moved your appointment" from being something the system does
+        # quietly.
+        return window.hardness is WindowHardness.HARD
+    return (
+        window.hardness is WindowHardness.HARD or job.commitment_state is CommitmentState.CONFIRMED
+    )
+
+
+def _matching_window(
+    job: Job, stop: Stop, released: frozenset[JobId] = frozenset()
+) -> TimeWindow | None:
+    """The first declared window this stop satisfies, if any.
+
+    The asymmetry is the whole point of having two kinds. A **hard** window must
+    contain the entire service - "done before we open at nine" is not satisfied by
+    starting at 08:55. A **soft** window only says when the crew may *begin*; running
+    past its end is lateness, which the objective prices per minute rather than
+    refuses.
+
+    Treating a late soft window as infeasible, as an earlier version did, quietly
+    turns every soft window into a hard one: a customer who said "Tuesday morning
+    would suit" makes their job unschedulable the moment the morning fills up, rather
+    than simply expensive to serve in the afternoon.
+    """
     for window in job.windows:
+        # Nobody is there to let the crew in before the window opens, whatever its kind.
         if stop.arrival < window.start:
             continue
-        if window.hardness is WindowHardness.HARD and stop.departure > window.end:
-            continue
-        if window.hardness is WindowHardness.SOFT and stop.arrival > window.end:
+        if _is_binding(job, window, released) and stop.departure > window.end:
             continue
         return window
     return None
@@ -376,7 +414,9 @@ def _check_travel_consistency(
     return out
 
 
-def _check_windows(plan: PlanVersion, world: WorldState) -> list[Violation]:
+def _check_windows(
+    plan: PlanVersion, world: WorldState, config: ValidationConfig
+) -> list[Violation]:
     out: list[Violation] = []
     for route in plan.routes:
         for stop in route.stops:
@@ -384,11 +424,12 @@ def _check_windows(plan: PlanVersion, world: WorldState) -> list[Violation]:
             if job is None or not job.windows:
                 continue
 
-            if _matching_window(job, stop) is None:
+            if _matching_window(job, stop, config.released_job_ids) is None:
                 declared = ", ".join(
                     f"{w.start.isoformat()}..{w.end.isoformat()} ({w.hardness.value})"
                     for w in job.windows
                 )
+                early = all(stop.arrival < w.start for w in job.windows)
                 code = (
                     ViolationCode.CONFIRMED_WINDOW_MOVED
                     if job.commitment_state is CommitmentState.CONFIRMED
@@ -398,8 +439,17 @@ def _check_windows(plan: PlanVersion, world: WorldState) -> list[Violation]:
                     Violation(
                         code=code,
                         detail=(
-                            f"service {stop.arrival.isoformat()}..{stop.departure.isoformat()} "
-                            f"satisfies none of the declared windows [{declared}]"
+                            (
+                                "crew arrives before any window opens"
+                                if early
+                                else (
+                                    "a promised window was moved"
+                                    if job.commitment_state is CommitmentState.CONFIRMED
+                                    else "service runs past the end of a hard window"
+                                )
+                            )
+                            + f": {stop.arrival.isoformat()}..{stop.departure.isoformat()} "
+                            f"against [{declared}]"
                         ),
                         job_id=job.id,
                         crew_id=route.crew_id,
@@ -578,7 +628,7 @@ def validate_plan(
     violations += _check_resource_exclusivity(plan)
     violations += _check_resource_availability(plan, world)
     violations += _check_travel_consistency(plan, world, travel, config)
-    violations += _check_windows(plan, world)
+    violations += _check_windows(plan, world, config)
     violations += _check_working_hours(plan, world, config)
     violations += _check_van_capacity(plan, world)
     violations += _check_materials(plan, world)

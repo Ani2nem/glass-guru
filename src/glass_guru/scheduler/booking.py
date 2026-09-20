@@ -27,13 +27,14 @@ includes penalty terms for the job not yet existing.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta, tzinfo
 
 from glass_guru.config import BusinessParams
 from glass_guru.domain.enums import UnservedReason
-from glass_guru.domain.models import Job, TimeWindow
+from glass_guru.domain.models import Job, JobId, TimeWindow
 from glass_guru.domain.state import WorldState
 from glass_guru.domain.travel import TravelOracle
 from glass_guru.scheduler.costing import RouteCost, cost_route
@@ -89,6 +90,46 @@ class BookingOptions:
         return self.slots[-1].marginal_cost - self.slots[0].marginal_cost
 
 
+@dataclass(frozen=True, slots=True)
+class BaselineDay:
+    """What the day costs before the new job is inserted."""
+
+    operating_cost: float
+    served: frozenset[JobId]
+    travel_minutes: int
+    travel_miles: float
+
+
+@dataclass
+class BaselineCache:
+    """The cost of a day as it already stands, remembered between quotes.
+
+    Half of a quote is re-solving the untouched day, and that answer does not change
+    between one caller and the next: the plan only moves when something is committed.
+    Caching it halves the wait, which at the real operating point is the difference
+    between three seconds and a second and a half - and three seconds is where a
+    dispatcher starts apologising for the pause.
+
+    Keyed on the day and the exact set of jobs in it, so a booking, a cancellation or
+    a disruption invalidates it by construction rather than by remembering to.
+    """
+
+    _entries: dict[tuple[date, frozenset[JobId], float], BaselineDay] = field(default_factory=dict)
+    hits: int = 0
+    misses: int = 0
+
+    def get(self, on_date: date, jobs: Sequence[JobId], budget: float) -> BaselineDay | None:
+        found = self._entries.get((on_date, frozenset(jobs), budget))
+        if found is None:
+            self.misses += 1
+        else:
+            self.hits += 1
+        return found
+
+    def put(self, on_date: date, jobs: Sequence[JobId], budget: float, day: BaselineDay) -> None:
+        self._entries[(on_date, frozenset(jobs), budget)] = day
+
+
 def _world_with(world: WorldState, job: Job) -> WorldState:
     """A shallow copy of the world with one extra job. The original is untouched."""
     clone = copy(world)
@@ -131,11 +172,17 @@ def suggest_booking_slots(
     params: SolveParams,
     business: BusinessParams,
     limit: int = 5,
+    cache: BaselineCache | None = None,
 ) -> BookingOptions:
     """Rank the days this job could be served on by what serving it actually costs."""
     tz = params.business_tz
     quoted_minutes = int(business.scheduling.quoted_window_minutes.value)
     candidate_world = _world_with(world, draft)
+
+    # A quote is two solves per day with a caller waiting, so it gets its own ceiling.
+    # Inheriting the batch budget made a twenty-five job day take twenty seconds to
+    # answer, which is not a feature anybody would use.
+    params = replace(params, max_solve_seconds=business.solver.quote_solve_seconds.value)
 
     slots: list[SlotSuggestion] = []
     unavailable: list[UnavailableDay] = []
@@ -151,18 +198,26 @@ def suggest_booking_slots(
             )
         ]
 
-        baseline = plan_day(
-            world=world,
-            travel=travel,
-            on_date=on_date,
-            candidate_job_ids=existing,
-            params=params,
-        )
-        baseline_cost = sum(
-            _route_operating_cost(cost_route(route, world, business, tz))
-            for route in baseline.routes
-        )
-        baseline_served = {j for route in baseline.routes for j in route.job_ids}
+        remembered = cache.get(on_date, existing, params.max_solve_seconds) if cache else None
+        if remembered is None:
+            baseline = plan_day(
+                world=world,
+                travel=travel,
+                on_date=on_date,
+                candidate_job_ids=existing,
+                params=params,
+            )
+            remembered = BaselineDay(
+                operating_cost=sum(
+                    _route_operating_cost(cost_route(route, world, business, tz))
+                    for route in baseline.routes
+                ),
+                served=frozenset(j for route in baseline.routes for j in route.job_ids),
+                travel_minutes=sum(r.total_travel_minutes for r in baseline.routes),
+                travel_miles=sum(r.total_travel_miles for r in baseline.routes),
+            )
+            if cache is not None:
+                cache.put(on_date, existing, params.max_solve_seconds, remembered)
 
         # Everything already placed stays placed. A quote must never look cheap
         # because it quietly displaced someone who was already promised a slot.
@@ -172,7 +227,7 @@ def suggest_booking_slots(
             on_date=on_date,
             candidate_job_ids=[*existing, draft.id],
             params=params,
-            locked_job_ids=sorted(baseline_served),
+            locked_job_ids=sorted(remembered.served),
         )
 
         placement = next(
@@ -200,11 +255,13 @@ def suggest_booking_slots(
             _route_operating_cost(cost_route(r, candidate_world, business, tz))
             for r in trial.routes
         )
-        added_minutes = sum(r.total_travel_minutes for r in trial.routes) - sum(
-            r.total_travel_minutes for r in baseline.routes
+        # Travel deltas come from the trial alone: the baseline's route objects are
+        # not kept, only its cost, which is all the marginal figure needs.
+        added_minutes = max(
+            0, sum(r.total_travel_minutes for r in trial.routes) - remembered.travel_minutes
         )
-        added_miles = sum(r.total_travel_miles for r in trial.routes) - sum(
-            r.total_travel_miles for r in baseline.routes
+        added_miles = max(
+            0.0, sum(r.total_travel_miles for r in trial.routes) - remembered.travel_miles
         )
 
         neighbours = len(route.stops) - 1
@@ -217,16 +274,14 @@ def suggest_booking_slots(
                 on_date=on_date,
                 arrival=stop.arrival,
                 quoted_window=window,
-                marginal_cost=max(0.0, trial_cost - baseline_cost),
+                marginal_cost=max(0.0, trial_cost - remembered.operating_cost),
                 crew_id=route.crew_id,
                 worker_names=tuple(
                     world.workers[w].name for w in route.worker_ids if w in world.workers
                 ),
-                added_travel_minutes=max(0, added_minutes),
-                added_travel_miles=max(0.0, added_miles),
-                reason=_reason_for(
-                    max(0, added_minutes), max(0.0, added_miles), neighbours, dedicated
-                ),
+                added_travel_minutes=added_minutes,
+                added_travel_miles=added_miles,
+                reason=_reason_for(added_minutes, added_miles, neighbours, dedicated),
             )
         )
 

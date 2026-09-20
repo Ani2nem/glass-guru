@@ -30,7 +30,11 @@ from glass_guru.domain.state import WorldState, fold
 from glass_guru.obs.correlation import current_dispatch_id, dispatch
 from glass_guru.obs.tracing import record, span
 from glass_guru.persistence.log import PlanConflict, Workspace
-from glass_guru.scheduler.booking import BookingOptions, suggest_booking_slots
+from glass_guru.scheduler.booking import (
+    BaselineCache,
+    BookingOptions,
+    suggest_booking_slots,
+)
 from glass_guru.scheduler.costing import RouteCost, cost_plan
 from glass_guru.scheduler.day_planner import SolveParams
 from glass_guru.scheduler.horizon import HorizonParams, HorizonResult, plan_horizon
@@ -76,6 +80,10 @@ class DispatchService:
         self.business = business or BusinessParams.load()
         self.travel_mode = TravelMode(travel_mode)
         self.tz = ZoneInfo(self.business.meta.timezone)
+        # Half of a quote is re-solving the untouched day, and that answer does not
+        # change between one caller and the next. The key includes the exact job set,
+        # so a booking or a disruption invalidates it by construction.
+        self._baseline_cache = BaselineCache()
 
     # ------------------------------------------------------------------ context
 
@@ -244,11 +252,14 @@ class DispatchService:
                 horizon=horizon,
                 params=self.solve_params(),
                 business=self.business,
+                cache=self._baseline_cache,
             )
             active.set_attribute("slots", len(options.slots))
             record(
                 best_cost=round(options.best.marginal_cost, 2) if options.best else -1,
                 spread=round(options.savings_vs_worst, 2),
+                baseline_hits=self._baseline_cache.hits,
+                baseline_misses=self._baseline_cache.misses,
             )
             return options
 

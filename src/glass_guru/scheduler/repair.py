@@ -81,6 +81,9 @@ class RepairCandidate:
     plan: PlanVersion
     result: HorizonResult
     diff: PlanDiff
+    #: Promises this candidate breaks. The checker will not accept the plan without
+    #: being told, and a dispatcher should not accept it without being asked.
+    released_promises: tuple[JobId, ...] = ()
 
     @property
     def changes(self) -> int:
@@ -157,6 +160,9 @@ def repair_plan(
             reschedule_penalty_multiplier=strategy.release_multiplier,
             change_penalty=strategy.change_penalty,
             incumbent=_incumbent_of(baseline),
+            # Under pressure, breaking a promise is sometimes the least bad option.
+            # It is allowed here, priced through commitment_cost, and reported.
+            allow_promise_release=True,
         )
         result = plan_horizon(
             world=planning_world,
@@ -181,6 +187,7 @@ def repair_plan(
                 plan=plan,
                 result=result,
                 diff=diff_plans(baseline, plan, world),
+                released_promises=result.released_promises,
             )
         )
 

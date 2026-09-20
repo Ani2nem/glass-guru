@@ -1,0 +1,176 @@
+# Labelled call transcripts for tier 1.
+#
+# A caveat that belongs on the file rather than in a commit message: these inputs and
+# their gold labels were written by the same person who wrote the prompts. That makes
+# them a regression suite, not evidence that the system reads real calls well. They
+# catch drift and they compare models against each other fairly; they do not tell you
+# how it behaves on a Tuesday morning with a real customer. Replacing them with real
+# transcripts, labelled by someone at the business, is the single highest-value thing
+# that could happen to this suite.
+#
+# Cases are chosen for the ways reading a call actually goes wrong: details stated
+# obliquely, service types that sound like each other, and the commitment signals the
+# whole pricing design rests on.
+
+meta:
+  labelled_by: author
+  note: >-
+    Synthetic. Written alongside the prompts they test, so a passing score means
+    "unchanged", not "correct on real calls".
+
+cases:
+  - id: intake-plain
+    why: The straightforward case. If this fails, nothing else matters.
+    text: >-
+      Hi, it's Sarah Chen, 206-555-0142. Two windows went in the front room,
+      4410 Ballard Ave NW, Seattle. Any chance this week?
+    expect:
+      customer_name: Sarah Chen
+      phone: "2065550142"
+      address: 4410 Ballard Ave NW
+      service_type: residential_window_replacement
+      pane_count: 2
+      property_type: residential
+      urgency: normal
+      commitment_signals: []
+
+  - id: intake-time-off-work
+    why: >-
+      The phrase the whole commitment design exists for. Missing it means the
+      optimiser will move this slot for free.
+    text: >-
+      Morning - Tom Whitfield, 206 555 0199. Need a window replaced at
+      2600 E Madison St. I can do Tuesday but I'd have to take the day off work
+      for it, so I'd rather not move it about.
+    expect:
+      customer_name: Tom Whitfield
+      phone: "2065550199"
+      address: 2600 E Madison St
+      service_type: residential_window_replacement
+      urgency: normal
+      commitment_signals: [time_off_work]
+
+  - id: intake-storefront-emergency
+    why: Urgency and a hard constraint both stated obliquely, neither with a keyword.
+    text: >-
+      Someone's put the front window of the shop through overnight. We're on
+      800 Pike St. We open at nine and can't trade with it boarded.
+    expect:
+      service_type: storefront_glass
+      property_type: commercial
+      urgency: emergency
+      hard_constraint: before opening at 09:00
+      commitment_signals: [business_closed]
+
+  - id: intake-no-phone
+    why: >-
+      A missing callback number must be reported, not invented. This case exists to
+      check the model leaves it blank rather than helpfully producing one.
+    text: >-
+      It's Priya at 1800 N 45th St, my shower screen's cracked. When could
+      someone come?
+    expect:
+      customer_name: Priya
+      phone: ""
+      address: 1800 N 45th St
+      service_type: shower_door_install
+
+  - id: intake-auto-glass
+    why: A different trade entirely; the vocabulary overlaps with residential.
+    text: >-
+      Windscreen's gone on my van - stone off a lorry. Dave Okonkwo,
+      2065550188. I'm at 6200 Airport Way S.
+    expect:
+      customer_name: Dave Okonkwo
+      phone: "2065550188"
+      service_type: auto_glass
+      property_type: vehicle
+
+  - id: intake-childcare
+    why: A second kind of commitment signal, phrased without any of the obvious words.
+    text: >-
+      Hello, Maria Alvarez, 206-555-0177. Screens need re-meshing at
+      14800 Des Moines Memorial Dr. Thursday morning suits - I've got my sister
+      watching the kids that morning specially.
+    expect:
+      customer_name: Maria Alvarez
+      phone: "2065550177"
+      service_type: screen_repair
+      commitment_signals: [arranged_childcare]
+
+  - id: intake-already-moved
+    why: >-
+      The second reschedule is far more expensive in goodwill than the first, and the
+      caller says so without naming a cost.
+    text: >-
+      This is the third time I'm ringing about this. You moved me off Monday and
+      then off Wednesday. Ken Brennan, 5500 Sand Point Way NE, 206 555 0133.
+      Window in the back bedroom, still broken.
+    expect:
+      customer_name: Ken Brennan
+      phone: "2065550133"
+      address: 5500 Sand Point Way NE
+      service_type: residential_window_replacement
+      commitment_signals: [already_rescheduled]
+
+  - id: intake-tempered
+    why: >-
+      Glass type turns a routing problem into a lead-time one. Getting it wrong
+      produces a schedule that cannot physically happen.
+    text: >-
+      We need the toughened glass panel in the office partition replaced -
+      it's safety glass, has to be. 1520 2nd Ave. Ask for Nina, 2065550155.
+    expect:
+      customer_name: Nina
+      phone: "2065550155"
+      service_type: storefront_glass
+      property_type: commercial
+      glass_type: tempered
+
+  - id: intake-measure-first
+    why: A survey visit, not an install. Easy to over-read as the job itself.
+    text: >-
+      Before you quote, can someone come and measure? It's a bay window,
+      I don't know the sizes. Alan Nakamura, 10200 Aurora Ave N, 206-555-0122.
+    expect:
+      customer_name: Alan Nakamura
+      phone: "2065550122"
+      address: 10200 Aurora Ave N
+      service_type: measure_quote
+
+  - id: intake-waiting-in
+    why: >-
+      A weaker commitment than taking the day off, and it should be priced as weaker
+      rather than lumped in with it.
+    text: >-
+      Hi - Rob Delgado, 206 555 0166, 2400 4th Ave S. Two screens want doing.
+      I'll be in all day Friday whenever suits you.
+    expect:
+      customer_name: Rob Delgado
+      phone: "2065550166"
+      service_type: screen_repair
+      commitment_signals: [waiting_in]
+
+  - id: intake-boarding-only
+    why: >-
+      A make-safe visit, with the real repair to follow. Reading it as the repair
+      would book three hours for a forty-five minute job.
+    text: >-
+      Break-in at the unit overnight, glass everywhere. Just need it made safe
+      today, we'll sort the proper repair after the insurers have looked.
+      Unit 4, 3800 1st Ave S.
+    expect:
+      service_type: emergency_board_up
+      urgency: emergency
+      property_type: commercial
+
+  - id: intake-site-access
+    why: Access detail that costs a visit if it is dropped.
+    text: >-
+      Jo Patel, 2065550111, 4410 Ballard Ave NW. Shower door install.
+      Gate code is 4412 and there's no parking out front - you'll want the alley.
+    expect:
+      customer_name: Jo Patel
+      phone: "2065550111"
+      service_type: shower_door_install
+      site_notes: gate code 4412, alley access
