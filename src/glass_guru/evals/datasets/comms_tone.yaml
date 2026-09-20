@@ -1,0 +1,121 @@
+# Labelled customer messages, used to check whether the tone judge can be trusted.
+#
+# This file exists because of a gap I left open and then wrote down: tier 4 claimed to
+# score tone and did not. Adding a judge without this file would have been worse than
+# the gap - an unchecked model scoring another model's output, reporting 100%, and
+# looking like evidence.
+#
+# What these labels are: my own, written deliberately, and chosen so that the verdict
+# is not a matter of taste. A message that blames the customer for a delay the business
+# caused is not "a bit off"; it is wrong, and anyone at the business would say so.
+#
+# What these labels are not: this business's dispatcher telling me what reads well to
+# their customers. Calibrating against clear-cut cases proves the judge is not broken -
+# that it reads the message, applies the rubric, and does not simply answer "good" to
+# everything. It does not prove the judge agrees with a real person on a borderline
+# message, and nothing here should be read as though it does. The harness takes real
+# labels in the same format the moment there are any.
+#
+# Deliberately excluded: anything the deterministic house-style checks already catch -
+# internal ids, unauthorised refunds, apologising three times. Putting those here would
+# score the judge on work a regular expression does better, and inflate its agreement
+# with labels for the wrong reason.
+
+meta:
+  labelled_by: author
+  note: >-
+    Synthetic. Clear-cut by construction, so that disagreement means the judge is
+    broken rather than that reasonable people differ.
+  rubric_version: 1
+
+cases:
+  # ------------------------------------------------------------------ acceptable
+  - id: tone-plain-reschedule
+    verdict: good
+    why: States what changed, when, and what to do about it. Nothing else.
+    body: >-
+      Hi Sarah - one of our vans is off the road this morning, so we need to move your
+      fitting to today at 12:40. Sorry about that. Give us a call if that doesn't work
+      and we'll find you something better.
+
+  - id: tone-acknowledges-the-cost-to-them
+    verdict: good
+    why: Names the inconvenience the customer actually took on, without grovelling.
+    body: >-
+      Hi Mr Patel - we've had to push your shower door install to Wednesday at 10:00.
+      I know you'd booked the day off for today, so do ring us if Wednesday is awkward
+      and we'll work around you.
+
+  - id: tone-unsure-says-so
+    verdict: good
+    why: Admits it does not have a time yet rather than inventing one.
+    body: >-
+      Hi Jess - our morning job has overrun and we're not going to reach you in the
+      window we gave you. I don't want to guess at a time and get it wrong again, so
+      I'll call you within the hour with a firm one.
+
+  - id: tone-brief-and-warm
+    verdict: good
+    why: Short is not the same as cold.
+    body: >-
+      Hi Tom - running late on the auto glass, we'll be with you closer to 15:30 than
+      14:00. Anything you need from us in the meantime, just call.
+
+  - id: tone-bad-news-offers-a-choice
+    verdict: good
+    why: Gives the customer a decision to make instead of announcing one.
+    body: >-
+      Hi Dana - the tempered pane we ordered for you won't arrive until Thursday, so we
+      can't fit it tomorrow as planned. We can either come Thursday afternoon or first
+      thing Friday - whichever suits you better, let me know.
+
+  - id: tone-no-drama-about-a-small-change
+    verdict: good
+    why: A twenty-minute slip is treated as a twenty-minute slip.
+    body: >-
+      Hi Marcus - we're about twenty minutes behind, so the crew will be with you
+      around 11:20 rather than 11:00. Nothing's changed otherwise.
+
+  # ------------------------------------------------------------------------ poor
+  - id: tone-blames-the-customer
+    verdict: poor
+    why: Makes a delay the business caused sound like the customer's fault.
+    body: >-
+      Hi - we're moving your appointment to Thursday. If you'd been in when we came
+      last time this wouldn't have been necessary, so please make sure someone is
+      there this time.
+
+  - id: tone-blames-an-employee-by-name
+    verdict: poor
+    why: Names and blames a worker to a customer, which is nobody's business but ours.
+    body: >-
+      Hi - your fitting is moving to 14:00. Dan didn't turn up this morning and left us
+      short, which is why everything has run late today.
+
+  - id: tone-no-next-step
+    verdict: poor
+    why: Tells them something is wrong and leaves them with nothing to do about it.
+    body: >-
+      Hi - unfortunately there has been a change to your booking. We will be in touch.
+
+  - id: tone-alarming
+    verdict: poor
+    why: Frames a routine reschedule as a catastrophe and frightens the customer.
+    body: >-
+      URGENT - there has been a serious problem with your job and we may not be able to
+      complete the work at all. Please contact us immediately to discuss the situation.
+
+  - id: tone-buries-the-change
+    verdict: poor
+    why: The one fact that matters is behind three lines of padding.
+    body: >-
+      Dear valued customer, thank you for choosing us for your glazing needs. We pride
+      ourselves on delivering an exceptional standard of service to every client, and
+      your satisfaction remains our highest priority at all times. Your appointment is
+      now Thursday.
+
+  - id: tone-curt
+    verdict: poor
+    why: Accurate, complete, and reads as though the customer is an inconvenience.
+    body: >-
+      Appointment moved. Thursday 09:00. Be there.

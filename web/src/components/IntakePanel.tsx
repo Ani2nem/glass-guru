@@ -40,7 +40,7 @@ export function IntakePanel() {
       <textarea
         value={text}
         rows={5}
-        placeholder="Type while they talk — name, number, what's broken, when they're free…"
+        placeholder="Type while they talk - name, number, what's broken, when they're free…"
         onChange={(e) => setText(e.target.value)}
       />
       <button className="primary" disabled={busy || !text.trim()} onClick={run}>
@@ -50,7 +50,7 @@ export function IntakePanel() {
       {error && (
         <p className="error">
           {error.message}
-          {error.remedy && <span className="muted"> — {error.remedy}</span>}
+          {error.remedy && <span className="muted"> - {error.remedy}</span>}
         </p>
       )}
 

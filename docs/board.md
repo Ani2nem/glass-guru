@@ -14,19 +14,19 @@ reload; Vite proxies `/api` across.
 
 Three columns, because a dispatcher is doing three things at once.
 
-**Left — the phone.** Intake takes call notes and fills a job while the customer is
+**Left - the phone.** Intake takes call notes and fills a job while the customer is
 still talking. What it shows in two halves is the point: what was captured, and what
 still has to be asked. A silently half-filled form discovered after the call is worse
 than no form. Below it, disruptions: type what you heard, review the typed events, then
 record them. Nothing an agent extracts is stored until a person agrees to it.
 
-**Middle — the plan.** A Gantt per crew per day, or the same routes on a map. Bar
+**Middle - the plan.** A Gantt per crew per day, or the same routes on a map. Bar
 colour carries commitment state, because "can this move?" is the question asked of
 every bar. Each row ends with on-site percentage and idle minutes - the two figures
 that make a technically valid but obviously wrong plan look wrong, and neither is
 something an invariant check can judge.
 
-**Right — proposals.** Repair candidates, each with how many customers would need
+**Right - proposals.** Repair candidates, each with how many customers would need
 telling and whether the rules allow it to apply without review. Several priced options
 rather than one answer, because choosing between "keep every promise and serve less"
 and "serve more and make two calls" is a judgement about this business today.

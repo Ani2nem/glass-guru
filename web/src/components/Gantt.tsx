@@ -27,7 +27,7 @@ function StopBar({ stop, onSelect }: { stop: Stop; onSelect: (id: string) => voi
       style={{ left: `${left}%`, width: `${width}%` }}
       onClick={() => onSelect(stop.job_id)}
       title={
-        `${stop.customer_name} — ${stop.service_type}\n` +
+        `${stop.customer_name} - ${stop.service_type}\n` +
         `${clock(stop.start_minute)}–${clock(stop.end_minute)}\n` +
         `${stop.travel_minutes} min drive, ${stop.travel_miles} mi\n` +
         `${stop.commitment_state}${stop.crew_size > 1 ? ` · needs ${stop.crew_size}` : ""}`

@@ -107,7 +107,7 @@ export function ProposalPanel({ onChanged }: { onChanged: () => void }) {
       {error && (
         <p className="error">
           {error.message}
-          {error.remedy && <span className="muted"> — {error.remedy}</span>}
+          {error.remedy && <span className="muted"> - {error.remedy}</span>}
         </p>
       )}
 

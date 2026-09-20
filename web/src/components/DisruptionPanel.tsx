@@ -59,7 +59,7 @@ export function DisruptionPanel({ onChanged }: { onChanged: () => void }) {
       {error && (
         <p className="error">
           {error.message}
-          {error.remedy && <span className="muted"> — {error.remedy}</span>}
+          {error.remedy && <span className="muted"> - {error.remedy}</span>}
         </p>
       )}
 
@@ -72,7 +72,7 @@ export function DisruptionPanel({ onChanged }: { onChanged: () => void }) {
                 <li key={index}>
                   <code>{String(event.type)}</code>{" "}
                   {String(event.van_id ?? event.worker_id ?? event.job_id ?? "")}
-                  {event.reason ? <span className="muted"> — {String(event.reason)}</span> : null}
+                  {event.reason ? <span className="muted"> - {String(event.reason)}</span> : null}
                 </li>
               ))}
             </ul>

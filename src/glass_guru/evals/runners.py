@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
-from glass_guru.agents.comms import draft_customer_messages
+from glass_guru.agents.comms import draft_customer_messages, verify_house_style
 from glass_guru.agents.coordinator import choose_repair
 from glass_guru.agents.intake import intake
 from glass_guru.agents.llm.base import LLMProvider
@@ -28,6 +28,7 @@ from glass_guru.domain.invariants import ValidationConfig, summarize, validate_p
 from glass_guru.domain.models import PlanVersion
 from glass_guru.domain.state import WorldState, fold
 from glass_guru.evals.core import CaseResult, Tier
+from glass_guru.evals.judge import Calibration, calibrate, judge_tone
 from glass_guru.evals.scoring import CALL_FIELDS, TRIAGE_FIELDS, score_fields
 from glass_guru.fixtures import scenarios as scenario_library
 from glass_guru.fixtures.sample_business import (
@@ -350,18 +351,30 @@ def _check_envelope(
 
 
 def run_quality(provider: LLMProvider) -> list[CaseResult]:
-    """Customer messages: grounded first, then readable.
+    """Customer messages: grounded, then in house style, then readable.
 
-    Grounding is checked deterministically and is not negotiable - a message stating a
-    time the plan does not support fails outright, however well written. Tone is the
-    part worth a judge, and is scored separately so a well-phrased fabrication cannot
-    average its way to a pass.
+    Three checks, in decreasing order of certainty, and separated so that a well-phrased
+    fabrication cannot average its way to a pass.
+
+    Grounding is not negotiable: a message stating a time the plan does not support
+    fails outright, however well written. House style is a list of rules - internal
+    ids, unauthorised refunds, apologising three times - and needs no opinion, so it
+    does not go to a model.
+
+    Tone is what is left, and it is the only part a judge is used for. The judge is
+    calibrated against labelled messages before any of its verdicts count; if it cannot
+    match the labels, or if it answers "good" to everything, the tone cases fail saying
+    so rather than reporting a number that means nothing.
     """
     business = _business()
     travel = build_travel(business, TravelMode.FROZEN)
     params = SolveParams.from_business(business, _tz(), reproducible=True)
     horizon_params = HorizonParams.from_business(business)
     results: list[CaseResult] = []
+    drafted_bodies: list[tuple[str, str]] = []
+
+    # Before anything is judged, establish whether the judge can be believed.
+    calibration = calibrate(provider)
 
     for name in ("promise_broken", "van_breakdown"):
         scenario = scenario_library.get(name)
@@ -422,6 +435,73 @@ def run_quality(provider: LLMProvider) -> list[CaseResult]:
                     "repairs": float(drafted.extraction.repairs),
                     "escalated": 1.0 if drafted.extraction.escalated else 0.0,
                 },
+            )
+        )
+
+        # Checkable, so checked rather than judged. Asking a model whether a message
+        # contains "j-407" costs a call and gives a worse answer than a regex.
+        style = [i for d in drafted.drafts for i in verify_house_style(d)]
+        results.append(
+            CaseResult(
+                case_id=f"quality/{name}-house-style",
+                tier=Tier.QUALITY,
+                score=0.0 if style else 1.0,
+                passed=not style,
+                detail="; ".join(f"{i.phrase}: {i.detail}" for i in style[:3]),
+            )
+        )
+        drafted_bodies += [(f"{name}/{d.job_id}", d.body) for d in drafted.drafts]
+
+    results.append(_calibration_case(calibration))
+    if calibration.trustworthy:
+        results += _tone_cases(provider, drafted_bodies)
+    else:
+        # Deliberately not scored as zero. The messages were not judged badly; they
+        # were not judged. Recording that as a tone failure would send someone to fix
+        # the prompt that writes messages, when the thing that is broken is the judge.
+        results.append(
+            CaseResult(
+                case_id="quality/tone",
+                tier=Tier.QUALITY,
+                score=0.0,
+                passed=False,
+                detail=f"not scored: the judge is not calibrated ({calibration.summary})",
+            )
+        )
+    return results
+
+
+def _calibration_case(calibration: Calibration) -> CaseResult:
+    """Whether the judge may be believed, reported as a case in its own right.
+
+    It belongs in the report rather than in a log. When tone scores move, the first
+    question is whether the messages changed or the judge did, and a number sitting
+    next to them answers it.
+    """
+    return CaseResult(
+        case_id="quality/judge-calibration",
+        tier=Tier.QUALITY,
+        score=calibration.agreement if calibration.discriminates else 0.0,
+        passed=calibration.trustworthy,
+        detail=calibration.summary,
+        metrics={"judge_agreement": calibration.agreement},
+    )
+
+
+def _tone_cases(provider: LLMProvider, bodies: list[tuple[str, str]]) -> list[CaseResult]:
+    """Score each drafted message on the part that needed reading."""
+    results: list[CaseResult] = []
+    for label, body in bodies:
+        verdict = judge_tone(provider, body)
+        good = verdict.value is not None and verdict.value.verdict == "good"
+        results.append(
+            CaseResult(
+                case_id=f"quality/tone-{label}",
+                tier=Tier.QUALITY,
+                score=1.0 if good else 0.0,
+                passed=good,
+                detail="" if good else (verdict.value.reason if verdict.value else "no verdict"),
+                metrics={"repairs": float(verdict.repairs)},
             )
         )
     return results
