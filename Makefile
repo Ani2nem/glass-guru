@@ -3,7 +3,7 @@ PY   := $(VENV)/bin/python
 GG   := $(VENV)/bin/glass-guru
 
 .PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
-        params world travel osrm-setup osrm-up freeze-travel geocode demo clean
+        params world travel osrm-setup osrm-up freeze-travel geocode demo mcp trace clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -28,6 +28,12 @@ typecheck:  ## Strict type check
 	$(VENV)/bin/mypy
 
 check: lint typecheck test  ## Everything CI will eventually gate on
+
+mcp:  ## Run the MCP server over stdio
+	$(VENV)/bin/glass-guru-mcp
+
+trace:  ## Run a command with spans printed to the console, e.g. make trace CMD=commit
+	GLASS_GURU_TRACE_CONSOLE=1 $(GG) $(CMD)
 
 demo:  ## End-to-end Gate 3 walkthrough in a throwaway workspace
 	@rm -rf /tmp/glass-guru-demo
