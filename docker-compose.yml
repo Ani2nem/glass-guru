@@ -1,0 +1,25 @@
+# Local development services. Nothing here is needed to run the test suite - the
+# synthetic travel provider and the frozen leg snapshot keep tests offline and free.
+services:
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    container_name: glass-guru-osrm
+    command: >
+      osrm-routed --algorithm mld
+      --max-table-size 2000
+      /data/Seattle.osrm
+    # The default table size of 100 is well under a 5-day horizon's ~130 stops, and
+    # one table request is far cheaper than N^2 route calls.
+    volumes:
+      - ./docker/osrm/data:/data
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          wget -qO- 'http://localhost:5000/table/v1/driving/-122.33,47.60;-122.35,47.62'
+          | grep -q '"code":"Ok"'
+      interval: 10s
+      timeout: 5s
+      retries: 12

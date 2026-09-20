@@ -42,6 +42,26 @@ vehicle:
       Fuel, tyres, maintenance, depreciation. Near the IRS business mileage rate,
       which is a reasonable proxy but not this fleet's actual cost.
 
+scheduling:
+  quoted_window_minutes:
+    value: 120
+    source: estimated
+    note: >-
+      Width of the arrival window quoted to a customer on the phone. Narrow enough
+      to be worth having, wide enough to absorb a job running over earlier in the
+      route. Two hours is the field-service norm; measure against actual arrival
+      spread once there is history.
+
+  hard_window_buffer_minutes:
+    value: 15
+    source: estimated
+    note: >-
+      Margin preferred before a hard deadline. Finishing at exactly 09:00 satisfies a
+      "done before we open at 09:00" window but leaves nothing for a slow drive. This
+      is priced at lateness_per_minute, not enforced: the planner prefers margin and
+      never refuses work for want of it, and the invariant checker still accepts a
+      plan that uses the full window, so a repair under pressure may spend it.
+
 penalties:
   unserved_base:
     value: 500.0
@@ -112,6 +132,39 @@ service_area:
     note: >-
       Beyond this a single job burns 2+ hours of drive time. Treated as a business
       rule rather than something the objective rediscovers every morning.
+
+horizon:
+  days:
+    value: 5
+    source: estimated
+    note: >-
+      Rolling planning window. Long enough that booking suggestions are useful and
+      material lead times are representable; short enough that a day-solve per day
+      stays interactive.
+
+  day_capacity_utilization:
+    value: 0.65
+    source: estimated
+    note: >-
+      Share of a crew's shift assumed to be on-site rather than driving or waiting,
+      used only as a coarse capacity bound when assigning jobs to days. Too high and
+      days are over-filled and spill; too low and the horizon looks falsely full.
+      Measure from actual routes once there is history.
+
+  sector_spread_penalty:
+    value: 45.0
+    source: estimated
+    note: >-
+      Cost of a crew day touching one more compass sector around the depot. This is
+      what makes the planner group the north side on one day and the south side on
+      another, the way a dispatcher already thinks.
+
+  day_delay_penalty:
+    value: 12.0
+    source: estimated
+    note: >-
+      Cost per day of pushing a job later in the horizon, scaled by priority. Keeps
+      urgent and long-deferred work near the front without hard-coding an order.
 
 solver:
   max_solve_seconds:

@@ -1,34 +1,32 @@
 SCENARIO  baseline
 An ordinary Monday with nothing going wrong.
 
-!  19 of 19 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  25 of 25 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (1f1f8dfb9af7a6dd)
+PLAN 2026-09-21  (acc3d533acaa2ed6)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      09:00-11:00  Chen Residence             residential_window_replacement  16min drive  
-      11:11-11:56  Nakamura Screens           screen_repair                   11min drive  
-                   travel 43min / 17.1mi  (43 person-min)   idle 0min   on-site 79%
+      08:29-09:14  Nakamura Screens           screen_repair                   29min drive  
+      09:33-11:33  Chen Residence             residential_window_replacement  19min drive  
+                   travel 70min / 23.0mi  (70 person-min)   idle 0min   on-site 70%
 
-  crew-van-2   Marcus + Priya   [van-2]
-      06:04-08:34  Rodriguez Storefront       storefront_glass                 4min drive  needs 2
-                   travel 9min / 1.6mi  (18 person-min)   idle 0min   on-site 94%
-
-  crew-van-3   Alex   [van-3]
-      10:00-12:30  Patel Shower Door          shower_door_install             14min drive  
-                   travel 25min / 8.7mi  (25 person-min)   idle 0min   on-site 86%
+  crew-van-3   Marcus + Priya   [van-3]
+      06:10-08:40  Rodriguez Storefront       storefront_glass                10min drive  needs 2
+                   ..68 min gap, leaves 09:48
+      10:00-12:30  Patel Shower Door          shower_door_install             12min drive  
+                   travel 40min / 14.9mi  (80 person-min)   idle 68min   on-site 74%
 
   crew-van-4   Sofia   [van-4]
-      08:21-09:51  Okonkwo Auto Glass         auto_glass                      21min drive  
-                   travel 37min / 14.8mi  (37 person-min)   idle 0min   on-site 71%
+      08:11-09:41  Okonkwo Auto Glass         auto_glass                      11min drive  
+                   travel 29min / 12.0mi  (29 person-min)   idle 0min   on-site 76%
 
-  not this day's work
+  not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
       j-408  Brennan Residence          window_on_another_day
                    customer window falls on 2026-09-22, not 2026-09-21
-      j-409  Alvarez Screens (far)      window_on_another_day
+      j-409  Alvarez Screens            window_on_another_day
                    customer window falls on 2026-09-23, not 2026-09-21
       j-410  Tran Auto Glass            window_on_another_day
                    customer window falls on 2026-09-23, not 2026-09-21
@@ -36,8 +34,8 @@ PLAN 2026-09-21  (1f1f8dfb9af7a6dd)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $113.16   vehicle $27.39   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $140.55
-  solver objective $160.80  (+$20.25 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $164.68   vehicle $32.43   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $197.11
+  solver objective $244.09  (+$46.98 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

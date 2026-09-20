@@ -8,17 +8,22 @@ from datetime import date, datetime
 
 import pytest
 
+from glass_guru.config import BusinessParams
 from glass_guru.domain.invariants import ValidationConfig
 from glass_guru.domain.models import CrewRoute, JobId, PlanVersion, VanId, WorkerId
 from glass_guru.domain.state import WorldState, fold
+from glass_guru.domain.travel import TravelOracle
 from glass_guru.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, sample_world_at
 from glass_guru.scheduler.routing import materialize_route
-from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+from glass_guru.scheduler.travel.factory import TravelMode, build_travel
 
 
 @pytest.fixture
-def travel() -> SyntheticTravelProvider:
-    return SyntheticTravelProvider()
+def travel() -> TravelOracle:
+    """Real road distances from the committed snapshot: no network, no spend, and
+    identical on every machine. A leg missing from the snapshot raises rather than
+    silently degrading to a straight line."""
+    return build_travel(BusinessParams.load(), TravelMode.FROZEN)
 
 
 @pytest.fixture
@@ -35,7 +40,7 @@ def config() -> ValidationConfig:
 class PlanBuilder:
     """Assembles routes into a plan, so tests read as "a valid plan, except ...""."""
 
-    def __init__(self, world: WorldState, travel: SyntheticTravelProvider) -> None:
+    def __init__(self, world: WorldState, travel: TravelOracle) -> None:
         self.world = world
         self.travel = travel
         self.routes: list[CrewRoute] = []
@@ -76,7 +81,7 @@ class PlanBuilder:
 
 
 @pytest.fixture
-def plan_builder(world: WorldState, travel: SyntheticTravelProvider) -> PlanBuilder:
+def plan_builder(world: WorldState, travel: TravelOracle) -> PlanBuilder:
     return PlanBuilder(world, travel)
 
 

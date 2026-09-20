@@ -69,8 +69,10 @@ def cost_route(
     travel_minutes = route.total_travel_minutes
     person_travel = travel_minutes * headcount
 
-    # Idle time: gaps between arriving early and the window opening. Visible waiting
-    # is usually a sign the sequence is wrong, so it is surfaced rather than buried.
+    # Slack: crew-minutes that are neither driving nor on site, because the next
+    # window has not opened yet. The crew leaves late rather than idling on a
+    # doorstep, but the time is unproductive either way, so it is surfaced rather
+    # than buried - a lot of it usually means the sequence is wrong.
     idle = 0
     previous_departure: datetime | None = None
     for stop in route.stops:

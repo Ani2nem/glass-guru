@@ -10,21 +10,26 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
-from datetime import date, datetime
+from dataclasses import replace
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from glass_guru.cli import render
 from glass_guru.config import BusinessParams
+from glass_guru.domain.enums import Certification, ServiceType
 from glass_guru.domain.invariants import ValidationConfig, validate_plan
-from glass_guru.domain.models import PlanVersion
+from glass_guru.domain.models import Job, Location, PlanVersion, TimeWindow
 from glass_guru.domain.state import WorldState, fold
 from glass_guru.domain.travel import TravelOracle
 from glass_guru.fixtures import scenarios
 from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at
+from glass_guru.geocoding import GeocodeError, Geocoder
+from glass_guru.scheduler.booking import suggest_booking_slots
 from glass_guru.scheduler.costing import cost_plan
 from glass_guru.scheduler.day_planner import DayPlanResult, SolveParams, plan_day
-from glass_guru.scheduler.travel.base import OverrideAdjustedProvider
-from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+from glass_guru.scheduler.horizon import HorizonParams, HorizonResult, plan_horizon
+from glass_guru.scheduler.travel.base import OverrideAdjustedProvider, TravelProvider
+from glass_guru.scheduler.travel.factory import TravelMode, build_travel, describe
 
 
 def _load_world(as_of: datetime | None = None) -> WorldState:
@@ -33,13 +38,17 @@ def _load_world(as_of: datetime | None = None) -> WorldState:
     return fold(events, as_of=as_of or default_as_of)
 
 
+#: Travel source for this process, set once from --travel.
+_TRAVEL_MODE: TravelMode = TravelMode.AUTO
+
+
 def _travel_for(world: WorldState, business: BusinessParams) -> TravelOracle:
     """Travel provider with the world's recorded traffic delays layered on top.
 
     Providers stay pure; a ``TrafficDelay`` event affects routing without any
     provider knowing the event log exists.
     """
-    base = SyntheticTravelProvider.from_business(business)
+    base = build_travel(business, _TRAVEL_MODE)
     if not world.traffic_overrides:
         return base
     return OverrideAdjustedProvider(base, world.traffic_multiplier)
@@ -73,11 +82,55 @@ def _solve(
     return result, plan, params
 
 
+def _render_horizon(
+    world: WorldState,
+    business: BusinessParams,
+    start: date,
+    *,
+    days: int | None = None,
+    allow_overtime: bool = True,
+) -> tuple[str, int]:
+    """Plan a rolling horizon and render it. Non-zero exit means infeasible."""
+    tz = ZoneInfo(business.meta.timezone)
+    travel = _travel_for(world, business)
+    params = SolveParams.from_business(business, tz, allow_overtime=allow_overtime)
+    horizon_params = HorizonParams.from_business(business)
+    if days is not None:
+        horizon_params = replace(horizon_params, days=days)
+
+    result: HorizonResult = plan_horizon(
+        world=world, travel=travel, start=start, params=params, horizon_params=horizon_params
+    )
+    end = date.fromordinal(start.toordinal() + horizon_params.days - 1)
+    plan = PlanVersion(
+        id=f"horizon-{start.isoformat()}",
+        created_at=world.as_of,
+        horizon_start=start,
+        horizon_end=end,
+        routes=result.routes,
+        unserved=result.unserved,
+    )
+    violations = validate_plan(
+        plan, world, travel, ValidationConfig(business_tz=tz, allow_overtime=allow_overtime)
+    )
+    cost, route_costs = cost_plan(plan, world, business, tz, result.unserved)
+    board = render.render_horizon(result, world, plan, business, tz, cost, route_costs, violations)
+    return board, (1 if violations else 0)
+
+
 def cmd_solve(args: argparse.Namespace) -> int:
     business = BusinessParams.load(args.config)
     tz = ZoneInfo(business.meta.timezone)
     world = _load_world()
     on_date = args.date or WEEK_START
+
+    if args.horizon:
+        days = None if args.horizon is True else int(args.horizon)
+        board, code = _render_horizon(
+            world, business, on_date, days=days, allow_overtime=not args.no_overtime
+        )
+        print(board)
+        return code
 
     result, plan, _ = _solve(world, business, on_date, allow_overtime=not args.no_overtime)
     travel = _travel_for(world, business)
@@ -200,6 +253,110 @@ def cmd_scenario(args: argparse.Namespace) -> int:
     return code
 
 
+def cmd_slots(args: argparse.Namespace) -> int:
+    """Price a prospective job into every day of the horizon.
+
+    This is the question a dispatcher actually has on a call: not "what is the
+    optimal schedule" but "when can I offer, and what does each option cost us?"
+    """
+    business = BusinessParams.load(args.config)
+    tz = ZoneInfo(business.meta.timezone)
+    world = _load_world()
+
+    geocoder = Geocoder()
+    if args.lat is not None and args.lon is not None:
+        location = Location(lat=args.lat, lon=args.lon, address=args.address or "")
+    elif args.address:
+        try:
+            location = geocoder.geocode(args.address)
+        except GeocodeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    else:
+        print("give --address or both --lat and --lon", file=sys.stderr)
+        return 2
+
+    start = args.date or WEEK_START
+    horizon_params = HorizonParams.from_business(business)
+    horizon = [
+        date.fromordinal(start.toordinal() + offset) for offset in range(horizon_params.days)
+    ]
+
+    draft = Job(
+        id="draft",
+        customer_id="draft",
+        customer_name=args.customer,
+        location=location,
+        service_type=ServiceType(args.service),
+        required_certifications=frozenset(Certification(c) for c in args.certs),
+        crew_size=args.crew,
+        estimated_duration_min=args.duration,
+        revenue=args.revenue,
+        windows=tuple(
+            TimeWindow(
+                start=datetime.combine(day, time(8, 0), tzinfo=tz),
+                end=datetime.combine(day, time(17, 0), tzinfo=tz),
+            )
+            for day in horizon
+        ),
+        requested_at=world.as_of,
+    )
+
+    travel = _travel_for(world, business)
+    params = SolveParams.from_business(business, tz)
+    options = suggest_booking_slots(
+        world=world,
+        travel=travel,
+        draft=draft,
+        horizon=horizon,
+        params=params,
+        business=business,
+    )
+    print(render.render_slots(options, draft, business, tz))
+    return 0 if options.slots else 1
+
+
+def cmd_travel(args: argparse.Namespace) -> int:
+    """Report the travel source, and optionally compare the three against each other."""
+    business = BusinessParams.load(args.config)
+    world = _load_world()
+    print(f"travel source: {describe(_TRAVEL_MODE)}")
+
+    if not args.compare:
+        oracle = build_travel(business, _TRAVEL_MODE)
+        depot = world.vans["van-1"].home_depot
+        probe = next(iter(world.active_jobs()))
+        leg = oracle.leg(depot, probe.location, world.as_of)
+        print(f"  sample leg depot -> {probe.customer_name}: {leg.minutes}min / {leg.miles}mi")
+        return 0
+
+    from glass_guru.scheduler.travel.cache import CacheMiss
+    from glass_guru.scheduler.travel.osrm import OsrmUnavailable
+
+    modes: list[tuple[str, TravelProvider]] = []
+    for mode in (TravelMode.SYNTHETIC, TravelMode.FROZEN, TravelMode.OSRM):
+        try:
+            modes.append((mode.value, build_travel(business, mode)))
+        except FileNotFoundError as exc:
+            print(f"  {mode.value}: unavailable ({exc.args[0].splitlines()[0]})")
+
+    depot = world.vans["van-1"].home_depot
+    at = world.as_of
+    header = "  ".join(f"{name:>18}" for name, _ in modes)
+    print()
+    print(f"{'job':<8} {'customer':<22} {header}")
+    for job in world.active_jobs():
+        cells = []
+        for _, oracle in modes:
+            try:
+                leg = oracle.leg(depot, job.location, at)
+                cells.append(f"{leg.minutes:>7}min {leg.miles:>6.1f}mi")
+            except (CacheMiss, OsrmUnavailable):
+                cells.append(f"{'unavailable':>18}")
+        print(f"{job.id:<8} {job.customer_name:<22} {'  '.join(cells)}")
+    return 0
+
+
 def _parse_date(text: str) -> date:
     return datetime.strptime(text, "%Y-%m-%d").date()
 
@@ -211,11 +368,25 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config", default=None, help="path to business_params.yaml (default: repo config/)"
     )
+    parser.add_argument(
+        "--travel",
+        choices=[m.value for m in TravelMode],
+        default=TravelMode.AUTO.value,
+        help="travel-time source (default: auto - frozen snapshot when present)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     solve = sub.add_parser("solve", help="solve a day and render the crew board")
     solve.add_argument("--date", type=_parse_date, default=None, help="YYYY-MM-DD")
     solve.add_argument("--no-overtime", action="store_true", help="forbid overtime")
+    solve.add_argument(
+        "--horizon",
+        nargs="?",
+        const=True,
+        default=None,
+        metavar="DAYS",
+        help="plan a rolling horizon instead of one day (default: config value)",
+    )
     solve.set_defaults(func=cmd_solve)
 
     show = sub.add_parser("show", help="show the world: workers, vans, jobs")
@@ -223,6 +394,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     params = sub.add_parser("params", help="business parameters and their provenance")
     params.set_defaults(func=cmd_params)
+
+    slots = sub.add_parser("slots", help="price a prospective job into the horizon")
+    slots.add_argument("--address", default=None, help="street address to geocode")
+    slots.add_argument("--lat", type=float, default=None)
+    slots.add_argument("--lon", type=float, default=None)
+    slots.add_argument(
+        "--service",
+        default=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT.value,
+        choices=[s.value for s in ServiceType],
+    )
+    slots.add_argument("--certs", nargs="*", default=[], choices=[c.value for c in Certification])
+    slots.add_argument("--duration", type=int, default=90, help="minutes on site")
+    slots.add_argument("--crew", type=int, default=1, choices=[1, 2])
+    slots.add_argument("--revenue", type=float, default=700.0)
+    slots.add_argument("--customer", default="New caller")
+    slots.add_argument("--date", type=_parse_date, default=None, help="horizon start")
+    slots.set_defaults(func=cmd_slots)
+
+    travel = sub.add_parser("travel", help="show or compare the travel-time source")
+    travel.add_argument(
+        "--compare", action="store_true", help="compare synthetic, frozen and live OSRM"
+    )
+    travel.set_defaults(func=cmd_travel)
 
     scenario = sub.add_parser("scenario", help="run a named disruption scenario")
     scenario.add_argument("name", nargs="?", default="list", help="scenario name, or 'list'")
@@ -237,7 +431,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    global _TRAVEL_MODE
     args = build_parser().parse_args(argv)
+    _TRAVEL_MODE = TravelMode(args.travel)
     result: int = args.func(args)
     return result
 
