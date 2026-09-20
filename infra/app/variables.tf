@@ -7,9 +7,9 @@ variable "image" {
   description = <<-DESC
     The image to run, by digest.
 
-    A digest rather than a tag, deliberately. `:latest` means the running task and the
-    commit that produced it can only be correlated by timestamp, and a rollback becomes
-    a guess. The deploy workflow substitutes the digest it just pushed.
+    A digest rather than a tag, deliberately. `:latest` means the running function and
+    the commit that produced it can only be correlated by timestamp, and a rollback
+    becomes a guess. The deploy workflow substitutes the digest it just pushed.
   DESC
   type        = string
 
@@ -25,47 +25,44 @@ variable "deploy_role_name" {
   default     = "glass-guru-deploy"
 }
 
-variable "vpc_cidr" {
-  type    = string
-  default = "10.40.0.0/16"
-}
-
-variable "allowed_cidrs" {
+variable "memory_mb" {
   description = <<-DESC
-    Who may reach the board.
+    Memory, which on Lambda also decides CPU.
 
-    Defaults to the whole internet because a demo nobody can open is not a demo, and
-    the board carries synthetic data for a fictional business. Anything with real
-    customer addresses in it should be an office range or behind a VPN, and this is
-    the one variable to change to get there.
+    1769MB is one vCPU; 2048 is a little over. CP-SAT is the reason this is not the
+    128MB minimum, and the solve times in docs/scaling.md were measured against roughly
+    one core, so this is the setting that keeps them honest. Lower it and quotes get
+    slower; raise it and each request costs proportionally more per second while
+    finishing sooner, which is close to a wash until the solver stops being the
+    bottleneck.
   DESC
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
-}
-
-variable "container_port" {
-  type    = number
-  default = 8000
-}
-
-variable "task_cpu" {
-  description = <<-DESC
-    CP-SAT is the reason this is not the 256 minimum.
-
-    Measured on this machine: a 25-job day solves in about ten seconds at the batch
-    budget and a quote in under two. Fargate vCPU units are not directly comparable, so
-    treat 1024 as a starting point and read the actual solve times out of the traces
-    before changing it - the solver reports its own duration, so this is measurable
-    rather than a matter of taste.
-  DESC
-  type        = number
-  default     = 1024
-}
-
-variable "task_memory" {
-  description = "OR-Tools holds the whole model in memory; 2GB is comfortable for a 5-day horizon."
   type        = number
   default     = 2048
+}
+
+variable "timeout_seconds" {
+  description = <<-DESC
+    The ceiling on one request.
+
+    Generous on purpose. A five-day horizon at sixty jobs measured 39 seconds, which is
+    already past what API Gateway would allow and comfortably inside this. The load
+    balancer this replaced capped out at 120.
+  DESC
+  type        = number
+  default     = 300
+}
+
+variable "public" {
+  description = <<-DESC
+    Whether anyone with the URL can open the board.
+
+    True by default because a demo nobody can open is not a demo, and the board carries
+    synthetic data for a fictional business. Set false and the function URL requires a
+    signed request, which is the right setting the moment real customer addresses are
+    in it.
+  DESC
+  type        = bool
+  default     = true
 }
 
 variable "travel_mode" {
@@ -97,8 +94,8 @@ variable "model_ids" {
     Which Bedrock models the running application may invoke.
 
     Named rather than wildcarded: this is the credential an attacker reaches first if
-    they get into the container, and "any model in the account" is an expensive thing
-    to hand out. The first entry is what the agents use.
+    they get into the function, and "any model in the account" is an expensive thing to
+    hand out. The first entry is what the agents use.
   DESC
   type        = list(string)
   default = [

@@ -1,21 +1,26 @@
-# The application stack: everything that costs money.
+# The application stack: a container on Lambda, and an S3 bucket holding the business's
+# history. That is the whole thing.
 #
-# Kept separate from infra/bootstrap because that stack grants the permissions this one
-# runs with. See infra/bootstrap/README.md.
+# It began as ECS Fargate behind an application load balancer, because the project plan
+# said ECS Fargate. That was the wrong default for this workload and it took writing
+# down the monthly figure to see it: one business, twenty-five jobs a day, one
+# dispatcher. An always-on task and a load balancer bill 730 hours a month to serve
+# perhaps two hours of work - about $47 - and neither scales to zero.
 #
-# Shape, and why it is this shape rather than the one in the original plan:
+# Lambda bills for what runs. Idle costs nothing, a function URL gives HTTPS and a
+# fifteen-minute request ceiling for free, and the whole stack lands near $3. Two things
+# had to be true first, and both were checked rather than assumed:
 #
-# The event log is an append-only JSONL file with exactly one writer by design. That is
-# not a limitation to engineer around at this size - one business, 25 jobs a day - it is
-# the correct model, and the honest way to deploy it is an EFS volume and exactly one
-# task. Two tasks would fork the log. Postgres is the answer when there are genuinely
-# concurrent writers or when the pgvector catalog lands; until then it would be a
-# persistence layer rewrite to support concurrency nothing needs.
+#   the event log had to leave local disk, because a Lambda has none that survives an
+#   invocation - it is on S3 now, which also made committing a plan properly atomic
 #
-# Travel comes from the committed snapshot, so there is no OSRM task and no routing
-# backend to keep alive. Real road distances, computed once and frozen. A deployment
-# that needs to quote arbitrary new addresses sets travel_mode to "warm" and points
-# osrm_url at a routing service; everything for that is a variable, not an edit.
+#   the board had to stop holding a server-sent-events stream open, because Lambda
+#   bills for every second of it: about $29 a month for one board left open during a
+#   working day, and more than the container it replaced if left open overnight
+#
+# There is no VPC. The function reaches Bedrock and S3 over their public endpoints,
+# which is what keeps this at $3 rather than $35 - a Lambda in a VPC needs a NAT
+# gateway to reach anything, and a NAT gateway costs more than all the compute here.
 
 terraform {
   required_version = ">= 1.10"
@@ -48,14 +53,8 @@ provider "aws" {
 }
 
 data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
 
 locals {
   name       = "glass-guru"
   account_id = data.aws_caller_identity.current.account_id
-
-  # One task, on purpose. The append-only log has a single writer; a second task would
-  # fork it. Stated here as a constant rather than a variable so that raising it is a
-  # code change that has to argue with this comment.
-  desired_count = 1
 }

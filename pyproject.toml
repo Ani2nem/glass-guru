@@ -43,6 +43,9 @@ dev = [
     "ruff>=0.7",
     "mypy>=1.13",
     "types-pyyaml",
+    # S3 is the deployed storage backend, so its tests must actually exercise the
+    # conditional writes the concurrency argument rests on. moto enforces them.
+    "moto[s3]>=5.0",
 ]
 
 [build-system]

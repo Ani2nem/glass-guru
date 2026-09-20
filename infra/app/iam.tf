@@ -1,41 +1,24 @@
-# Two task roles, for the same reason the CI roles are two.
+# What the running application may do, and what the deploy pipeline may do to it.
 #
-# The execution role is what ECS itself uses to start the container: pull the image,
-# open a log stream. The task role is what the *application* holds while running. They
-# are separated so that a compromised application cannot pull other images or write to
-# other log groups, and so that the list of things the app may do reads as a list of
-# things the app actually does.
+# There is no execution role here and no task role, because there is no ECS. Lambda
+# uses one role for both purposes, so the list below is exactly the set of things the
+# application actually does - and it is short enough to read, which is the point.
 
-data "aws_iam_policy_document" "assume_task" {
+data "aws_iam_policy_document" "assume_lambda" {
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
+      identifiers = ["lambda.amazonaws.com"]
     }
   }
 }
 
-# ---------------------------------------------------------------- execution role
-
-resource "aws_iam_role" "execution" {
-  name               = "${local.name}-execution"
-  description        = "Used by ECS to start the task: pull the image, open a log stream."
-  assume_role_policy = data.aws_iam_policy_document.assume_task.json
-}
-
-resource "aws_iam_role_policy_attachment" "execution" {
-  role       = aws_iam_role.execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-# ---------------------------------------------------------------------- task role
-
 resource "aws_iam_role" "task" {
-  name               = "${local.name}-task"
+  name               = "${local.name}-runtime"
   description        = "Held by the application while it runs."
-  assume_role_policy = data.aws_iam_policy_document.assume_task.json
+  assume_role_policy = data.aws_iam_policy_document.assume_lambda.json
 }
 
 data "aws_iam_policy_document" "task" {
@@ -47,7 +30,7 @@ data "aws_iam_policy_document" "task" {
       "bedrock:InvokeModelWithResponseStream",
     ]
     # Named, not wildcarded. This is the credential an attacker reaches first if they
-    # get into the container, and "any Bedrock model" is an expensive thing to hand out.
+    # get into the function, and "any Bedrock model" is an expensive thing to hand out.
     resources = concat(
       [for id in var.model_ids : "arn:aws:bedrock:*::foundation-model/${id}"],
       [for id in var.model_ids : "arn:aws:bedrock:*:${local.account_id}:inference-profile/${id}"],
@@ -55,18 +38,28 @@ data "aws_iam_policy_document" "task" {
   }
 
   statement {
-    sid    = "MountTheEventLog"
+    sid    = "ReadAndWriteTheBusinessHistory"
     effect = "Allow"
     actions = [
-      "elasticfilesystem:ClientMount",
-      "elasticfilesystem:ClientWrite",
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:ListBucket",
     ]
-    resources = [aws_efs_file_system.workspace.arn]
-    condition {
-      test     = "StringEquals"
-      variable = "elasticfilesystem:AccessPointArn"
-      values   = [aws_efs_access_point.workspace.arn]
-    }
+    resources = [
+      aws_s3_bucket.workspace.arn,
+      "${aws_s3_bucket.workspace.arn}/*",
+    ]
+  }
+
+  # Deliberately absent: s3:DeleteObject. The log is append-only and plan versions are
+  # immutable, so nothing the application does needs to remove an object. A bug that
+  # tries will fail loudly rather than quietly erasing a day's bookings.
+
+  statement {
+    sid       = "WriteItsOwnLogs"
+    effect    = "Allow"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["${aws_cloudwatch_log_group.app.arn}:*"]
   }
 }
 
@@ -79,34 +72,23 @@ resource "aws_iam_role_policy" "task" {
 # ------------------------------------------------- what the deploy role may change
 
 # Attached here rather than in the bootstrap stack because these ARNs only exist once
-# this stack does. Writing the policy earlier would have meant writing it against
-# guesses, which is how a policy ends up with a wildcard in it.
+# this stack does. Writing the policy earlier would mean writing it against guesses,
+# which is how a policy ends up with a wildcard in it.
 data "aws_iam_policy_document" "deploy_this_stack" {
   statement {
-    sid    = "RollTheService"
+    sid    = "ReplaceTheRunningImage"
     effect = "Allow"
     actions = [
-      "ecs:UpdateService",
-      "ecs:DescribeServices",
-      "ecs:DescribeTaskDefinition",
-      "ecs:RegisterTaskDefinition",
-      "ecs:ListTasks",
-      "ecs:DescribeTasks",
+      "lambda:UpdateFunctionCode",
+      "lambda:GetFunction",
+      "lambda:GetFunctionConfiguration",
     ]
-    resources = ["*"] # RegisterTaskDefinition takes no resource; the rest are scoped below.
+    resources = [aws_lambda_function.app.arn]
   }
 
-  statement {
-    sid       = "PassOnlyTheseRoles"
-    effect    = "Allow"
-    actions   = ["iam:PassRole"]
-    resources = [aws_iam_role.execution.arn, aws_iam_role.task.arn]
-    condition {
-      test     = "StringEquals"
-      variable = "iam:PassedToService"
-      values   = ["ecs-tasks.amazonaws.com"]
-    }
-  }
+  # Deliberately absent: UpdateFunctionConfiguration, AddPermission, CreateFunctionUrl.
+  # The pipeline may change what code runs and nothing about how it is reached or what
+  # it is allowed to do. Those are terraform's, and a human reads the plan.
 }
 
 resource "aws_iam_role_policy" "deploy_this_stack" {

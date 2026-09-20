@@ -25,6 +25,14 @@ RUN mkdir -p src/glass_guru && touch src/glass_guru/__init__.py && pip install .
 
 # --- runtime ------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
+
+# The Lambda Web Adapter turns a Lambda invocation into an ordinary HTTP request
+# against the app, so FastAPI runs unchanged whether this image is started by `docker
+# run` or by Lambda. It is inert outside Lambda - no AWS_LAMBDA_RUNTIME_API in the
+# environment means the extension does nothing - which is what keeps `make image-run`
+# and the local walkthrough identical to what is deployed.
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 \
+     /lambda-adapter /opt/extensions/lambda-adapter
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
@@ -35,7 +43,16 @@ ENV PYTHONUNBUFFERED=1 \
     # Bind every interface. The default is loopback so that running the API on a
     # laptop does not expose the board to the local network; in a container loopback
     # means nothing outside can reach it, load balancer included.
-    GLASS_GURU_API_HOST=0.0.0.0
+    GLASS_GURU_API_HOST=0.0.0.0 \
+    # The adapter reads PORT to know where to forward; the app reads its own variable.
+    # Both name the same port, and a mismatch is a request that goes nowhere.
+    PORT=8000 \
+    GLASS_GURU_API_PORT=8000 \
+    # Stream responses rather than buffering them, so a long solve does not sit silent
+    # and the readiness probe answers immediately.
+    AWS_LWA_INVOKE_MODE=RESPONSE_STREAM \
+    # Do not let a cold start forward a request before uvicorn is listening.
+    AWS_LWA_READINESS_CHECK_PATH=/api/health
 
 RUN useradd --create-home --uid 10001 glass
 WORKDIR /app

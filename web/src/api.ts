@@ -62,12 +62,51 @@ export const api = {
     post<Message[]>(`/api/comms?strategy=${encodeURIComponent(strategy)}`),
 };
 
-/** Live updates, so a change made from the CLI or an agent shows up here too. */
-export function subscribe(onChange: () => void): () => void {
+/** How often to re-check when streaming is off. Slow enough to be nearly free, fast
+ * enough that a change made in the CLI shows up before you switch windows. */
+const POLL_MS = 10_000;
+
+function stream(onChange: () => void): () => void {
   const source = new EventSource("/api/stream");
   source.onmessage = (event) => {
     const payload = JSON.parse(event.data) as { type: string };
     if (payload.type === "plan" || payload.type === "world") onChange();
   };
   return () => source.close();
+}
+
+function poll(onChange: () => void): () => void {
+  const timer = setInterval(onChange, POLL_MS);
+  return () => clearInterval(timer);
+}
+
+/**
+ * Live updates, so a change made from the CLI or an agent shows up here too.
+ *
+ * The server chooses the mechanism, because the client cannot: a stream works
+ * perfectly well on Lambda, it is just billed for every second it stays open, and
+ * there is no failure to detect and fall back from. Running locally it streams;
+ * deployed it polls.
+ */
+export function subscribe(onChange: () => void): () => void {
+  let stop = () => {};
+  let cancelled = false;
+
+  void (async () => {
+    let mode = "sse";
+    try {
+      const health = await request<{ stream?: string }>("/api/health");
+      mode = health.stream ?? "sse";
+    } catch {
+      // Unreachable server, or an older one that does not say. Streaming is the
+      // right guess for both: it is what a local dev server does.
+    }
+    if (cancelled) return;
+    stop = mode === "poll" ? poll(onChange) : stream(onChange);
+  })();
+
+  return () => {
+    cancelled = true;
+    stop();
+  };
 }
