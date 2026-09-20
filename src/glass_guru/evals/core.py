@@ -51,6 +51,16 @@ class Tier(IntEnum):
         }[self]
 
 
+#: Tier numbers that need a live model. Named here rather than in the runner so the
+#: scorecard can tell "scored badly" apart from "never ran" without importing it.
+MODEL_TIER_NUMBERS = {1, 2, 4}
+
+#: Ignore movement below this when comparing against a baseline. Sampling noise is not
+#: a regression, and a gate that fires on it gets muted. Shared with the CI scorecard so
+#: the comment on a pull request and the gate that blocks it cannot disagree about what
+#: counts as a slip.
+REGRESSION_TOLERANCE = 0.02
+
 #: Pass marks per tier. Tier 0 is absolute: the point of an invariant is that it holds.
 #: The others are deliberately below 1.0 - a suite that only passes at perfection stops
 #: being a gate and becomes something people disable.
@@ -108,6 +118,14 @@ class TierResult:
         """Mean of a named per-case metric across this tier."""
         values = [r.metrics[name] for r in self.results if name in r.metrics]
         return sum(values) / len(values) if values else 0.0
+
+    @property
+    def metric_names(self) -> tuple[str, ...]:
+        """Every per-case metric recorded anywhere in this tier."""
+        names: set[str] = set()
+        for result in self.results:
+            names.update(result.metrics)
+        return tuple(sorted(names))
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +206,11 @@ class EvalReport:
                     "passed": t.passed,
                     "cases": t.cases,
                     "failures": [{"case_id": f.case_id, "detail": f.detail} for f in t.failures],
+                    # Health signals belong in the machine report, not only the
+                    # printed one. A CI scorecard cannot trend a number it never sees,
+                    # and repair rate is the earliest warning that a small model is
+                    # drifting from what the schema expects.
+                    "metrics": {name: round(t.metric(name), 4) for name in t.metric_names},
                 }
                 for t in self.tiers
             ],
@@ -204,9 +227,6 @@ def compare(baseline: dict[str, Any], current: EvalReport) -> tuple[bool, list[s
     and still be sliding; catching that early is the difference between noticing a
     regression and discovering it three months later as a mystery.
     """
-    #: Ignore movement below this. Sampling noise is not a regression, and a gate that
-    #: fires on it gets muted.
-    tolerance = 0.02
     problems: list[str] = []
     previous = {t["label"]: t for t in baseline.get("tiers", [])}
 
@@ -215,7 +235,7 @@ def compare(baseline: dict[str, Any], current: EvalReport) -> tuple[bool, list[s
         if before is None:
             continue
         drop = float(before["score"]) - tier.score
-        if drop > tolerance:
+        if drop > REGRESSION_TOLERANCE:
             problems.append(
                 f"tier {int(tier.tier)} {tier.tier.label}: "
                 f"{float(before['score']):.1%} -> {tier.score:.1%} ({drop:.1%} worse)"

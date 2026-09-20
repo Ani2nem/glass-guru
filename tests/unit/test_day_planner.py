@@ -287,3 +287,43 @@ def test_solve_is_fast_enough_for_an_interactive_call(world, travel, params):
     """The hot path quotes slots while a customer is on the phone."""
     result = solve(world, travel, params)
     assert result.metrics["solve_seconds"] < 5.0
+
+
+# ------------------------------------------------------------ deterministic ties
+
+
+def test_an_equal_cost_tie_is_broken_the_same_way_every_time(world, travel, params):
+    """Two plans costing exactly the same must not depend on how the search ran.
+
+    This is not symmetry between identical workers - the fixture has none. It is
+    degeneracy: the objective uses a blended labour rate by design, so on a day where
+    two differently-paid, differently-certified people are both qualified, it genuinely
+    has no reason to prefer either, and both answers are optimal.
+
+    Found when golden board snapshots passed on arm64 and failed on x86_64 with the
+    same OR-Tools version, the same seed, one search worker and a deterministic budget.
+    Both runs returned OPTIMAL at $405.61. Nothing was wrong except that the question
+    had two right answers and the suite asserted one of them.
+    """
+    signatures = set()
+    for _ in range(3):
+        result = solve(world, travel, params)
+        signatures.add(
+            tuple(sorted((r.crew_id, tuple(sorted(r.worker_ids))) for r in result.routes))
+        )
+    assert len(signatures) == 1, f"the same problem gave {len(signatures)} different plans"
+
+
+def test_the_tie_break_never_outweighs_a_cent_of_real_cost(world, travel, params):
+    """The tie-break is scaled below the objective, so it can only order equal plans.
+
+    Asserted by comparing against a solve of the same problem: the cost must be exactly
+    what it was before a preference for lower-numbered vans was introduced. A tie-break
+    large enough to buy a worse plan would be a silent, permanent overcharge.
+    """
+    result = solve(world, travel, params)
+    assert result.status == "OPTIMAL"
+    assert_feasible(result, world, travel)
+    # The value the fixture has always produced. If the tie-break could distort the
+    # objective, this is the number that would drift.
+    assert round(result.objective_cost, 2) == 244.09

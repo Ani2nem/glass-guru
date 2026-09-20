@@ -63,6 +63,11 @@ WEEK_START = date(2026, 9, 21)
 
 DEPOT = _geo("depot", 47.6205, -122.3493, "3800 1st Ave S, Seattle, WA")
 
+#: The downtown storefront, exported so the API's readiness probe can ask for a leg
+#: the committed snapshot actually holds. Keyed the same way the job is, so it moves
+#: with the geocode cache rather than drifting away from it.
+PROBE_STOP = _geo("j-401", 47.6145, -122.3400, "1520 2nd Ave, Seattle, WA")
+
 #: Standard shift for most of the roster.
 DAY_SHIFT = tuple(DayHours(weekday=d, start=time(8, 0), end=time(17, 0)) for d in range(5))
 

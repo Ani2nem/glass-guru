@@ -222,3 +222,100 @@ def test_every_commitment_state_can_reach_the_board(client: TestClient):
     plan = client.post("/api/plan/commit").json()
     states = {stop["commitment_state"] for r in plan["routes"] for stop in r["stops"]}
     assert {"provisional", "confirmed", "dispatched"} <= states
+
+
+# ---------------------------------------------------------------- health probes
+
+
+def test_liveness_does_no_work(client: TestClient):
+    """A probe that touched the solver would restart healthy tasks mid-solve."""
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_readiness_reports_each_thing_the_image_could_have_failed_to_ship(client: TestClient):
+    """The three checks stand for three things the image copies selectively."""
+    body = client.get("/api/ready").json()
+    assert set(body["checks"]) == {"params", "travel", "board"}
+    assert body["checks"]["params"] == "35 parameters"
+    assert body["checks"]["travel"].startswith("frozen:")
+
+
+def test_readiness_is_ready_when_the_board_is_there(client: TestClient, monkeypatch, tmp_path):
+    """Asserted against a directory this test creates.
+
+    An earlier version asserted `ready` against whatever happened to be on disk, which
+    passed locally - where the board had been built - and failed in CI, where the job
+    that runs the tests has no reason to build it. The check was right and the test was
+    reading the developer's working tree.
+    """
+    from glass_guru.api import main
+
+    monkeypatch.setattr(main, "WEB_DIST", tmp_path)
+    response = client.get("/api/ready")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+
+
+def test_readiness_is_degraded_without_the_built_board(client: TestClient, monkeypatch, tmp_path):
+    """An image that shipped no board serves a blank page and answers 200 on every API
+    route. The load balancer should not call that a healthy target."""
+    from glass_guru.api import main
+
+    monkeypatch.setattr(main, "WEB_DIST", tmp_path / "never-built")
+    response = client.get("/api/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"]["board"].startswith("FAILED")
+
+
+def test_readiness_fails_loudly_when_travel_cannot_answer(client: TestClient, monkeypatch):
+    """The failure worth catching: the process is up and cannot do the job.
+
+    A port check calls this container healthy. It is not - a task wired to a routing
+    backend that is not there would serve errors for every solve while the load
+    balancer kept sending it traffic.
+    """
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "osrm")
+    monkeypatch.setenv("GLASS_GURU_OSRM_URL", "http://127.0.0.1:1")
+
+    response = client.get("/api/ready")
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["checks"]["travel"].startswith("FAILED")
+    assert body["checks"]["params"] == "35 parameters", "unrelated checks still report"
+
+
+def test_the_readiness_probe_asks_for_a_leg_the_snapshot_holds():
+    """Regression: the probe used hand-typed coordinates and a wall-clock timestamp.
+
+    Both were wrong in a way that only showed up sometimes. The addresses are geocoded,
+    so a literal copied from the source sat in a different geohash cell than anything
+    frozen; and the snapshot is keyed by day type, so probing at "now" asked for a
+    weekend leg every Saturday, and a healthy container reported degraded.
+
+    Asserted against the snapshot directly rather than through the endpoint, because
+    the endpoint answers correctly on six days out of seven either way.
+    """
+    from glass_guru.api.main import _PROBE_AT
+    from glass_guru.config import BusinessParams
+    from glass_guru.fixtures.sample_business import DEPOT, PROBE_STOP
+    from glass_guru.scheduler.travel.factory import TravelMode, build_travel
+
+    assert _PROBE_AT.weekday() < 5, "the business does not run weekends"
+
+    frozen = build_travel(BusinessParams.load(), TravelMode.FROZEN)
+    # Raises CacheMiss if this pair and bucket were never frozen, which is the bug.
+    leg = frozen.leg(DEPOT, PROBE_STOP, _PROBE_AT)
+    assert leg.minutes > 0
+
+
+def test_the_osrm_url_is_configurable(monkeypatch):
+    """Deployed, the routing backend is another host. localhost is a laptop default."""
+    from glass_guru.config import BusinessParams
+    from glass_guru.scheduler.travel.factory import TravelMode, build_travel
+
+    monkeypatch.setenv("GLASS_GURU_OSRM_URL", "http://osrm.internal:5000")
+    provider = build_travel(BusinessParams.load(), TravelMode.OSRM)
+    assert "osrm.internal" in repr(provider.__dict__), "the env var was not honoured"

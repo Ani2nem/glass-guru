@@ -3,6 +3,7 @@ PY   := $(VENV)/bin/python
 GG   := $(VENV)/bin/glass-guru
 
 .PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
+        image image-run scorecard tf-bootstrap tf-app tf-check \
         params world travel osrm-setup osrm-up freeze-travel geocode demo mcp trace \
         eval eval-offline eval-baseline load aws-check web-install web-build web-check api dev clean
 
@@ -41,6 +42,37 @@ load:  ## Measure where the solver stops coping
 
 eval-baseline:  ## Record the current scores as the regression baseline
 	GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval --update-baseline
+
+image:  ## Build the container image locally (linux/arm64, as deployed)
+	docker build --platform linux/arm64 -t glass-guru:dev .
+
+image-run:  ## Run the built image and print what its health endpoints say
+	@docker rm -f glass-guru-local >/dev/null 2>&1 || true
+	docker run -d --name glass-guru-local -p 8000:8000 glass-guru:dev
+	@until curl -sf http://127.0.0.1:8000/api/health >/dev/null; do sleep 1; done
+	@echo "health : $$(curl -s http://127.0.0.1:8000/api/health)"
+	@echo "ready  : $$(curl -s http://127.0.0.1:8000/api/ready)"
+	@echo "board  : http://127.0.0.1:8000"
+
+scorecard:  ## Render the eval scorecard CI posts on a pull request
+	@GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval $(ARGS) --json /tmp/gg-eval.json >/dev/null
+	@$(PY) -m glass_guru.evals.scorecard /tmp/gg-eval.json --baseline evals/baseline.json
+
+tf-bootstrap:  ## Plan the one-time bootstrap stack (OIDC, roles, registry, state)
+	terraform -chdir=infra/bootstrap init -input=false
+	terraform -chdir=infra/bootstrap plan
+
+tf-app:  ## Plan the application stack. IMAGE=<url>@sha256:<digest> required
+	@test -n "$(IMAGE)" || (echo "IMAGE=<repo-url>@sha256:<digest> required - see infra/app/README.md"; exit 1)
+	terraform -chdir=infra/app init -input=false \
+	  -backend-config="bucket=$$(terraform -chdir=infra/bootstrap output -raw state_bucket)"
+	terraform -chdir=infra/app plan -var "image=$(IMAGE)"
+
+tf-check:  ## Validate and format-check both stacks
+	terraform -chdir=infra/bootstrap fmt -check
+	terraform -chdir=infra/bootstrap validate
+	terraform -chdir=infra/app fmt -check
+	terraform -chdir=infra/app validate
 
 aws-check:  ## Verify AWS credentials and Bedrock model access
 	@echo "--- identity ---"

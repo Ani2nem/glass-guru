@@ -23,3 +23,11 @@ docker/osrm/data/
 # Local CLI workspace: event log and plan history
 .glass-guru/
 web/node_modules/
+
+# Terraform. The bootstrap stack keeps its state locally and it names the account.
+# .terraform.lock.hcl is deliberately NOT ignored: it pins provider versions and
+# their hashes, which is the same argument as pinning the travel snapshot.
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log

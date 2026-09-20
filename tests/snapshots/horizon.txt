@@ -1,6 +1,6 @@
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-HORIZON 2026-09-21..2026-09-25  (7a009ff9340bb790)
+HORIZON 2026-09-21..2026-09-25  (aa2732bfd9090d3b)
 ------------------------------------------------------------------------------
 
   Mon 21 Sep   3 crew   5 job(s)   139min driving
@@ -16,19 +16,19 @@ HORIZON 2026-09-21..2026-09-25  (7a009ff9340bb790)
         10:00-12:30  Patel Shower Door          shower_door_install             12min drive  
                      travel 40min / 14.9mi  (80 person-min)   idle 68min   on-site 74%
 
-    crew-van-4   Sofia   [van-4]
+    crew-van-4   Alex   [van-4]
         08:11-09:41  Okonkwo Auto Glass         auto_glass                      11min drive  
                      travel 29min / 12.0mi  (29 person-min)   idle 0min   on-site 76%
 
   Tue 22 Sep   2 crew   2 job(s)   77min driving
 
-    crew-van-1   Ken   [van-1]
-        09:00-10:40  Brennan Residence          residential_window_replacement  28min drive  
-                     travel 52min / 19.2mi  (52 person-min)   idle 0min   on-site 66%
-
-    crew-van-2   Marcus + Priya   [van-2]
+    crew-van-1   Marcus + Priya   [van-1]
         07:45-10:45  Delgado Storefront         storefront_glass                13min drive  needs 2
                      travel 25min / 7.7mi  (50 person-min)   idle 0min   on-site 88%
+
+    crew-van-2   Dan   [van-2]
+        09:00-10:40  Brennan Residence          residential_window_replacement  28min drive  
+                     travel 52min / 19.2mi  (52 person-min)   idle 0min   on-site 66%
 
   Wed 23 Sep   2 crew   2 job(s)   53min driving
 
@@ -36,7 +36,7 @@ HORIZON 2026-09-21..2026-09-25  (7a009ff9340bb790)
         08:20-09:05  Alvarez Screens            screen_repair                   20min drive  
                      travel 38min / 11.0mi  (38 person-min)   idle 0min   on-site 54%
 
-    crew-van-4   Sofia   [van-4]
+    crew-van-4   Alex   [van-4]
         08:08-09:23  Tran Auto Glass            auto_glass                       8min drive  
                      travel 15min / 2.0mi  (15 person-min)   idle 0min   on-site 83%
 

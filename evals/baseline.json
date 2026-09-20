@@ -1,13 +1,16 @@
 {
-  "duration_seconds": 46.96,
+  "duration_seconds": 45.35,
   "model_id": "BedrockLLMProvider (us.amazon.nova-lite-v1:0)",
   "passed": true,
-  "started_at": "2026-09-20T17:19:30.939453+00:00",
+  "started_at": "2026-09-20T19:58:08.172911+00:00",
   "tiers": [
     {
       "cases": 15,
       "failures": [],
       "label": "invariants",
+      "metrics": {
+        "violations": 0.0
+      },
       "passed": true,
       "score": 1.0,
       "threshold": 1.0,
@@ -34,6 +37,10 @@
         }
       ],
       "label": "extraction",
+      "metrics": {
+        "escalated": 0.0,
+        "repairs": 0.0
+      },
       "passed": true,
       "score": 0.953,
       "threshold": 0.85,
@@ -43,6 +50,10 @@
       "cases": 11,
       "failures": [],
       "label": "action",
+      "metrics": {
+        "escalated": 0.0,
+        "repairs": 0.0
+      },
       "passed": true,
       "score": 1.0,
       "threshold": 0.9,
@@ -52,6 +63,9 @@
       "cases": 8,
       "failures": [],
       "label": "scenario",
+      "metrics": {
+        "served": 4.5
+      },
       "passed": true,
       "score": 1.0,
       "threshold": 0.95,
@@ -61,6 +75,11 @@
       "cases": 1,
       "failures": [],
       "label": "quality",
+      "metrics": {
+        "drafts": 1.0,
+        "escalated": 0.0,
+        "repairs": 0.0
+      },
       "passed": true,
       "score": 1.0,
       "threshold": 0.7,

@@ -1,0 +1,17 @@
+.venv/
+web/node_modules/
+web/dist/
+.git/
+.github/
+tests/
+docs/
+infra/
+docker/
+scripts/
+.glass-guru/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+**/__pycache__/
+*.pyc
+.env*

@@ -3,10 +3,10 @@ The Chen job cancels at the top of the route, freeing a residential slot.
 
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (6359346f5d83c54a)
+PLAN 2026-09-21  (e948b032001d96e3)
 ------------------------------------------------------------------------------
 
-  crew-van-1   Alex   [van-1]
+  crew-van-1   Ken   [van-1]
       08:29-09:14  Nakamura Screens           screen_repair                   29min drive  
                    travel 59min / 22.1mi  (59 person-min)   idle 0min   on-site 43%
 
@@ -16,7 +16,7 @@ PLAN 2026-09-21  (6359346f5d83c54a)
       10:00-12:30  Patel Shower Door          shower_door_install             12min drive  
                    travel 40min / 14.9mi  (80 person-min)   idle 68min   on-site 74%
 
-  crew-van-4   Sofia   [van-4]
+  crew-van-4   Alex   [van-4]
       08:11-09:41  Okonkwo Auto Glass         auto_glass                      11min drive  
                    travel 29min / 12.0mi  (29 person-min)   idle 0min   on-site 76%
 

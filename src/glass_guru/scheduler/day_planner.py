@@ -959,7 +959,33 @@ def plan_day(
         for k in range(num_crews):
             terms.append(late[job.id, k] * late_per_min)
 
-    model.minimize(sum(terms))
+    # ------------------------------------------------------- breaking exact ties
+    #
+    # Two plans can cost exactly the same and put different people in different vans.
+    # That is not symmetry - Sofia and Alex hold different certifications and are paid
+    # differently - it is degeneracy, and the blended labour rate this model uses by
+    # design is part of what creates it: the objective deliberately cannot see the
+    # difference between a $57 tech and a $52 one, so on a day where both are qualified
+    # it has no reason to prefer either.
+    #
+    # Left alone, the answer is whichever the search reached first, which is a property
+    # of the machine rather than the problem. The same OR-Tools version, the same seed,
+    # one search worker and a deterministic budget all failed to fix it: both answers
+    # were OPTIMAL and cost $405.61 to the cent. It surfaced as golden board snapshots
+    # passing on arm64 and failing on x86_64.
+    #
+    # So the tie is broken here instead, lexicographically: among plans of equal cost,
+    # prefer the one that puts earlier-named workers on earlier vans. Scaling the real
+    # objective above the largest possible tie-break value makes this exact rather than
+    # approximate - no tie-break can ever outweigh a single cent of real cost.
+    primary = sum(terms)
+    tie_break = sum(
+        assign[worker.id, k] * (rank * num_crews + k)
+        for rank, worker in enumerate(workers)
+        for k in range(num_crews)
+    )
+    tie_break_ceiling = len(workers) * num_crews * (len(workers) * num_crews + 1)
+    model.minimize(primary * (tie_break_ceiling + 1) + tie_break)
 
     # --------------------------------------------------------------------- solve
     solver = cp_model.CpSolver()
@@ -1035,7 +1061,8 @@ def plan_day(
         routes=tuple(routes),
         unserved=tuple(unserved_out),
         released_promises=released_promises,
-        objective_cost=solver.objective_value / 100.0,
+        # The primary term, not the scaled objective the solver minimised.
+        objective_cost=solver.value(primary) / 100.0,
         status=status_name,
         metrics={
             "candidates": float(len(jobs)),
