@@ -80,7 +80,7 @@ export default function App() {
       {error && (
         <div className="banner banner--error">
           {error.message}
-          {error.remedy && <span className="muted"> — {error.remedy}</span>}
+          {error.remedy && <span className="muted"> - {error.remedy}</span>}
         </div>
       )}
 
@@ -119,12 +119,12 @@ export default function App() {
                   "not this plan's work" is routine. */}
               {plan.unserved.filter((u) => u.is_failure).map((u) => (
                 <p key={u.job_id} className="warn">
-                  <strong>{u.customer_name || u.job_id}</strong> — {u.reason}: {u.detail}
+                  <strong>{u.customer_name || u.job_id}</strong> - {u.reason}: {u.detail}
                 </p>
               ))}
               {plan.unserved.filter((u) => !u.is_failure).map((u) => (
                 <p key={u.job_id} className="muted">
-                  {u.customer_name || u.job_id} — {u.detail}
+                  {u.customer_name || u.job_id} - {u.detail}
                 </p>
               ))}
             </section>
@@ -140,13 +140,13 @@ export default function App() {
                 {world.workers.map((w) => (
                   <li key={w.id} className={w.available ? "" : "warn"}>
                     <strong>{w.name}</strong> <span className="muted">{w.shift}</span>
-                    {!w.available && " — unavailable"}
+                    {!w.available && " - unavailable"}
                   </li>
                 ))}
                 {world.vans.map((v) => (
                   <li key={v.id} className={v.available ? "muted" : "warn"}>
                     {v.id}
-                    {!v.available && " — out of service"}
+                    {!v.available && " - out of service"}
                   </li>
                 ))}
               </ul>

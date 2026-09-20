@@ -26,13 +26,13 @@ The obvious half solves each scenario and validates the result. That proves the 
 agrees with the checker.
 
 It says nothing about the checker. Removing a check produces a *missing* violation, not
-a detected one — so a checker returning no violations at all scores a hundred percent.
+a detected one - so a checker returning no violations at all scores a hundred percent.
 This was not hypothetical: deleting the certification check and re-running the gate,
 it passed.
 
-So the second half feeds the checker plans that are deliberately wrong — a crew sent to
+So the second half feeds the checker plans that are deliberately wrong - a crew sent to
 work it is not certified for, an arrival two hours before any drive could deliver it, a
-two-hour install allotted one minute — and requires the specific violation each should
+two-hour install allotted one minute - and requires the specific violation each should
 raise. Removing any of three checks now fails the gate with a message naming what went
 unreported.
 
@@ -57,8 +57,8 @@ highest-value thing that could happen to this suite. The report says so on every
 
 ## Asserting outcomes, not prose
 
-No scenario passes because wording matched. Each asserts what happened to the schedule —
-which jobs were served, which promises held, whether anyone needs a phone call — with
+No scenario passes because wording matched. Each asserts what happened to the schedule -
+which jobs were served, which promises held, whether anyone needs a phone call - with
 bounds rather than exact numbers, so a legitimate improvement is not a test failure.
 
 Scoring text against text produces a number that moves when a prompt is reworded and
@@ -68,7 +68,7 @@ sits still when the system gets worse, which is backwards for a gate.
 
 The report carries mean repair attempts and escalation rate. With a small model, a
 rising repair rate means it is drifting from what the prompt and schema expect, long
-before a schedule looks wrong. Provider failure is tracked separately from bad output —
+before a schedule looks wrong. Provider failure is tracked separately from bad output -
 an unreachable endpoint is an operator's problem, a malformed answer is a prompt's.
 
 See `docs/scaling.md` for where the solver stops coping.
@@ -83,12 +83,80 @@ The first live run against `us.amazon.nova-lite-v1:0`, and what it changed.
 | 1 extraction | 94.8% (22 cases) | 85% |
 | 2 action | 100% (11 cases) | 90% |
 | 3 scenario | 100% (8 cases) | 95% |
-| 4 quality | 100% (1 case) | 70% |
+| 4 quality | 97.9% (4 cases) | 70% |
 
-Fifty-seven cases in about 42 seconds, escalation rate zero. Nova Lite is comfortably
+Sixty cases in about 50 seconds, escalation rate zero. Nova Lite is comfortably
 good enough for every task it is given here - which is the answer the `LLMProvider`
 abstraction was built to make cheap to obtain, and it took one command rather than an
 argument.
+
+## Tier 4: scoring tone without pretending to
+
+Tier 4 was the weakest thing in this suite for a long time, and it was weak in a way
+that is easy to leave alone: it scored grounding, which is deterministic and
+unarguable, and quietly scored nothing about whether the message was any good to
+receive. The docstring said tone was judged. Nothing judged it.
+
+The obvious fix is worse than the gap. An unchecked model scoring another model's
+prose, reporting 100%, sitting in a table next to four measured numbers, is not
+evidence - it is decoration that looks like evidence, and it would be believed.
+
+So tier 4 is now three checks in decreasing order of certainty.
+
+**Grounding**, by regular expression. A message stating a time the plan does not
+support fails outright however well written.
+
+**House style**, by a list of rules. Internal job and van ids, scheduling vocabulary
+the customer has no reason to know, money nobody authorised, apologising more than
+once, an SMS long enough for the carrier to split. None of this needs an opinion, so
+none of it goes to a model. Asking one whether a message contains `j-407` costs a
+call and gives a worse answer than a regex.
+
+**Tone**, by a judge - and only the part that genuinely needs reading. Whether the
+message blames somebody, leaves the customer knowing what happens next, treats a
+twenty-minute delay like a twenty-minute delay.
+
+### The judge does not get to mark its own work
+
+Before any verdict counts, the judge runs against twelve labelled messages and has to
+agree with them. Two conditions, and the second is the one that matters:
+
+| | |
+|---|---|
+| agreement | how often it matches the label. Below 80%, tone is not scored |
+| discrimination | whether it ever says "poor" at all |
+
+A judge that answers "good" to everything scores 50% on a balanced set. Some
+thresholds would let that through, and it is useless. Requiring both verdicts catches
+it directly rather than hoping a percentage does.
+
+When calibration fails, the tone cases report *not scored: the judge is not
+calibrated* rather than zero. The distinction is practical: a zero sends someone to
+fix the prompt that writes messages, when the broken thing is the judge.
+
+Measured: Nova Lite agrees with 11 of 12, produces both verdicts, and takes about
+eight seconds. The one it misses is the corporate-padding case - it reads a message
+that buries the change under three lines of "your satisfaction remains our highest
+priority" and calls it good. That is the least clear-cut label in the set, and it
+stays as it is. A gate adjusted until it passes measures nothing.
+
+### What these labels are, and are not
+
+They are mine. They are deliberately clear-cut - a message blaming the customer for a
+delay the business caused is not a matter of taste - so that disagreement means the
+judge is broken rather than that reasonable people differ.
+
+They are not this business's dispatcher telling me what reads well to their customers.
+Calibrating against obvious cases proves the judge reads the message and applies the
+rubric. It does not prove it agrees with a real person on a borderline one, and
+nothing in the report should be read as though it does. The harness takes real labels
+in the same format the moment there are any, and that is the single highest-value
+thing anyone at the business could spend an hour on.
+
+One rule keeps the halves honest, and a test enforces it: no labelled case may be one
+the deterministic rules already catch. Otherwise the judge scores well for work a
+regular expression did, and its agreement figure inflates without it having read
+anything.
 
 ### Four things the live run found
 

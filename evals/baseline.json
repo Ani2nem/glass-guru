@@ -1,8 +1,8 @@
 {
-  "duration_seconds": 45.35,
+  "duration_seconds": 57.76,
   "model_id": "BedrockLLMProvider (us.amazon.nova-lite-v1:0)",
   "passed": true,
-  "started_at": "2026-09-20T19:58:08.172911+00:00",
+  "started_at": "2026-09-20T22:37:56.222488+00:00",
   "tiers": [
     {
       "cases": 15,
@@ -42,7 +42,7 @@
         "repairs": 0.0
       },
       "passed": true,
-      "score": 0.953,
+      "score": 0.9477,
       "threshold": 0.85,
       "tier": 1
     },
@@ -72,16 +72,17 @@
       "tier": 3
     },
     {
-      "cases": 1,
+      "cases": 4,
       "failures": [],
       "label": "quality",
       "metrics": {
         "drafts": 1.0,
         "escalated": 0.0,
+        "judge_agreement": 0.9167,
         "repairs": 0.0
       },
       "passed": true,
-      "score": 1.0,
+      "score": 0.9792,
       "threshold": 0.7,
       "tier": 4
     }

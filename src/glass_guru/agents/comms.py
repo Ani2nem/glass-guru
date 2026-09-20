@@ -251,6 +251,84 @@ def verify_grounding(draft: DraftMessage, allowed: set[str]) -> tuple[GroundingI
     return tuple(issues)
 
 
+#: House style, expressed as things that are simply wrong rather than matters of taste.
+#:
+#: These are checked rather than judged on purpose. A rubric handed to a model should
+#: only carry the questions that genuinely need reading comprehension; asking it
+#: whether a message contains "j-407" wastes a call, costs money, and gives a less
+#: reliable answer than a regular expression. What is left for the judge is the part
+#: that actually requires judgement.
+_STYLE_RULES: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    (
+        "internal identifier",
+        re.compile(r"\b(?:j-\d+|van-\d+|crew-van-\d+|w-[a-z]+)\b", re.IGNORECASE),
+        "job, van and worker ids mean nothing to a customer and leak how we work",
+    ),
+    (
+        "internal vocabulary",
+        re.compile(
+            r"\b(?:provisional|dispatched|commitment cost|solver|invariant|horizon"
+            r"|plan version|re-?optimi[sz]e[ds]?)\b",
+            re.IGNORECASE,
+        ),
+        "scheduling vocabulary the customer has no reason to know",
+    ),
+    (
+        "unauthorised compensation",
+        re.compile(
+            r"\b(?:discount|refund|voucher|compensat\w*|free of charge|no charge|on us)\b",
+            re.IGNORECASE,
+        ),
+        "money was promised that nobody approved, and the customer will hold us to it",
+    ),
+)
+
+#: One apology is warmth. Two is grovelling, and it reads as though something worse
+#: happened than actually did.
+_APOLOGY = re.compile(r"\b(?:sorry|apolog\w+)\b", re.IGNORECASE)
+
+#: Beyond this an SMS is split by the carrier, arrives out of order, and costs twice.
+_SMS_LIMIT = 320
+
+
+def verify_house_style(draft: DraftMessage) -> tuple[GroundingIssue, ...]:
+    """Check a draft against the rules that need no taste to apply.
+
+    Deliberately separate from tone. Whether a message is *warm enough* is a judgement
+    call; whether it quotes an internal job id, promises a refund nobody authorised, or
+    apologises three times is not.
+    """
+    issues: list[GroundingIssue] = []
+
+    for label, pattern, why in _STYLE_RULES:
+        match = pattern.search(draft.body)
+        if match:
+            issues.append(
+                GroundingIssue(job_id=draft.job_id, phrase=match.group(0), detail=f"{label}: {why}")
+            )
+
+    apologies = len(_APOLOGY.findall(draft.body))
+    if apologies > 1:
+        issues.append(
+            GroundingIssue(
+                job_id=draft.job_id,
+                phrase=f"{apologies} apologies",
+                detail="apologising more than once reads as though something worse happened",
+            )
+        )
+
+    if draft.channel == "sms" and len(draft.body) > _SMS_LIMIT:
+        issues.append(
+            GroundingIssue(
+                job_id=draft.job_id,
+                phrase=f"{len(draft.body)} characters",
+                detail=f"over {_SMS_LIMIT}, so the carrier splits it and it may arrive jumbled",
+            )
+        )
+
+    return tuple(issues)
+
+
 def draft_customer_messages(
     provider: LLMProvider,
     diff: PlanDiff,
