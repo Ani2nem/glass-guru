@@ -159,15 +159,20 @@ def test_quoted_window_is_the_configured_width_and_contains_the_arrival(
 # ----------------------------------------------------------------- constraints
 
 
-def test_a_scarce_certification_limits_which_days_are_offered(world, travel, params, business):
-    """Only Marcus and Priya hold the commercial certification, and a storefront job
-    needs both of them. Days where they are committed elsewhere cannot be offered."""
+def test_a_scarce_certification_gates_every_offered_crew(world, travel, params, business):
+    """Only Marcus and Priya hold the commercial certification. Certifications pool
+    across a crew, so the second seat can be anyone - but one of those two must be on
+    every crew offered, which is what makes storefront work the bottleneck."""
     draft = draft_at(
         world, "j-401", certs={Certification.COMMERCIAL_STOREFRONT}, duration=120, crew=2
     )
     options = quote(world, travel, params, business, draft)
+    assert options.slots
     for slot in options.slots:
-        assert set(slot.worker_names) == {"Marcus", "Priya"}
+        assert len(slot.worker_names) == 2
+        assert {"Marcus", "Priya"} & set(slot.worker_names), (
+            f"{slot.worker_names} has nobody commercially certified"
+        )
 
 
 def test_unbookable_days_are_explained(world, travel, params, business):
