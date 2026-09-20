@@ -30,7 +30,7 @@ data "aws_iam_policy_document" "evals_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:*"]
+      values   = [local.subject_any]
     }
   }
 }

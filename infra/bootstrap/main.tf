@@ -43,10 +43,22 @@ locals {
     ? one(aws_iam_openid_connect_provider.github[*].arn)
     : one(data.aws_iam_openid_connect_provider.github[*].arn)
   )
+  # How GitHub names this repository inside the token's `sub` claim. With immutable
+  # subjects on - which they are here - the name is replaced by owner and repository
+  # ids, so a repository that is renamed, transferred, or deleted and recreated does
+  # not inherit the trust its name used to carry.
+  owner      = split("/", var.github_repository)[0]
+  repository = split("/", var.github_repository)[1]
+  subject_repo = (
+    var.github_owner_id == null
+    ? "repo:${var.github_repository}"
+    : "repo:${local.owner}@${var.github_owner_id}/${local.repository}@${var.github_repository_id}"
+  )
+
   # Every claim GitHub can present for this repository. Written out rather than
   # wildcarded so that widening it is a visible diff.
-  subject_main = "repo:${var.github_repository}:ref:refs/heads/main"
-  subject_pr   = "repo:${var.github_repository}:pull_request"
+  subject_main = "${local.subject_repo}:ref:refs/heads/main"
+  subject_any  = "${local.subject_repo}:*"
 }
 
 # ---------------------------------------------------------------- terraform state

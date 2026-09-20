@@ -234,12 +234,39 @@ def test_liveness_does_no_work(client: TestClient):
     assert response.json()["status"] == "ok"
 
 
-def test_readiness_checks_what_the_image_could_have_failed_to_ship(client: TestClient):
+def test_readiness_reports_each_thing_the_image_could_have_failed_to_ship(client: TestClient):
+    """The three checks stand for three things the image copies selectively."""
     body = client.get("/api/ready").json()
-    assert body["status"] == "ready"
     assert set(body["checks"]) == {"params", "travel", "board"}
-    assert "35 parameters" in body["checks"]["params"]
+    assert body["checks"]["params"] == "35 parameters"
     assert body["checks"]["travel"].startswith("frozen:")
+
+
+def test_readiness_is_ready_when_the_board_is_there(client: TestClient, monkeypatch, tmp_path):
+    """Asserted against a directory this test creates.
+
+    An earlier version asserted `ready` against whatever happened to be on disk, which
+    passed locally - where the board had been built - and failed in CI, where the job
+    that runs the tests has no reason to build it. The check was right and the test was
+    reading the developer's working tree.
+    """
+    from glass_guru.api import main
+
+    monkeypatch.setattr(main, "WEB_DIST", tmp_path)
+    response = client.get("/api/ready")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+
+
+def test_readiness_is_degraded_without_the_built_board(client: TestClient, monkeypatch, tmp_path):
+    """An image that shipped no board serves a blank page and answers 200 on every API
+    route. The load balancer should not call that a healthy target."""
+    from glass_guru.api import main
+
+    monkeypatch.setattr(main, "WEB_DIST", tmp_path / "never-built")
+    response = client.get("/api/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"]["board"].startswith("FAILED")
 
 
 def test_readiness_fails_loudly_when_travel_cannot_answer(client: TestClient, monkeypatch):

@@ -55,3 +55,36 @@ variable "create_oidc_provider" {
   type        = bool
   default     = true
 }
+
+variable "github_owner_id" {
+  description = <<-DESC
+    Numeric account id of the repository owner, or null for the mutable subject form.
+
+    GitHub can issue OIDC tokens with an *immutable* subject claim, which identifies the
+    repository by numeric id rather than by name:
+
+      repo:Ani2nem@96967353/glass-guru@1377693884:ref:refs/heads/main
+
+    rather than
+
+      repo:Ani2nem/glass-guru:ref:refs/heads/main
+
+    This is strictly better - a repository that is deleted and recreated, renamed, or
+    transferred gets new ids and does not inherit the old one's trust - and it is on for
+    this repository. A trust policy written against the name form silently matches
+    nothing, and the only symptom is "Not authorized to perform
+    sts:AssumeRoleWithWebIdentity", which says nothing about why.
+
+    Check with:
+      gh api repos/OWNER/REPO/actions/oidc/customization/sub
+    Set both ids to null if `use_immutable_subject` is false there.
+  DESC
+  type        = number
+  default     = 96967353
+}
+
+variable "github_repository_id" {
+  description = "Numeric id of the repository. See github_owner_id."
+  type        = number
+  default     = 1377693884
+}
