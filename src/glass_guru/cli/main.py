@@ -537,6 +537,65 @@ def cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_triage(args: argparse.Namespace) -> int:
+    """Turn a dispatcher's note into typed events, then optionally act on them.
+
+    The whole Gate 5 path in one command: a sentence becomes events, events become a
+    repair, and the autonomy policy decides whether a human is needed - all under one
+    dispatch id.
+    """
+    from glass_guru.agents.a2a.types import submitted
+    from glass_guru.agents.llm.base import LLMError
+    from glass_guru.agents.llm.factory import build_llm
+    from glass_guru.agents.llm.factory import describe as describe_llm
+    from glass_guru.agents.registry import TRIAGE_SKILL, TriageContext, build_transport
+
+    workspace = _require_workspace()
+    if workspace is None:
+        return 2
+
+    business = BusinessParams.load(args.config)
+    tz = ZoneInfo(business.meta.timezone)
+    world = _load_world()
+    provider = build_llm(args.llm)
+    print(f"model: {describe_llm(provider)}")
+
+    context = TriageContext(world=world, on_date=args.on or WEEK_START, tz=tz)
+    transport = build_transport(provider, triage_context=context)
+
+    try:
+        agent = transport.discover(TRIAGE_SKILL)
+        task = transport.send(agent, submitted(args.text, dispatch_id=require_dispatch_id()))
+    except LLMError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    payload = artifact.data if (artifact := task.artifact("events")) else {}
+    events = payload.get("events", [])
+
+    print(render.render_triage(task, payload))
+    if task.needs_input or not events:
+        return 1
+
+    if not args.apply:
+        print("\n  re-run with --apply to record these events")
+        return 0
+
+    from pydantic import TypeAdapter
+
+    from glass_guru.domain.events import Event
+
+    adapter: TypeAdapter[Event] = TypeAdapter(Event)
+    recorded = [adapter.validate_python(e) for e in events]
+    workspace.events.append(recorded)
+    print(f"\n  recorded {len(recorded)} event(s)")
+
+    if workspace.plans.head() is None:
+        print("  no committed plan to repair; run `glass-guru commit` first")
+        return 0
+    return cmd_repair(argparse.Namespace(config=args.config, apply=False, force=False))
+
+
 def cmd_travel(args: argparse.Namespace) -> int:
     """Report the travel source, and optionally compare the three against each other."""
     business = BusinessParams.load(args.config)
@@ -676,6 +735,18 @@ def build_parser() -> argparse.ArgumentParser:
     slots.add_argument("--customer", default="New caller")
     slots.add_argument("--date", type=_parse_date, default=None, help="horizon start")
     slots.set_defaults(func=cmd_slots)
+
+    triage = sub.add_parser("triage", help="turn a note into typed events, then repair")
+    triage.add_argument("text", help='e.g. "Dan called, van 3 won\'t start"')
+    triage.add_argument("--apply", action="store_true", help="record the extracted events")
+    triage.add_argument("--on", type=_parse_date, default=None, help="date the note is about")
+    triage.add_argument(
+        "--llm",
+        default=None,
+        choices=["bedrock", "unavailable"],
+        help="model provider; defaults to bedrock when AWS credentials are present",
+    )
+    triage.set_defaults(func=cmd_triage)
 
     travel = sub.add_parser("travel", help="show or compare the travel-time source")
     travel.add_argument(
