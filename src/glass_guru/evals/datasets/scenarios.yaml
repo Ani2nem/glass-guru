@@ -1,0 +1,68 @@
+# Outcome envelopes for tier 3.
+#
+# Every assertion is about what happened to the schedule - which jobs were served,
+# which promises held, whether anyone needs a phone call. None is about wording. A
+# scenario that passed because a sentence matched would move when a prompt is
+# reworded and sit still when the system got worse, which is backwards for a gate.
+#
+# Bounds rather than exact numbers, deliberately. Pinning "exactly 9 jobs" makes every
+# legitimate improvement a test failure; "at least 9, and nobody phoned" says what the
+# business actually requires.
+
+cases:
+  - scenario: baseline
+    why: An ordinary Monday. Everything that can be served, is.
+    expect:
+      min_jobs_served: 5
+      max_customer_calls: 0
+      must_serve: [j-401, j-402, j-403, j-404, j-405]
+      feasible: true
+
+  - scenario: van_breakdown
+    why: >-
+      A van dies at 10:40 having already done the morning storefront. The useful
+      question is how much of the afternoon survives, not whether the van is written
+      off for the day.
+    expect:
+      min_jobs_served: 5
+      max_customer_calls: 0
+      must_serve: [j-401]
+      feasible: true
+
+  - scenario: worker_sick
+    expect:
+      min_jobs_served: 4
+      feasible: true
+
+  - scenario: commercial_crew_out
+    why: >-
+      Both commercially certified workers are out, so the storefront job is
+      unstaffable. The dispatcher must be told that precisely rather than told the day
+      was full - they are different problems with different fixes.
+    expect:
+      min_jobs_served: 3
+      must_not_serve: [j-401]
+      unserved_reasons:
+        j-401: no_certified_worker
+      feasible: true
+
+  - scenario: job_overruns
+    why: A job running two hours over while the crew is on site.
+    expect:
+      min_jobs_served: 4
+      feasible: true
+
+  - scenario: customer_cancels
+    expect:
+      min_jobs_served: 4
+      must_not_serve: [j-402]
+      feasible: true
+
+  - scenario: traffic_spike
+    why: >-
+      Congestion costs minutes, so fewer jobs may fit - but the plan must still be
+      feasible, and the solver must have seen the delay rather than planning around
+      congestion it did not know about.
+    expect:
+      min_jobs_served: 4
+      feasible: true

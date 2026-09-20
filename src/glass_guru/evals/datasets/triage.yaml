@@ -1,0 +1,91 @@
+# Labelled disruption notes for tiers 1 and 2.
+#
+# Same caveat as intake.yaml: written alongside the prompts they test.
+#
+# Chosen for the ways triage actually goes wrong - a note that should produce no
+# events at all, one that names something not on the roster, one missing a detail the
+# event type requires, and the ordinary ones in between.
+
+meta:
+  labelled_by: author
+  note: Synthetic, written alongside the prompts.
+
+cases:
+  - id: triage-van-down
+    why: The canonical case.
+    text: Dan called, van 3 won't start, tow's coming.
+    expect:
+      event_kinds: [van-unavailable]
+      targets: [van-3]
+      asks_question: false
+
+  - id: triage-worker-sick
+    text: Priya's phoned in sick, she won't be in today.
+    expect:
+      event_kinds: [worker-unavailable]
+      targets: [w-priya]
+      asks_question: false
+
+  - id: triage-overrun
+    why: Needs a number. Inventing one would put a fabricated fact in the log.
+    text: The Patel shower door job is running about two hours over.
+    expect:
+      event_kinds: [job-overran]
+      targets: [j-403]
+      asks_question: false
+
+  - id: triage-cancellation
+    text: Chen just rang to cancel, she's going with someone else.
+    expect:
+      event_kinds: [job-cancelled]
+      targets: [j-402]
+      asks_question: false
+
+  - id: triage-dispatched
+    text: Marcus and Priya have left for the Rodriguez storefront.
+    expect:
+      event_kinds: [job-dispatched]
+      targets: [j-401]
+      asks_question: false
+
+  - id: triage-two-events
+    why: One sentence, two facts. Extracting only the first is a quiet loss.
+    text: Van 1's off the road and Ken's gone home with a bad back.
+    expect:
+      event_kinds: [van-unavailable, worker-unavailable]
+      targets: [van-1, w-ken]
+      asks_question: false
+
+  - id: triage-ambiguous
+    why: >-
+      Nothing actionable was said. The right answer is a question, not a guess -
+      guessing writes a wrong fact into an append-only log.
+    text: Dan says the van's making a funny noise, might want looking at.
+    expect:
+      event_kinds: []
+      targets: []
+      asks_question: true
+
+  - id: triage-traffic
+    text: I-5 southbound is crawling, everything's taking about twice as long this morning.
+    expect:
+      event_kinds: [traffic-delay]
+      targets: []
+      asks_question: false
+
+  - id: triage-completed
+    text: Sofia's finished the Okonkwo windscreen, took her about an hour and a half.
+    expect:
+      event_kinds: [job-completed]
+      targets: [j-404]
+      asks_question: false
+
+  - id: triage-nothing-happened
+    why: >-
+      Chatter, not an event. A system that invents an event from "all fine" will
+      invent them from everything.
+    text: All quiet this morning, nothing to report.
+    expect:
+      event_kinds: []
+      targets: []
+      asks_question: false

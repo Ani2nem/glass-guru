@@ -23,6 +23,7 @@ from glass_guru.domain.models import CrewRoute, PlanVersion
 from glass_guru.domain.state import WorldState, fold
 from glass_guru.fixtures.sample_business import seed_events
 from glass_guru.scheduler.day_planner import SolveParams, plan_day
+from glass_guru.scheduler.travel.base import TimeBucket
 from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
 from tests.property.strategies import DAY, TZ, at, worlds
 
@@ -129,31 +130,48 @@ def test_solving_twice_gives_the_same_plan(world: WorldState) -> None:
 
 @given(worlds(min_workers=2, max_workers=4))
 @PROPERTY
-def test_losing_a_worker_never_increases_the_work_done(world: WorldState) -> None:
-    """Capacity cannot be created by removing it. A violation here would mean the
-    objective is rewarding something other than serving jobs."""
-    before = solve(world)
+def test_losing_a_worker_never_makes_the_day_cheaper(world: WorldState) -> None:
+    """Removing a resource shrinks the feasible set, so the optimum cannot improve.
+
+    Two things had to be understood before this property was true as stated, and both
+    came from counterexamples rather than from thinking about it.
+
+    First, the obvious version - "never increases the jobs done" - is unsound. Jobs
+    served is not the objective; cost is. Removing a worker can remove a *cheap* plan
+    that served fewer jobs, leaving a dearer plan that serves more as the new optimum.
+
+    Second, the objective is a cost under a particular approximation, and the
+    approximation depends on the roster: the travel matrix is probed once per traffic
+    bucket the shift span touches, so a narrower roster yields fewer probes and a less
+    pessimistic matrix. Removing a worker whose shift reached into the morning peak
+    changed the probe set from [06, 08, 12, 16] to [12, 16], and the two objectives
+    were then costs under different assumptions. Pinning the bucket holds the matrix
+    still so the comparison means something.
+    """
+    from glass_guru.domain.state import Unavailability
+
+    before = solve(world, travel_bucket=TimeBucket.PM_PEAK)
     victim = sorted(world.workers)[0]
     world.worker_outages[victim] = [
-        __import__("glass_guru.domain.state", fromlist=["Unavailability"]).Unavailability(
-            from_time=at(0), until_time=at(23), reason="out"
-        )
+        Unavailability(from_time=at(0), until_time=at(23), reason="out")
     ]
-    after = solve(world)
+    after = solve(world, travel_bucket=TimeBucket.PM_PEAK)
 
-    served_before = len({j for r in before.routes for j in r.job_ids})
-    served_after = len({j for r in after.routes for j in r.job_ids})
-    assert served_after <= served_before
+    # Only the optimum is comparable. A time-limited FEASIBLE answer is not it.
+    if before.status != "OPTIMAL" or after.status != "OPTIMAL":
+        return
+    assert after.objective_cost >= before.objective_cost - 0.01
 
 
 @given(worlds())
 @PROPERTY
-def test_forbidding_overtime_never_increases_the_work_done(world: WorldState) -> None:
-    generous = solve(world, allow_overtime=True)
-    strict = solve(world, allow_overtime=False)
-    assert len({j for r in strict.routes for j in r.job_ids}) <= len(
-        {j for r in generous.routes for j in r.job_ids}
-    )
+def test_forbidding_overtime_never_makes_the_day_cheaper(world: WorldState) -> None:
+    """The same argument for a constraint rather than a resource."""
+    generous = solve(world, travel_bucket=TimeBucket.PM_PEAK)
+    strict = solve(world, allow_overtime=False, travel_bucket=TimeBucket.PM_PEAK)
+    if generous.status != "OPTIMAL" or strict.status != "OPTIMAL":
+        return
+    assert strict.objective_cost >= generous.objective_cost - 0.01
 
 
 @given(worlds())

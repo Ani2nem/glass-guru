@@ -1,0 +1,26 @@
+{
+  "duration_seconds": 0.73,
+  "model_id": "no model",
+  "passed": true,
+  "started_at": "2026-09-20T02:49:20.116311+00:00",
+  "tiers": [
+    {
+      "cases": 14,
+      "failures": [],
+      "label": "invariants",
+      "passed": true,
+      "score": 1.0,
+      "threshold": 1.0,
+      "tier": 0
+    },
+    {
+      "cases": 7,
+      "failures": [],
+      "label": "scenario",
+      "passed": true,
+      "score": 1.0,
+      "threshold": 0.95,
+      "tier": 3
+    }
+  ]
+}

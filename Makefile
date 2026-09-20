@@ -4,7 +4,7 @@ GG   := $(VENV)/bin/glass-guru
 
 .PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
         params world travel osrm-setup osrm-up freeze-travel geocode demo mcp trace \
-        aws-check web-install web-build web-check api dev clean
+        eval eval-offline eval-baseline aws-check web-install web-build web-check api dev clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -29,6 +29,15 @@ typecheck:  ## Strict type check
 	$(VENV)/bin/mypy
 
 check: lint typecheck test  ## Everything CI will eventually gate on
+
+eval:  ## Run the eval suite (model tiers skip without credentials)
+	GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval $(ARGS)
+
+eval-offline:  ## Run only the tiers that need no model
+	GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval --tier 0 --tier 3
+
+eval-baseline:  ## Record the current scores as the regression baseline
+	GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval --update-baseline
 
 aws-check:  ## Verify AWS credentials and Bedrock model access
 	@echo "--- identity ---"
