@@ -1,8 +1,8 @@
 # Agents
 
-Four agents were planned; two are built. Triage and the coordinator are the two ends
-of the design - narrow extraction and constrained ranking - and intake and comms
-follow the same template.
+All four are built: triage (free text to typed events), intake (a call to a priced
+job), coordinator (choosing between costed options) and comms (telling a customer,
+without inventing anything).
 
 ## The model
 
@@ -30,6 +30,31 @@ along something that merely looks right.
 candidates the solver has already costed and picks one by name from an enum. Ranking a
 short list is within a small model's range; open-ended planning is not.
 
+## The division of labour, agent by agent
+
+| Agent | The model does | Code does |
+|---|---|---|
+| Triage | Reads a sentence, names event kinds and ids | Checks every id exists; refuses an event missing a required detail |
+| Intake | Classifies the service, hears what the caller arranged | Supplies duration, certifications, crew, parts from the catalogue; prices the promise |
+| Coordinator | Ranks already-costed options | Decides autonomy; the model may only ask for more review |
+| Comms | Writes the sentence | Checks every time and date in it against the plan diff |
+
+The pattern repeats: the model handles interpretation and phrasing, code handles
+anything where being plausibly wrong is expensive.
+
+Intake is the sharpest case. The `CallExtraction` schema has **no field for duration**,
+so the model cannot supply one even if asked. A schedule built on an invented duration
+is wrong in a way no invariant check can catch, because every arrival time is
+internally consistent with the fiction. The catalogue answers from the service type,
+and once there are completed jobs those figures become measured percentiles of actuals
+with nothing above them changing.
+
+Commitment cost works the same way. "I'd have to take the morning off" is the phrase
+the whole field exists for - no dropdown captures it and the solver cannot infer it -
+but the model only identifies *which* of a fixed list of arrangements was expressed.
+The dollar figure is a business parameter, capped, because asking a language model to
+price goodwill produces a confident number with nothing behind it.
+
 ## What is checked rather than trusted
 
 The roster goes into the prompt, so the model picks ids from a list rather than
@@ -44,6 +69,22 @@ Whatever the coordinator picks, the deterministic autonomy policy decides whethe
 may be applied silently. The model can only ever ask for *more* review, never less. A
 model that could authorise a customer-visible change on its own would make the entire
 autonomy layer decorative.
+
+## Grounding customer messages
+
+Comms is the one artefact that reaches a customer directly, so a draft is checked
+rather than trusted. Every time, date and day-name in the text is extracted and matched
+against the plan diff it was written from; anything unsupported holds the draft.
+
+A plausible wrong time in a text message is worse than no message: the customer
+believes it, arranges their day around it, and the business finds out when a crew
+arrives to an empty house.
+
+The check reads the produced text, not the model's stated intent - the only kind of
+check a model cannot argue with. Two bugs in the checker itself were found by running
+it: the bare hour "3pm" was initially accepted for a 15:10 slot (and would have been
+for 15:55), and "3:10pm" was flagged as containing "10pm" because a colon creates a
+word boundary. Both now have tests.
 
 ## A2A
 

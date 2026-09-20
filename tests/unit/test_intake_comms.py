@@ -1,0 +1,355 @@
+"""Intake and comms.
+
+Both are about the same discipline from opposite ends. Intake refuses to let the model
+supply numbers; comms refuses to let it supply facts. In each case the model does the
+part it is good at - classifying, phrasing - and code does the part where being
+plausibly wrong is expensive.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from glass_guru.agents.comms import (
+    CommsResult,
+    DraftMessage,
+    draft_customer_messages,
+    verify_grounding,
+)
+from glass_guru.agents.intake import (
+    CommitmentSignal,
+    IntakeResult,
+    commitment_cost_for,
+    intake,
+)
+from glass_guru.agents.llm.scripted import ScriptedLLMProvider
+from glass_guru.config import BusinessParams
+from glass_guru.domain.catalog import CATALOG, lookup
+from glass_guru.domain.diff import ChangeKind, JobChange, Placement, PlanDiff
+from glass_guru.domain.enums import (
+    Certification,
+    CommitmentState,
+    GlassType,
+    ServiceType,
+)
+from glass_guru.domain.models import TimeWindow
+from glass_guru.fixtures.sample_business import _at
+from glass_guru.geocoding import Geocoder
+from glass_guru.obs.correlation import dispatch
+
+TZ = ZoneInfo("America/Los_Angeles")
+NOW = datetime(2026, 9, 21, 9, 0, tzinfo=TZ)
+
+
+@pytest.fixture
+def business() -> BusinessParams:
+    return BusinessParams.load()
+
+
+@pytest.fixture
+def geocoder() -> Geocoder:
+    """Cache-only: fixture addresses resolve, anything else fails. Keeps tests offline."""
+    return Geocoder(allow_network=False)
+
+
+CALL = {
+    "customer_name": "Sarah Chen",
+    "phone": "206-555-0142",
+    "address": "4410 Ballard Ave NW, Seattle, WA",
+    "service_type": "residential_window_replacement",
+    "description": "Two front-room windows broken",
+    "pane_count": 2,
+    "property_type": "residential",
+    "urgency": "normal",
+    "preferred_timing": "Tuesday morning",
+    "commitment_signals": ["time_off_work"],
+    "commitment_quotes": ["I'd have to take the morning off work"],
+    "details_covered": ["how many panes"],
+}
+
+
+def run_intake(
+    payload: dict[str, Any], business: BusinessParams, geocoder: Geocoder
+) -> IntakeResult:
+    provider = ScriptedLLMProvider.returning(payload)
+    with dispatch("d-intake"):
+        return intake(provider, "call notes", business=business, now=NOW, geocoder=geocoder)
+
+
+# --------------------------------------------------------------------- catalogue
+
+
+def test_every_service_type_is_in_the_catalogue():
+    """A service the model can name but the catalogue cannot price would force a
+    guessed duration back into the system."""
+    assert set(CATALOG) == set(ServiceType)
+
+
+def test_duration_scales_with_panes_not_with_the_model():
+    one = lookup(ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT, pane_count=1)
+    three = lookup(ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT, pane_count=3)
+    assert three.duration_min > one.duration_min
+
+
+def test_made_to_order_glass_becomes_a_lead_time():
+    """The case that turns a routing problem into a procurement one. No amount of
+    clever scheduling installs a pane that has not been cut."""
+    estimate = lookup(ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT, glass_type=GlassType.TEMPERED)
+    assert estimate.needs_ordering
+    assert estimate.lead_time_days > 0
+    assert Certification.TEMPERED_SAFETY in estimate.required_certifications
+
+
+def test_a_big_multi_pane_job_needs_a_second_pair_of_hands():
+    assert lookup(ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT, pane_count=5).crew_size == 2
+
+
+def test_the_catalogue_reports_what_was_not_asked():
+    estimate = lookup(
+        ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
+        known_details=frozenset({"how many panes"}),
+    )
+    assert "how many panes" not in estimate.missing_details
+    assert estimate.missing_details
+
+
+# ------------------------------------------------------------------------ intake
+
+
+def test_intake_builds_a_bookable_draft(business, geocoder):
+    result = run_intake(CALL, business, geocoder)
+    assert result.bookable
+    assert result.draft is not None
+    assert result.draft.customer_name == "Sarah Chen"
+
+
+def test_scheduling_numbers_come_from_the_catalogue_not_the_call(business, geocoder):
+    """The model is never asked how long a job takes. A schedule built on an invented
+    duration is wrong in a way no invariant check can catch, because every arrival
+    time is internally consistent with the fiction."""
+    result = run_intake(CALL, business, geocoder)
+    expected = lookup(ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT, pane_count=2)
+    assert result.draft is not None
+    assert result.draft.estimated_duration_min == expected.duration_min
+    assert result.draft.required_certifications == expected.required_certifications
+    assert result.draft.crew_size == expected.crew_size
+
+
+def test_the_schema_has_no_field_for_duration():
+    """Enforced by construction rather than by instruction. A model cannot supply a
+    number it is given nowhere to put."""
+    from glass_guru.agents.intake import CallExtraction
+
+    fields = set(CallExtraction.model_fields)
+    assert not {"duration", "duration_minutes", "estimated_duration_min"} & fields
+
+
+def test_a_commitment_signal_becomes_a_priced_promise(business, geocoder):
+    """ "I'd have to take the morning off" is the phrase that motivated the whole
+    field. No dropdown captures it and the solver cannot infer it."""
+    result = run_intake(CALL, business, geocoder)
+    assert result.draft is not None
+    assert result.draft.commitment_cost == business.commitment.time_off_work.value
+    assert result.commitment_quotes == ("I'd have to take the morning off work",)
+
+
+def test_the_model_does_not_choose_the_number(business):
+    """It identifies which signal was expressed; the price is configuration."""
+    assert (
+        commitment_cost_for([CommitmentSignal.TIME_OFF_WORK], business)
+        == business.commitment.time_off_work.value
+    )
+
+
+def test_commitment_cost_is_capped(business):
+    """Without a ceiling, a caller listing every inconvenience could make one job
+    effectively immovable and distort the whole week around it."""
+    every = list(CommitmentSignal)
+    assert commitment_cost_for(every, business) == business.commitment.max_total.value
+
+
+def test_repeated_signals_do_not_stack(business):
+    once = commitment_cost_for([CommitmentSignal.WAITING_IN], business)
+    twice = commitment_cost_for(
+        [CommitmentSignal.WAITING_IN, CommitmentSignal.WAITING_IN], business
+    )
+    assert once == twice
+
+
+def test_no_signal_means_no_commitment_cost(business, geocoder):
+    result = run_intake(
+        {**CALL, "commitment_signals": [], "commitment_quotes": []}, business, geocoder
+    )
+    assert result.commitment_cost == 0.0
+    assert result.draft is not None
+    assert result.draft.commitment_cost == 0.0
+
+
+def test_missing_details_become_questions_to_ask_on_the_call(business, geocoder):
+    """A dispatcher needs "ask for a callback number" while the customer is still on
+    the line, not a half-filled form discovered later."""
+    result = run_intake({**CALL, "phone": ""}, business, geocoder)
+    assert not result.bookable
+    assert any("callback number" in q for q in result.ask_next)
+
+
+def test_an_unknown_service_type_is_not_guessed_at(business, geocoder):
+    result = run_intake({**CALL, "service_type": "glass_blowing"}, business, geocoder)
+    assert result.draft is None
+    assert any("what kind of work" in m for m in result.missing_required)
+
+
+def test_an_unresolvable_address_is_reported_not_invented(business, geocoder):
+    result = run_intake({**CALL, "address": "the blue house with the gate"}, business, geocoder)
+    assert result.draft is None
+    assert result.geocode_note
+
+
+def test_an_escalated_extraction_still_tells_the_dispatcher_what_to_do(business, geocoder):
+    provider = ScriptedLLMProvider.always({"urgency": "extremely"})
+    with dispatch("d"):
+        result = intake(provider, "notes", business=business, now=NOW, geocoder=geocoder)
+    assert result.draft is None
+    assert result.extraction.escalated
+    assert result.ask_next
+
+
+def test_repair_count_reaches_the_job_provenance(business, geocoder):
+    """Extraction quality travels with the record it produced, so a later audit can
+    ask which jobs came from a struggling model."""
+    provider = ScriptedLLMProvider.returning({**CALL, "urgency": "catastrophic"}, CALL)
+    with dispatch("d"):
+        result = intake(provider, "notes", business=business, now=NOW, geocoder=geocoder)
+    assert result.draft is not None
+    assert result.draft.provenance.extractor_retries == 1
+
+
+# ------------------------------------------------------------------------ comms
+
+
+def change_at(hour: int, minute: int, *, window: TimeWindow | None = None) -> JobChange:
+    return JobChange(
+        job_id="j-402",
+        kind=ChangeKind.RETIMED,
+        before=Placement(
+            on_date=_at(0, 9).date(),
+            crew_id="A",
+            van_id="van-1",
+            worker_ids=("w-dan",),
+            arrival=_at(0, 9, 33),
+            departure=_at(0, 11, 33),
+        ),
+        after=Placement(
+            on_date=_at(0, 9).date(),
+            crew_id="A",
+            van_id="van-1",
+            worker_ids=("w-dan",),
+            arrival=_at(0, hour, minute),
+            departure=_at(0, hour + 2, minute),
+        ),
+        commitment_state=CommitmentState.CONFIRMED,
+        customer_name="Sarah Chen",
+        promised_window=window,
+    )
+
+
+def draft(body: str, diff: PlanDiff, job_id: str = "j-402") -> CommsResult:
+    provider = ScriptedLLMProvider.always(
+        {"messages": [{"job_id": job_id, "channel": "sms", "body": body}]}, times=4
+    )
+    with dispatch("d-comms"):
+        return draft_customer_messages(provider, diff, tz=TZ, reason="a van broke down")
+
+
+def test_a_grounded_message_is_safe_to_send():
+    result = draft("Moving you to Monday 15:10.", PlanDiff(changes=(change_at(15, 10),)))
+    assert result.safe_to_send
+    assert result.issues == ()
+
+
+def test_an_invented_time_is_caught():
+    """A plausible wrong time in a text message is worse than no message: the customer
+    believes it and arranges their day around it."""
+    result = draft("We'll be with you Monday at 3pm sharp.", PlanDiff(changes=(change_at(15, 10),)))
+    assert not result.safe_to_send
+    assert any(i.phrase.lower() == "3pm" for i in result.issues)
+
+
+def test_the_bare_hour_is_allowed_only_when_it_is_exact():
+    """3pm means 15:00. Allowing it for 15:10 would also have allowed it for 15:55."""
+    assert draft("See you Monday at 3pm.", PlanDiff(changes=(change_at(15, 0),))).safe_to_send
+
+
+def test_a_precise_time_is_not_misread_as_a_shorter_one():
+    """ "3:10pm" once matched as "10pm" because the colon creates a word boundary, and
+    a correctly grounded message was held for a phrase it never contained."""
+    result = draft("We'll be with you Monday at 3:10pm.", PlanDiff(changes=(change_at(15, 10),)))
+    assert result.safe_to_send, [i.phrase for i in result.issues]
+
+
+def test_an_invented_day_is_caught():
+    result = draft("Moving you to Thursday 15:10.", PlanDiff(changes=(change_at(15, 10),)))
+    assert any(i.phrase.lower() == "thursday" for i in result.issues)
+
+
+def test_a_change_inside_the_promised_window_drafts_nothing():
+    """If the crew still arrives within the window the customer was given, they have
+    not been let down and there is nothing to tell them."""
+    window = TimeWindow(start=_at(0, 14), end=_at(0, 16))
+    provider = ScriptedLLMProvider.always({"messages": []})
+    with dispatch("d"):
+        result = draft_customer_messages(
+            provider, PlanDiff(changes=(change_at(15, 10, window=window),)), tz=TZ
+        )
+    assert result.drafts == () and result.issues == ()
+    assert provider.call_count == 0
+
+
+def test_the_window_a_customer_was_given_may_be_restated_as_context():
+    """Moving outside the promised window does need a message, and that message may
+    legitimately refer to the slot they were originally given."""
+    window = TimeWindow(start=_at(0, 9), end=_at(0, 11))
+    result = draft(
+        "You were down for 09:00-11:00 on Monday; we now need to move you to 15:10.",
+        PlanDiff(changes=(change_at(15, 10, window=window),)),
+    )
+    assert result.safe_to_send, [i.phrase for i in result.issues]
+
+
+def test_a_message_to_an_unaffected_customer_is_caught():
+    """Worse than a wrong time: nothing changed for them, and a message says otherwise."""
+    result = draft(
+        "We're running late Monday 15:10.", PlanDiff(changes=(change_at(15, 10),)), job_id="j-999"
+    )
+    assert not result.safe_to_send
+    assert any("did not change" in i.detail for i in result.issues)
+
+
+def test_a_missing_message_is_caught():
+    provider = ScriptedLLMProvider.always({"messages": []}, times=4)
+    with dispatch("d"):
+        result = draft_customer_messages(provider, PlanDiff(changes=(change_at(15, 10),)), tz=TZ)
+    assert not result.safe_to_send
+    assert any("no message drafted" in i.detail for i in result.issues)
+
+
+def test_nothing_is_drafted_when_no_customer_is_affected():
+    """Provisional work moving is invisible by definition."""
+    provider = ScriptedLLMProvider.always({"messages": []})
+    with dispatch("d"):
+        result = draft_customer_messages(provider, PlanDiff(changes=()), tz=TZ)
+    assert result.drafts == () and result.issues == ()
+    assert provider.call_count == 0, "should not have asked the model at all"
+
+
+def test_grounding_is_checked_on_the_text_not_the_intent():
+    """The only kind of check a model cannot argue with."""
+    issues = verify_grounding(
+        DraftMessage(job_id="j-1", channel="sms", body="See you at 09:00 Friday."),
+        allowed={"15:10", "monday"},
+    )
+    assert {i.phrase.lower() for i in issues} == {"09:00", "friday"}
