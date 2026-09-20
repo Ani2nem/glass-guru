@@ -65,6 +65,15 @@ class SchedulingParams(Section):
     hard_window_buffer_minutes: Param
 
 
+class CommitmentParams(Section):
+    time_off_work: Param
+    waiting_in: Param
+    arranged_childcare: Param
+    business_closed: Param
+    already_rescheduled: Param
+    max_total: Param
+
+
 class AutonomyParams(Section):
     max_auto_cost_delta: Param
     max_auto_changes: Param
@@ -113,6 +122,7 @@ class BusinessParams(Section):
     labor: LaborParams
     vehicle: VehicleParams
     scheduling: SchedulingParams
+    commitment: CommitmentParams
     autonomy: AutonomyParams
     penalties: PenaltyParams
     travel: TravelParams

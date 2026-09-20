@@ -1,7 +1,7 @@
 SCENARIO  job_overruns
 The shower-door install runs two hours over while the crew is on site.
 
-!  27 of 27 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  33 of 33 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (593ed8410d1f9e4a)
 ------------------------------------------------------------------------------

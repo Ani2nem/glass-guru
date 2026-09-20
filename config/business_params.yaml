@@ -62,6 +62,50 @@ scheduling:
       never refuses work for want of it, and the invariant checker still accepts a
       plan that uses the full window, so a repair under pressure may spend it.
 
+commitment:
+  # What it costs to break a promise, by what the customer told us they arranged.
+  # The model identifies which of these a caller expressed; these numbers are not the
+  # model's to choose. Asking a language model to price goodwill would produce a
+  # confident figure with nothing behind it.
+  time_off_work:
+    value: 250.0
+    source: estimated
+    note: >-
+      "I'll take the morning off." A wasted day of someone's leave. The phrase that
+      motivated this whole field.
+
+  waiting_in:
+    value: 90.0
+    source: estimated
+    note: '"I''ll be in all day." Inconvenient to move, but not a day surrendered.'
+
+  arranged_childcare:
+    value: 200.0
+    source: estimated
+    note: "Cover that has to be rebooked, often at a cost to the customer."
+
+  business_closed:
+    value: 400.0
+    source: estimated
+    note: >-
+      A shop closing or opening late for us. Directly costs the customer trade, and
+      the account is usually worth more than one job.
+
+  already_rescheduled:
+    value: 300.0
+    source: estimated
+    note: >-
+      We have moved this once already. Escalating deliberately: the second call is
+      much more expensive than the first in goodwill, even though it costs the same
+      in minutes.
+
+  max_total:
+    value: 600.0
+    source: estimated
+    note: >-
+      Ceiling on the sum. Without it a caller listing every inconvenience could make
+      one job effectively immovable and distort the whole week around it.
+
 autonomy:
   max_auto_cost_delta:
     value: 150.0

@@ -35,7 +35,7 @@ from glass_guru.agents.llm.base import (
 #: Nova Lite: fast and cheap, and materially weaker at open-ended reasoning than a
 #: frontier model. The agents are decomposed and constrained on that assumption.
 DEFAULT_MODEL_ID = "us.amazon.nova-lite-v1:0"
-DEFAULT_REGION = "us-west-2"
+DEFAULT_REGION = "us-east-1"
 
 
 class BedrockLLMProvider:

@@ -16,7 +16,7 @@ workspace; nothing in the code reads a secret from a file.
 ## 1. Enable Bedrock model access
 
 Model access is off by default and must be granted per region. Pick **one** region and
-use it consistently - `us-west-2` and `us-east-1` both carry the Nova models.
+use it consistently - `us-east-1` and `us-east-1` both carry the Nova models.
 
 1. AWS console -> **Amazon Bedrock** -> **Model access** (left nav, under Configure).
 2. **Modify model access**, tick **Amazon Nova Lite**, submit.
@@ -40,7 +40,7 @@ is a bad afternoon; a leaked access key is a bad quarter.
 aws configure sso
 #   SSO start URL   : https://<your-directory>.awsapps.com/start
 #   SSO region      : the region your Identity Center lives in
-#   Default region  : us-west-2        (use the one you enabled above)
+#   Default region  : us-east-1        (use the one you enabled above)
 #   Profile name    : glass-guru
 
 export AWS_PROFILE=glass-guru
@@ -65,7 +65,10 @@ export AWS_PROFILE=glass-guru
 Attach this to the permission set (Identity Center) or the user (access key). It grants
 exactly one verb on exactly one model, and nothing else.
 
-Replace `ACCOUNT_ID` with your account number, and `us-west-2` with your region.
+Replace `ACCOUNT_ID` with your account number, and `us-east-1` with **the region you
+enabled model access in**. The inference-profile ARN is regional; getting it wrong
+surfaces as an AccessDenied only after account verification completes, which makes
+it look like a new problem rather than the same one.
 **Do not commit the filled-in version** - it contains your account id.
 
 ```json
@@ -78,7 +81,7 @@ Replace `ACCOUNT_ID` with your account number, and `us-west-2` with your region.
       "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
       "Resource": [
         "arn:aws:bedrock:*::foundation-model/amazon.nova-lite-v1:0",
-        "arn:aws:bedrock:us-west-2:ACCOUNT_ID:inference-profile/us.amazon.nova-lite-v1:0"
+        "arn:aws:bedrock:us-east-1:ACCOUNT_ID:inference-profile/us.amazon.nova-lite-v1:0"
       ]
     },
     {
@@ -102,16 +105,23 @@ names a region you never configured, which is a confusing half-hour.
 
 ```bash
 aws sts get-caller-identity                      # who am I
-aws bedrock list-foundation-models --region us-west-2 \
+aws bedrock list-foundation-models --region us-east-1 \
   --query "modelSummaries[?contains(modelId,'nova-lite')].modelId" --output text
 
-export AWS_REGION=us-west-2
+export AWS_REGION=us-east-1
 glass-guru triage "Dan called, van 3 won't start"
 ```
 
-The last command should extract a `van_unavailable` event for `van-3`. If it reports
-the assistant is unavailable, credentials are not reaching boto3. If it reports
-AccessDenied, model access or the policy is the problem.
+The last command should extract a `van_unavailable` event for `van-3`.
+
+Failure modes, in the order you will meet them:
+
+- **"Your account is currently being verified"** - AWS-side account activation, not
+  a permissions problem. Usually under two hours. Nothing to change; wait.
+- **AccessDenied naming a region you did not configure** - the inference-profile ARN
+  in the policy is for the wrong region, or is missing.
+- **"The assistant is unavailable"** - credentials are not reaching boto3 at all.
+  Check `AWS_PROFILE` is exported.
 
 ---
 
