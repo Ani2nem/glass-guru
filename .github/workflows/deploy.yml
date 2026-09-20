@@ -1,0 +1,131 @@
+# Deploying new code, which is not the same thing as changing infrastructure.
+#
+# This workflow can replace the running image and nothing else. It cannot create a
+# VPC, touch an IAM policy, or destroy a database, because the role it assumes cannot:
+# the deploy role's permissions stop at pushing to one ECR repository and rolling one
+# ECS service. Infrastructure changes are a human running `terraform apply`, reading a
+# plan first.
+#
+# That split is deliberate rather than an omission. A pipeline that can apply arbitrary
+# terraform is a pipeline that can delete the event log, and "it is reviewed" is a
+# weaker control than "it is not permitted".
+#
+# Manual trigger only. Merging to main does not deploy; someone decides to.
+
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm'
+        required: true
+        type: string
+      ref:
+        description: "Commit or branch to deploy. Defaults to main."
+        required: false
+        default: main
+        type: string
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: build, push, roll
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: check the confirmation
+        if: inputs.confirm != 'deploy'
+        run: |
+          echo "Refusing: type 'deploy' to confirm. Got '${{ inputs.confirm }}'."
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: assume the deploy role
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/${{ vars.DEPLOY_ROLE_NAME || 'glass-guru-deploy' }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-session-name: gg-deploy-${{ github.run_id }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: build and push
+        id: build
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY || 'glass-guru' }}
+        run: |
+          set -euo pipefail
+          tag="${REGISTRY}/${REPOSITORY}:${GITHUB_SHA}"
+          # linux/arm64 to match the task definition: Fargate charges roughly 20% less
+          # for it and OR-Tools ships aarch64 wheels, so there is nothing to trade away.
+          docker buildx build --platform linux/arm64 --provenance=false \
+            --tag "$tag" --push .
+          digest=$(aws ecr describe-images --repository-name "$REPOSITORY" \
+            --image-ids imageTag="${GITHUB_SHA}" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          echo "image=${REGISTRY}/${REPOSITORY}@${digest}" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${REGISTRY}/${REPOSITORY}@${digest}"
+
+      - name: roll the service onto the new image
+        id: roll
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+          CLUSTER: glass-guru
+          SERVICE: glass-guru
+        run: |
+          set -euo pipefail
+          # Take the live task definition and change exactly one field. Rendering a new
+          # one from scratch here would mean this workflow quietly owned settings that
+          # terraform believes it owns, and the two would drift.
+          aws ecs describe-task-definition --task-definition "$SERVICE" \
+            --query 'taskDefinition' > live.json
+          jq --arg image "$IMAGE" '
+            .containerDefinitions[0].image = $image
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy)
+          ' live.json > next.json
+          arn=$(aws ecs register-task-definition --cli-input-json file://next.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "registered $arn"
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+            --task-definition "$arn" >/dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+          echo "service stable"
+
+      - name: smoke test
+        env:
+          BOARD_URL: ${{ vars.BOARD_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BOARD_URL:-}" ]; then
+            echo "BOARD_URL is not set, so there is nothing to smoke test against."
+            echo "Set it to the stack's board_url output to turn this step on."
+            exit 0
+          fi
+          # Readiness, not liveness: the question is whether the new task can plan, and
+          # a deploy that rolled cleanly onto a container missing its travel snapshot
+          # would pass every other check in this workflow.
+          for attempt in $(seq 1 10); do
+            body=$(curl -fsS --max-time 10 "${BOARD_URL}/api/ready") && break
+            echo "attempt $attempt: not ready yet"; sleep 10
+          done
+          echo "$body"
+          echo "$body" | jq -e '.status == "ready"' >/dev/null
+          echo "the deployed board reports ready"
