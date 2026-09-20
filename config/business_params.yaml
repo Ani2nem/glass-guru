@@ -231,7 +231,18 @@ solver:
   max_solve_seconds:
     value: 10.0
     source: estimated
-    note: "Ceiling per day-solve. The hot path needs sub-second; this is the batch bound."
+    note: >-
+      Ceiling per day-solve for batch planning, where waiting is acceptable.
+
+  quote_solve_seconds:
+    value: 1.5
+    source: estimated
+    note: >-
+      Ceiling per solve when someone is on the phone. A quote costs two solves - the
+      day as it stands and the day with the job inserted - so this is half the wait a
+      caller experiences. Measured: at 25 jobs a day, inheriting the batch ceiling made
+      a quote take twenty seconds, which is not a feature anybody would use. A good
+      enough answer now beats a better one after the caller has hung up.
 
   search_workers:
     value: 1

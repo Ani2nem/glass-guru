@@ -71,6 +71,8 @@ rising repair rate means it is drifting from what the prompt and schema expect, 
 before a schedule looks wrong. Provider failure is tracked separately from bad output —
 an unreachable endpoint is an operator's problem, a malformed answer is a prompt's.
 
+See `docs/scaling.md` for where the solver stops coping.
+
 ## Measured: Nova Lite, live
 
 The first live run against `us.amazon.nova-lite-v1:0`, and what it changed.

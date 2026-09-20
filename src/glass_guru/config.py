@@ -105,6 +105,7 @@ class HorizonParams(Section):
 
 class SolverParams(Section):
     max_solve_seconds: Param
+    quote_solve_seconds: Param
     search_workers: Param
     random_seed: Param
 

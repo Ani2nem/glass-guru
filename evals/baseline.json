@@ -1,8 +1,8 @@
 {
-  "duration_seconds": 37.96,
+  "duration_seconds": 35.64,
   "model_id": "BedrockLLMProvider (us.amazon.nova-lite-v1:0)",
   "passed": true,
-  "started_at": "2026-09-20T03:07:52.256561+00:00",
+  "started_at": "2026-09-20T16:27:31.199177+00:00",
   "tiers": [
     {
       "cases": 15,

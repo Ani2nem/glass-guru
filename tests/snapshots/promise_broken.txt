@@ -1,7 +1,7 @@
 SCENARIO  promise_broken
 Chen was given a nine-to-half-eleven window and arranged her morning around it. Everyone who could do the work is then unavailable until half ten, so the promise cannot be kept. The only scenario where a customer has to be telephoned - without one, the comms agent is never exercised and the quality tier scores nothing.
 
-!  33 of 33 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  34 of 34 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (ec0f447e0d214f0a)
 ------------------------------------------------------------------------------
