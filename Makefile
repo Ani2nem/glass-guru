@@ -3,7 +3,8 @@ PY   := $(VENV)/bin/python
 GG   := $(VENV)/bin/glass-guru
 
 .PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
-        params world travel osrm-setup osrm-up freeze-travel geocode demo mcp trace clean
+        params world travel osrm-setup osrm-up freeze-travel geocode demo mcp trace \
+        aws-check clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -28,6 +29,16 @@ typecheck:  ## Strict type check
 	$(VENV)/bin/mypy
 
 check: lint typecheck test  ## Everything CI will eventually gate on
+
+aws-check:  ## Verify AWS credentials and Bedrock model access
+	@echo "--- identity ---"
+	@aws sts get-caller-identity || (echo "no credentials: see docs/aws-setup.md"; exit 1)
+	@echo "--- nova-lite access in $${AWS_REGION:-us-west-2} ---"
+	@aws bedrock list-foundation-models --region $${AWS_REGION:-us-west-2} \
+	  --query "modelSummaries[?contains(modelId,'nova-lite')].modelId" --output text \
+	  || (echo "cannot list models: check the policy in docs/aws-setup.md"; exit 1)
+	@echo "--- end to end ---"
+	$(GG) triage "Dan called, van 3 won't start"
 
 mcp:  ## Run the MCP server over stdio
 	$(VENV)/bin/glass-guru-mcp
