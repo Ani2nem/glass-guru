@@ -1,7 +1,7 @@
 SCENARIO  worker_sick
 Ken calls in sick. He is the only worker who cannot do overtime.
 
-!  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  25 of 25 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (123aa4e82fb64406)
 ------------------------------------------------------------------------------

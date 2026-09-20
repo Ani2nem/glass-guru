@@ -43,6 +43,15 @@ vehicle:
       which is a reasonable proxy but not this fleet's actual cost.
 
 scheduling:
+  quoted_window_minutes:
+    value: 120
+    source: estimated
+    note: >-
+      Width of the arrival window quoted to a customer on the phone. Narrow enough
+      to be worth having, wide enough to absorb a job running over earlier in the
+      route. Two hours is the field-service norm; measure against actual arrival
+      spread once there is history.
+
   hard_window_buffer_minutes:
     value: 15
     source: estimated

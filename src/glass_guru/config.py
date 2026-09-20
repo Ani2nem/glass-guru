@@ -61,6 +61,7 @@ class VehicleParams(Section):
 
 
 class SchedulingParams(Section):
+    quoted_window_minutes: Param
     hard_window_buffer_minutes: Param
 
 

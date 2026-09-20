@@ -1,7 +1,7 @@
 SCENARIO  van_breakdown
 Van 2 will not start from 10:40. The morning storefront job already used it, so the useful question is how much of the afternoon is lost - not whether the van is written off for the whole day.
 
-!  24 of 24 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  25 of 25 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (acc3d533acaa2ed6)
 ------------------------------------------------------------------------------

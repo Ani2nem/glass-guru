@@ -19,8 +19,15 @@ from datetime import date, datetime, timedelta, tzinfo
 from glass_guru.config import BusinessParams, Provenance, calibration_banner
 from glass_guru.domain.enums import NOT_A_FAILURE
 from glass_guru.domain.invariants import Violation
-from glass_guru.domain.models import CostBreakdown, CrewRoute, PlanVersion, UnservedJob
+from glass_guru.domain.models import (
+    CostBreakdown,
+    CrewRoute,
+    Job,
+    PlanVersion,
+    UnservedJob,
+)
 from glass_guru.domain.state import WorldState
+from glass_guru.scheduler.booking import BookingOptions
 from glass_guru.scheduler.costing import RouteCost
 from glass_guru.scheduler.day_planner import DayPlanResult
 from glass_guru.scheduler.horizon import HorizonResult
@@ -295,4 +302,59 @@ def render_params(business: BusinessParams) -> str:
     warning = calibration_banner(business)
     if warning:
         lines.append(f"  !  {warning}")
+    return "\n".join(lines)
+
+
+def render_slots(
+    options: BookingOptions,
+    draft: Job,
+    business: BusinessParams,
+    tz: tzinfo,
+) -> str:
+    """Bookable slots, cheapest first.
+
+    Ordered by what serving the job actually costs, so "Tuesday afternoon" is a
+    priced recommendation rather than a preference. The spread at the bottom is the
+    number that makes the feature worth having: it is what choosing well is worth on
+    this one call.
+    """
+    lines: list[str] = []
+    lines += banner(business)
+    lines.append(
+        f"SLOTS for {draft.customer_name} - {draft.service_type.value}, "
+        f"{draft.estimated_duration_min}min, crew of {draft.crew_size}"
+    )
+    if draft.location.address:
+        lines.append(f"  at {draft.location.address}")
+    lines.append(RULE)
+
+    if not options.slots:
+        lines.append("")
+        lines.append("  no bookable slot in the horizon")
+    for index, slot in enumerate(options.slots, start=1):
+        marker = "*" if index == 1 else " "
+        start = slot.quoted_window.start.astimezone(tz)
+        end = slot.quoted_window.end.astimezone(tz)
+        crew = " + ".join(slot.worker_names) or slot.crew_id
+        lines.append("")
+        lines.append(
+            f" {marker} {start:%a %d %b}  {start:%H:%M}-{end:%H:%M}   "
+            f"{_money(slot.marginal_cost):>9}   {crew}"
+        )
+        lines.append(f"      {slot.reason}")
+
+    if options.unavailable:
+        lines.append("")
+        lines.append("  not bookable")
+        for item in options.unavailable:
+            lines.append(f"      {item.on_date:%a %d %b}  {item.reason.value}: {item.detail}")
+
+    lines.append("")
+    lines.append(RULE)
+    if len(options.slots) > 1:
+        lines.append(
+            f"  {len(options.slots)} option(s) across {options.evaluated_days} days."
+            f"  Booking the cheapest rather than the dearest saves "
+            f"{_money(options.savings_vs_worst)}."
+        )
     return "\n".join(lines)

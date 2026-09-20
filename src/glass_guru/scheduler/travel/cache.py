@@ -179,6 +179,12 @@ class CachingTravelProvider:
 
     def leg(self, origin: Location, dest: Location, depart_at: datetime) -> TravelLeg:
         key = LegKey.build(origin, dest, depart_at)
+        if key.origin == key.dest:
+            # Two points the key cannot tell apart - the same ~150m cell. Treating the
+            # hop as free is the honest consequence of that resolution, and it is a
+            # real case: two jobs on one block, or a second unit at the same address.
+            # Storing such legs would mean caching a value the key cannot distinguish.
+            return TravelLeg(minutes=0, miles=0.0)
         cached = self._store.get(key)
         if cached is not None:
             self.stats.hits += 1
@@ -205,10 +211,7 @@ class CachingTravelProvider:
         minutes: list[tuple[int, ...]] = []
         miles: list[tuple[float, ...]] = []
         for origin in locs:
-            row = [
-                TravelLeg(0, 0.0) if origin is dest else self.leg(origin, dest, depart_at)
-                for dest in locs
-            ]
+            row = [self.leg(origin, dest, depart_at) for dest in locs]
             minutes.append(tuple(leg.minutes for leg in row))
             miles.append(tuple(leg.miles for leg in row))
         return TravelMatrix(keys=keys, minutes=tuple(minutes), miles=tuple(miles))

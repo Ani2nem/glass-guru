@@ -11,17 +11,20 @@ import argparse
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import date, datetime
+from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from glass_guru.cli import render
 from glass_guru.config import BusinessParams
+from glass_guru.domain.enums import Certification, ServiceType
 from glass_guru.domain.invariants import ValidationConfig, validate_plan
-from glass_guru.domain.models import PlanVersion
+from glass_guru.domain.models import Job, Location, PlanVersion, TimeWindow
 from glass_guru.domain.state import WorldState, fold
 from glass_guru.domain.travel import TravelOracle
 from glass_guru.fixtures import scenarios
 from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at
+from glass_guru.geocoding import GeocodeError, Geocoder
+from glass_guru.scheduler.booking import suggest_booking_slots
 from glass_guru.scheduler.costing import cost_plan
 from glass_guru.scheduler.day_planner import DayPlanResult, SolveParams, plan_day
 from glass_guru.scheduler.horizon import HorizonParams, HorizonResult, plan_horizon
@@ -250,6 +253,69 @@ def cmd_scenario(args: argparse.Namespace) -> int:
     return code
 
 
+def cmd_slots(args: argparse.Namespace) -> int:
+    """Price a prospective job into every day of the horizon.
+
+    This is the question a dispatcher actually has on a call: not "what is the
+    optimal schedule" but "when can I offer, and what does each option cost us?"
+    """
+    business = BusinessParams.load(args.config)
+    tz = ZoneInfo(business.meta.timezone)
+    world = _load_world()
+
+    geocoder = Geocoder()
+    if args.lat is not None and args.lon is not None:
+        location = Location(lat=args.lat, lon=args.lon, address=args.address or "")
+    elif args.address:
+        try:
+            location = geocoder.geocode(args.address)
+        except GeocodeError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+    else:
+        print("give --address or both --lat and --lon", file=sys.stderr)
+        return 2
+
+    start = args.date or WEEK_START
+    horizon_params = HorizonParams.from_business(business)
+    horizon = [
+        date.fromordinal(start.toordinal() + offset) for offset in range(horizon_params.days)
+    ]
+
+    draft = Job(
+        id="draft",
+        customer_id="draft",
+        customer_name=args.customer,
+        location=location,
+        service_type=ServiceType(args.service),
+        required_certifications=frozenset(Certification(c) for c in args.certs),
+        crew_size=args.crew,
+        estimated_duration_min=args.duration,
+        revenue=args.revenue,
+        windows=tuple(
+            TimeWindow(
+                start=datetime.combine(day, time(8, 0), tzinfo=tz),
+                end=datetime.combine(day, time(17, 0), tzinfo=tz),
+            )
+            for day in horizon
+        ),
+        requested_at=world.as_of,
+    )
+
+    travel = _travel_for(world, business)
+    params = SolveParams.from_business(business, tz)
+    options = suggest_booking_slots(
+        world=world,
+        travel=travel,
+        draft=draft,
+        horizon=horizon,
+        params=params,
+        business=business,
+    )
+    print(render.render_slots(options, draft, business, tz))
+    return 0 if options.slots else 1
+
+
 def cmd_travel(args: argparse.Namespace) -> int:
     """Report the travel source, and optionally compare the three against each other."""
     business = BusinessParams.load(args.config)
@@ -328,6 +394,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     params = sub.add_parser("params", help="business parameters and their provenance")
     params.set_defaults(func=cmd_params)
+
+    slots = sub.add_parser("slots", help="price a prospective job into the horizon")
+    slots.add_argument("--address", default=None, help="street address to geocode")
+    slots.add_argument("--lat", type=float, default=None)
+    slots.add_argument("--lon", type=float, default=None)
+    slots.add_argument(
+        "--service",
+        default=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT.value,
+        choices=[s.value for s in ServiceType],
+    )
+    slots.add_argument("--certs", nargs="*", default=[], choices=[c.value for c in Certification])
+    slots.add_argument("--duration", type=int, default=90, help="minutes on site")
+    slots.add_argument("--crew", type=int, default=1, choices=[1, 2])
+    slots.add_argument("--revenue", type=float, default=700.0)
+    slots.add_argument("--customer", default="New caller")
+    slots.add_argument("--date", type=_parse_date, default=None, help="horizon start")
+    slots.set_defaults(func=cmd_slots)
 
     travel = sub.add_parser("travel", help="show or compare the travel-time source")
     travel.add_argument(

@@ -15,6 +15,11 @@ expensive in different ways each time:
     Haversine times a constant. No dependencies at all. Useful for unit tests of logic
     that has nothing to do with geography, and as a fallback before OSRM is set up -
     but it does not know about bridges, so it is not a substitute for real roads.
+``warm``
+    The frozen snapshot as a warm start, with live OSRM for anything missing. This is
+    the production shape: a quote for a brand-new address needs a handful of new legs,
+    and everything else is already paid for. Known legs cost nothing, misses cost one
+    lookup each.
 ``auto``
     Frozen when the snapshot exists, synthetic otherwise. Keeps a fresh clone working
     before anyone runs ``scripts/setup_osrm.sh``.
@@ -43,6 +48,7 @@ class TravelMode(StrEnum):
     FROZEN = "frozen"
     OSRM = "osrm"
     SYNTHETIC = "synthetic"
+    WARM = "warm"
 
 
 def build_travel(
@@ -65,6 +71,14 @@ def build_travel(
     if mode is TravelMode.OSRM:
         return OsrmTravelProvider.from_business(business, osrm_url)
 
+    if mode is TravelMode.WARM:
+        store = JsonLegStore(path) if path.exists() else None
+        return CachingTravelProvider(
+            OsrmTravelProvider.from_business(business, osrm_url),
+            store,
+            on_miss=MissPolicy.COMPUTE,
+        )
+
     if not path.exists():
         raise FileNotFoundError(
             f"no travel snapshot at {path}. Generate one with:\n"
@@ -86,4 +100,5 @@ def describe(mode: TravelMode | str, snapshot: Path | None = None) -> str:
         TravelMode.FROZEN: f"frozen OSRM snapshot ({path.name})",
         TravelMode.OSRM: "live OSRM",
         TravelMode.SYNTHETIC: "synthetic (straight line x road factor - no real roads)",
+        TravelMode.WARM: f"frozen snapshot ({path.name}) warm-starting live OSRM",
     }[resolved]
