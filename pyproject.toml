@@ -31,6 +31,7 @@ dependencies = [
 [project.scripts]
 glass-guru = "glass_guru.cli.main:main"
 glass-guru-mcp = "glass_guru.mcp_server.server:main"
+glass-guru-api = "glass_guru.api.main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -58,6 +59,10 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom puts these calls in argument defaults.
+extend-immutable-calls = ["fastapi.Query", "fastapi.Path", "fastapi.Body", "fastapi.Depends"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
@@ -78,3 +83,7 @@ disallow_incomplete_defs = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# starlette's test client still uses a deprecated anyio alias; not ours to fix.
+filterwarnings = [
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
+]

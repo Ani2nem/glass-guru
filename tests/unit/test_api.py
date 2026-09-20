@@ -1,0 +1,224 @@
+"""HTTP surface.
+
+The board is a thin client over these endpoints, so anything asserted here is
+something a dispatcher would otherwise have to notice on screen. The regression at
+the bottom is the one that matters most: it was found by clicking, not by reasoning.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+
+from glass_guru.fixtures.sample_business import seed_events
+from glass_guru.persistence.log import Workspace
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch) -> TestClient:
+    workspace = Workspace(tmp_path / "ws")
+    workspace.seed(seed_events())
+    monkeypatch.setenv("GLASS_GURU_WORKSPACE", str(tmp_path / "ws"))
+    # Real road distances from the committed snapshot: offline and identical to what a
+    # deployment would compute.
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "frozen")
+
+    from glass_guru.api.main import app
+
+    return TestClient(app)
+
+
+def scheduled(plan: dict[str, Any]) -> set[str]:
+    return {stop["job_id"] for route in plan["routes"] for stop in route["stops"]}
+
+
+# ---------------------------------------------------------------------- reading
+
+
+def test_world_reports_the_roster(client: TestClient):
+    world = client.get("/api/world").json()
+    assert len(world["workers"]) == 6
+    assert len(world["vans"]) == 4
+    assert len(world["jobs"]) == 10
+
+
+def test_the_board_is_told_the_costs_are_uncalibrated(client: TestClient):
+    """Every figure on screen rests on numbers nobody has validated. That belongs in
+    front of the reader, not in a config file they will never open."""
+    assert "estimate" in client.get("/api/world").json()["calibration_warning"]
+
+
+def test_no_plan_yet_is_null_not_an_error(client: TestClient):
+    response = client.get("/api/plan")
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+def test_params_carry_their_provenance(client: TestClient):
+    params = client.get("/api/params").json()
+    assert params
+    assert all(p["source"] and p["note"] for p in params)
+
+
+# --------------------------------------------------------------------- planning
+
+
+def test_committing_returns_a_feasible_plan(client: TestClient):
+    plan = client.post("/api/plan/commit").json()
+    assert plan["feasible"] and plan["violations"] == []
+    assert len(scheduled(plan)) == 10
+
+
+def test_the_board_gets_what_it_needs_to_draw_a_bar(client: TestClient):
+    """Minutes from midnight rather than timestamps, so the client positions bars
+    without parsing dates or guessing a timezone."""
+    plan = client.post("/api/plan/commit").json()
+    stop = plan["routes"][0]["stops"][0]
+    assert 0 <= stop["start_minute"] < stop["end_minute"] <= 24 * 60
+    assert stop["lat"] and stop["lon"]
+    assert stop["commitment_state"]
+
+
+def test_routes_carry_utilisation_and_slack(client: TestClient):
+    """The two columns that make a technically valid but obviously wrong plan look
+    wrong. Neither is something an invariant check can judge."""
+    plan = client.post("/api/plan/commit").json()
+    route = plan["routes"][0]
+    assert 0.0 <= route["utilization"] <= 1.0
+    assert route["idle_minutes"] >= 0
+
+
+def test_unserved_separates_failures_from_routine(client: TestClient):
+    plan = client.post("/api/plan/commit").json()
+    for item in plan["unserved"]:
+        assert isinstance(item["is_failure"], bool)
+        assert item["detail"]
+
+
+# ----------------------------------------------------------------------- events
+
+
+def test_recording_an_event_changes_the_world(client: TestClient):
+    client.post(
+        "/api/events",
+        json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"},
+    )
+    vans = {v["id"]: v for v in client.get("/api/world").json()["vans"]}
+    assert vans["van-1"]["available"] is False
+
+
+def test_an_incomplete_event_is_refused_with_a_remedy(client: TestClient):
+    response = client.post("/api/events", json={"kind": "job-overran", "target": "j-403"})
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert "--minutes" in detail["detail"]
+    assert detail["remedy"]
+
+
+def test_an_unknown_event_kind_is_refused(client: TestClient):
+    assert client.post("/api/events", json={"kind": "abduction"}).status_code == 400
+
+
+# ----------------------------------------------------------------------- repair
+
+
+def test_repairing_without_a_plan_says_what_to_do(client: TestClient):
+    response = client.post("/api/repair")
+    assert response.status_code == 409
+    assert "commit" in response.json()["detail"]["remedy"]
+
+
+def test_repair_offers_priced_options_with_autonomy_verdicts(client: TestClient):
+    client.post("/api/plan/commit")
+    client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"})
+
+    repair = client.post("/api/repair").json()
+    assert repair["candidates"]
+    assert repair["recommended"]
+    for candidate in repair["candidates"]:
+        assert candidate["autonomy"] in {"auto_apply", "escalate"}
+        assert candidate["blast_radius"] in {"internal", "crew_only", "customer_visible"}
+
+
+def test_applying_an_unknown_strategy_is_a_404(client: TestClient):
+    client.post("/api/plan/commit")
+    assert client.post("/api/repair/apply", params={"strategy": "wing_it"}).status_code == 404
+
+
+def test_applying_a_repair_moves_the_head(client: TestClient):
+    first = client.post("/api/plan/commit").json()
+    client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"})
+    repair = client.post("/api/repair").json()
+    applied = client.post("/api/repair/apply", params={"strategy": repair["recommended"]}).json()
+
+    assert applied["plan_id"] != first["plan_id"]
+    newest = next(h["plan_id"] for h in client.get("/api/history").json())
+    assert newest == applied["plan_id"]
+
+
+def test_a_customer_visible_repair_cannot_be_applied_without_approval(
+    client: TestClient, monkeypatch
+):
+    """`force` is what a dispatcher's approval looks like over HTTP. The endpoint
+    cannot be talked past, only overridden by a person who saw the diff."""
+    from glass_guru.domain import autonomy as autonomy_module
+
+    client.post("/api/plan/commit")
+    client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"})
+    repair = client.post("/api/repair").json()
+
+    forced = autonomy_module.AutonomyDecision(
+        autonomy_module.Decision.ESCALATE, ("a customer would need telling",)
+    )
+    monkeypatch.setattr("glass_guru.service.decide", lambda *a, **k: forced)
+
+    response = client.post("/api/repair/apply", params={"strategy": repair["recommended"]})
+    assert response.status_code == 412
+    assert "dispatcher" in response.json()["detail"]["remedy"]
+
+    ok = client.post("/api/repair/apply", params={"strategy": repair["recommended"], "force": True})
+    assert ok.status_code == 200
+
+
+# -------------------------------------------------------------------- regression
+
+
+def test_replanning_does_not_erase_work_already_in_flight(client: TestClient):
+    """Found by clicking, not by reasoning.
+
+    A job that has been dispatched is no longer "schedulable", so planning the week
+    from scratch dropped it silently - a dispatcher pressing Re-plan at eleven would
+    have erased the crew that left at six. Repair already carried in-flight work
+    forward; a plain re-plan did not.
+    """
+    first = client.post("/api/plan/commit").json()
+    assert "j-401" in scheduled(first)
+
+    client.post("/api/events", json={"kind": "job-dispatched", "target": "j-401", "at": "06:05"})
+
+    again = client.post("/api/plan/commit").json()
+    assert "j-401" in scheduled(again), "dispatched work vanished from the re-planned board"
+    assert len(scheduled(again)) == 10
+    assert again["feasible"]
+
+
+def test_every_commitment_state_can_reach_the_board(client: TestClient):
+    """Each state is a different colour on the Gantt, so a state that never arrives is
+    a colour nobody has ever seen."""
+    client.post("/api/plan/commit")
+    client.post("/api/events", json={"kind": "job-dispatched", "target": "j-401", "at": "06:05"})
+    client.post(
+        "/api/events",
+        json={
+            "kind": "job-confirmed",
+            "target": "j-402",
+            "window_start": "09:00",
+            "window_end": "15:00",
+            "commitment_cost": 250,
+        },
+    )
+    plan = client.post("/api/plan/commit").json()
+    states = {stop["commitment_state"] for r in plan["routes"] for stop in r["stops"]}
+    assert {"provisional", "confirmed", "dispatched"} <= states

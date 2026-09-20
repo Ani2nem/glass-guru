@@ -25,7 +25,7 @@ from glass_guru.domain.autonomy import AutonomyDecision, AutonomyPolicy, decide
 from glass_guru.domain.diff import PlanDiff, diff_plans
 from glass_guru.domain.events import Event
 from glass_guru.domain.invariants import ValidationConfig, Violation, validate_plan
-from glass_guru.domain.models import CostBreakdown, Job, PlanVersion
+from glass_guru.domain.models import CostBreakdown, CrewRoute, Job, PlanVersion
 from glass_guru.domain.state import WorldState, fold
 from glass_guru.obs.correlation import current_dispatch_id, dispatch
 from glass_guru.obs.tracing import record, span
@@ -34,7 +34,12 @@ from glass_guru.scheduler.booking import BookingOptions, suggest_booking_slots
 from glass_guru.scheduler.costing import RouteCost, cost_plan
 from glass_guru.scheduler.day_planner import SolveParams
 from glass_guru.scheduler.horizon import HorizonParams, HorizonResult, plan_horizon
-from glass_guru.scheduler.repair import RepairOptions, repair_plan
+from glass_guru.scheduler.repair import (
+    RepairOptions,
+    carve_out_locked,
+    locked_jobs,
+    repair_plan,
+)
 from glass_guru.scheduler.travel.base import OverrideAdjustedProvider, TravelProvider
 from glass_guru.scheduler.travel.factory import TravelMode, build_travel
 
@@ -121,15 +126,30 @@ class DispatchService:
         allow_overtime: bool = True,
         world: WorldState | None = None,
     ) -> PlanResult:
-        """Plan the rolling horizon and check it. Does not commit."""
+        """Plan the rolling horizon and check it. Does not commit.
+
+        Work already dispatched is carried forward rather than re-planned. Planning a
+        day from scratch at eleven in the morning would otherwise silently drop the
+        crew that left at six - those jobs are no longer "schedulable", so they simply
+        vanish from the result. Repair already knew this; a plain re-plan did not, and
+        a dispatcher pressing the button mid-morning would have erased work in
+        progress without being told.
+        """
         with span("plan.horizon", start=start.isoformat()) as active:
             state = world if world is not None else self.world()
-            travel = self.travel(state)
             params = self.solve_params(allow_overtime=allow_overtime)
             horizon_params = self.horizon_params()
 
+            head = self.head()
+            locked = locked_jobs(state)
+            carried: tuple[CrewRoute, ...] = ()
+            planning_state = state
+            if head is not None and locked:
+                planning_state, carried = carve_out_locked(state, head, locked)
+
+            travel = self.travel(planning_state)
             result = plan_horizon(
-                world=state,
+                world=planning_state,
                 travel=travel,
                 start=start,
                 params=params,
@@ -137,11 +157,11 @@ class DispatchService:
             )
             plan = PlanVersion(
                 id=self._next_plan_id(),
-                parent_id=(head.id if (head := self.head()) else None),
+                parent_id=head.id if head else None,
                 created_at=state.as_of,
                 horizon_start=start,
                 horizon_end=date.fromordinal(start.toordinal() + horizon_params.days - 1),
-                routes=result.routes,
+                routes=(*carried, *result.routes),
                 unserved=result.unserved,
                 label="committed",
             )

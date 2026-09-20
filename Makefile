@@ -4,7 +4,7 @@ GG   := $(VENV)/bin/glass-guru
 
 .PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
         params world travel osrm-setup osrm-up freeze-travel geocode demo mcp trace \
-        aws-check clean
+        aws-check web-install web-build web-check api dev clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -39,6 +39,25 @@ aws-check:  ## Verify AWS credentials and Bedrock model access
 	  || (echo "cannot list models: check the policy in docs/aws-setup.md"; exit 1)
 	@echo "--- end to end ---"
 	$(GG) triage "Dan called, van 3 won't start"
+
+web-install:  ## Install the dispatch board's dependencies (once)
+	cd web && npm install
+
+web-build:  ## Build the board; the API then serves it from web/dist
+	cd web && npm run build
+
+web-check:  ## Type-check the board
+	cd web && npm run typecheck
+
+api:  ## Run the API (serves the built board at http://127.0.0.1:8000)
+	GLASS_GURU_TRAVEL=$${GLASS_GURU_TRAVEL:-frozen} $(VENV)/bin/glass-guru-api
+
+dev:  ## Run the API and the board's dev server together, with hot reload
+	@echo "API   http://127.0.0.1:8000"
+	@echo "Board http://127.0.0.1:5173  (proxies /api to the API)"
+	@( GLASS_GURU_TRAVEL=$${GLASS_GURU_TRAVEL:-frozen} \
+	   $(PY) -m uvicorn glass_guru.api.main:app --reload --port 8000 & \
+	   cd web && npm run dev; kill %1 )
 
 mcp:  ## Run the MCP server over stdio
 	$(VENV)/bin/glass-guru-mcp

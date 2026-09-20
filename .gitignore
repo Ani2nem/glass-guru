@@ -22,3 +22,4 @@ docker/osrm/data/
 
 # Local CLI workspace: event log and plan history
 .glass-guru/
+web/node_modules/
