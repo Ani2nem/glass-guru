@@ -65,6 +65,11 @@ class SchedulingParams(Section):
     hard_window_buffer_minutes: Param
 
 
+class AutonomyParams(Section):
+    max_auto_cost_delta: Param
+    max_auto_changes: Param
+
+
 class PenaltyParams(Section):
     unserved_base: Param
     deferral_escalation: Param
@@ -108,6 +113,7 @@ class BusinessParams(Section):
     labor: LaborParams
     vehicle: VehicleParams
     scheduling: SchedulingParams
+    autonomy: AutonomyParams
     penalties: PenaltyParams
     travel: TravelParams
     service_area: ServiceAreaParams

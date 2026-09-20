@@ -1,7 +1,7 @@
 SCENARIO  baseline
 An ordinary Monday with nothing going wrong.
 
-!  25 of 25 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  27 of 27 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (acc3d533acaa2ed6)
 ------------------------------------------------------------------------------

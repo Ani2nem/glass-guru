@@ -30,7 +30,7 @@ independently by :mod:`glass_guru.domain.invariants`.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, tzinfo
 
@@ -38,6 +38,7 @@ from ortools.sat.python import cp_model
 
 from glass_guru.config import BusinessParams
 from glass_guru.domain.enums import (
+    CommitmentState,
     UnservedReason,
     WindowHardness,
 )
@@ -95,6 +96,18 @@ class SolveParams:
     #: eval baselines depend on. Raise only for interactive solves that are not scored.
     search_workers: int = 1
     random_seed: int = 0
+
+    # ------------------------------------------------------------------ repair mode
+    #: Where each job sits in the plan being repaired, as ``(van_id, minutes past
+    #: local midnight)``. Staying put is free; moving is charged ``change_penalty``.
+    incumbent: Mapping[JobId, tuple[str, int]] | None = None
+    #: Cost of disturbing a job that already had a place. Even provisional work churns
+    #: routes crews have looked at, so a plan that changes three things beats an
+    #: equivalent one that changes thirty.
+    change_penalty: float = 0.0
+    #: Scales ``commitment_cost`` when a promised window has to be released. Strategies
+    #: vary this to trade promises against throughput.
+    reschedule_penalty_multiplier: float = 1.0
 
     @classmethod
     def from_business(
@@ -556,6 +569,18 @@ def plan_day(
         for job in jobs
         for k in range(num_crews)
     }
+    # Releasing a promise: only meaningful for work a customer was actually told
+    # about, and priced at that job's own commitment_cost.
+    released = {
+        job.id: (
+            model.new_bool_var(f"released_{job.id}")
+            if job.commitment_state is CommitmentState.CONFIRMED
+            else model.new_constant(0)
+        )
+        for job in jobs
+    }
+    incumbent = params.incumbent or {}
+    stay = {job.id: model.new_bool_var(f"stay_{job.id}") for job in jobs if job.id in incumbent}
     crew_active = [model.new_bool_var(f"active_{k}") for k in range(num_crews)]
     crew_start = [
         model.new_int_var(0, MINUTES_PER_DAY, f"crew_start_{k}") for k in range(num_crews)
@@ -584,10 +609,33 @@ def plan_day(
         model.add(crew_end[k] <= usable_end)
         model.add(crew_end[k] >= crew_start[k])
 
+    van_index = {van_id: k for k, van_id in enumerate(vans)}
     for job in jobs:
         model.add(sum(visit[job.id, k] for k in range(num_crews)) == served[job.id])
         if job.id in locked:
             model.add(served[job.id] == 1)
+
+        placement = incumbent.get(job.id)
+        if placement is None:
+            continue
+        van_id, minutes = placement
+        k0 = van_index.get(van_id)
+        if k0 is None:
+            # The van it was on is gone - a breakdown. It cannot stay put.
+            model.add(stay[job.id] == 0)
+            continue
+
+        # Staying put is free, moving is charged. Soft by construction: the model
+        # prices travel pessimistically, so a materialized arrival cannot be asserted
+        # as an equality - the solver would correctly call it unreachable. Work that
+        # is genuinely immovable is carved out of the problem entirely; see
+        # :func:`glass_guru.scheduler.repair.carve_out_locked`.
+        model.add(visit[job.id, k0] == 1).only_enforce_if(stay[job.id])
+        model.add(start[job.id, k0] >= minutes).only_enforce_if(stay[job.id])
+
+        # Dropping a promise is a way of breaking it, not a way of avoiding the cost.
+        if job.commitment_state is CommitmentState.CONFIRMED:
+            model.add(released[job.id] >= 1 - served[job.id])
 
     # ------------------------------------------------------- crew fitness per job
     for job in jobs:
@@ -708,7 +756,10 @@ def plan_day(
                         late[job.id, k] >= start[job.id, k] + duration - win_end
                     ).only_enforce_if(selector)
 
-            model.add(sum(selectors) == visit[job.id, k])
+            # A released promise no longer needs a window to sit in. Everything
+            # else must satisfy one of its declared windows.
+            model.add(sum(selectors) >= visit[job.id, k] - released[job.id])
+            model.add(sum(selectors) <= visit[job.id, k])
             model.add(late[job.id, k] == 0).only_enforce_if(~visit[job.id, k])
 
     # ------------------------------------------------------------------ objective
@@ -749,6 +800,17 @@ def plan_day(
     # but it keeps plans stable, which is what a dispatcher notices.
     for k in range(num_crews):
         terms.append(crew_active[k] * k)
+
+    change_cost = _cents(params.change_penalty)
+    if change_cost:
+        terms.extend((1 - stay_var) * change_cost for stay_var in stay.values())
+
+    for job in jobs:
+        if job.commitment_state is CommitmentState.CONFIRMED and job.commitment_cost:
+            terms.append(
+                released[job.id]
+                * _cents(job.commitment_cost * params.reschedule_penalty_multiplier)
+            )
 
     for job in jobs:
         penalty = _cents(_unserved_penalty(job, params))
@@ -823,6 +885,15 @@ def plan_day(
             "solve_seconds": solver.wall_time,
             "best_bound": solver.best_objective_bound / 100.0,
             "travel_probes": float(len(probes)),
+            "moved": float(sum(1 for v in stay.values() if not solver.boolean_value(v))),
+            "promises_released": float(
+                sum(
+                    1
+                    for job in jobs
+                    if job.commitment_state is CommitmentState.CONFIRMED
+                    and solver.value(released[job.id])
+                )
+            ),
         },
     )
 

@@ -1,7 +1,7 @@
 SCENARIO  traffic_spike
 A corridor-wide slowdown makes every leg 80% longer all morning.
 
-!  25 of 25 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  27 of 27 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (34ca4c98f80a6eac)
 ------------------------------------------------------------------------------

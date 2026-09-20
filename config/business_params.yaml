@@ -62,6 +62,23 @@ scheduling:
       never refuses work for want of it, and the invariant checker still accepts a
       plan that uses the full window, so a repair under pressure may spend it.
 
+autonomy:
+  max_auto_cost_delta:
+    value: 150.0
+    source: estimated
+    note: >-
+      Largest cost increase the system may absorb without asking. Structural rules
+      come first - nothing customer-visible is ever auto-applied regardless of price -
+      so this only bounds how expensive a silent internal reshuffle may get.
+
+  max_auto_changes:
+    value: 12
+    source: estimated
+    note: >-
+      Largest number of job movements applied without review. A repair that churns
+      half the week is worth a human glance even when no promise is broken, because
+      crews have already looked at their routes.
+
 penalties:
   unserved_base:
     value: 500.0

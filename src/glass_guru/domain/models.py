@@ -18,7 +18,7 @@ from datetime import date, datetime, time
 from typing import Annotated
 
 import pygeohash
-from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from glass_guru.domain.enums import (
     Certification,
@@ -57,12 +57,10 @@ class Location(Frozen):
     address: str = ""
     geocode_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def geohash7(self) -> str:
         return str(pygeohash.encode(self.lat, self.lon, precision=7))
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def geohash5(self) -> str:
         """Coarse ~5km cell, used as the traffic-calibration corridor key."""
@@ -328,7 +326,6 @@ class PlanVersion(Frozen):
     label: str = ""
     solver_metrics: dict[str, float] = Field(default_factory=dict)
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def content_hash(self) -> str:
         """Stable digest of the scheduling decisions only (not metadata).
