@@ -15,11 +15,20 @@ services:
     ports:
       - "5000:5000"
     healthcheck:
+      # The image ships neither wget nor curl, so the original probe reported every
+      # healthy container as unhealthy and `--wait` could never succeed. bash is
+      # present, and /dev/tcp is enough to ask a real routing question - which beats a
+      # port check, because a container that has loaded no map still accepts connections.
+      # Connection: close matters: without it OSRM holds the socket on keep-alive and
+      # grep blocks until EOF, so a working probe took 5.2s and timed out at 5.
       test:
-        - CMD-SHELL
+        - CMD
+        - bash
+        - -c
         - >-
-          wget -qO- 'http://localhost:5000/table/v1/driving/-122.33,47.60;-122.35,47.62'
-          | grep -q '"code":"Ok"'
+          exec 3<>/dev/tcp/127.0.0.1/5000 &&
+          printf 'GET /table/v1/driving/-122.33,47.60;-122.35,47.62 HTTP/1.0\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"code":"Ok"' <&3
       interval: 10s
       timeout: 5s
       retries: 12

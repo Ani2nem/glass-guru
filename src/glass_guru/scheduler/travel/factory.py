@@ -27,6 +27,7 @@ expensive in different ways each time:
 
 from __future__ import annotations
 
+import os
 from enum import StrEnum
 from pathlib import Path
 
@@ -56,10 +57,16 @@ def build_travel(
     mode: TravelMode | str = TravelMode.AUTO,
     *,
     snapshot: Path | None = None,
-    osrm_url: str = DEFAULT_BASE_URL,
+    osrm_url: str | None = None,
 ) -> TravelProvider:
-    """Build the travel oracle for a given mode."""
+    """Build the travel oracle for a given mode.
+
+    ``osrm_url`` falls back to ``GLASS_GURU_OSRM_URL`` and then to localhost. Deployed,
+    the routing backend is a different host from the API, so the default is only ever
+    right on a developer's machine.
+    """
     mode = TravelMode(mode)
+    osrm_url = osrm_url or os.environ.get("GLASS_GURU_OSRM_URL") or DEFAULT_BASE_URL
     path = snapshot or DEFAULT_SNAPSHOT
 
     if mode is TravelMode.AUTO:

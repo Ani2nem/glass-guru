@@ -19,13 +19,13 @@ import json
 import os
 from collections.abc import AsyncIterator
 from contextlib import suppress
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from glass_guru.api import views
@@ -47,10 +47,16 @@ from glass_guru.config import BusinessParams
 from glass_guru.obs.correlation import dispatch, new_dispatch_id
 from glass_guru.obs.tracing import configure, span
 from glass_guru.persistence.log import Workspace
-from glass_guru.scheduler.travel.factory import TravelMode
+from glass_guru.scheduler.travel.factory import TravelMode, build_travel
 from glass_guru.service import DispatchService, ServiceError
 
 WEB_DIST = Path(__file__).resolve().parents[3] / "web" / "dist"
+
+#: A weekday mid-morning. The snapshot is keyed by day type and hour bucket, so probing
+#: at wall-clock "now" asks for a weekend leg every Saturday and reports a healthy
+#: container as degraded. The business does not run weekends; the probe should not
+#: pretend otherwise.
+_PROBE_AT = datetime(2026, 9, 21, 16, 0, tzinfo=UTC)
 
 
 class Broadcaster:
@@ -112,6 +118,63 @@ def _fail(exc: Exception, status: int = 400, remedy: str = "") -> HTTPException:
     return HTTPException(
         status_code=status,
         detail={"error": type(exc).__name__, "detail": str(exc), "remedy": remedy},
+    )
+
+
+# --------------------------------------------------------------------------- health
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    """Liveness. Deliberately does no work at all.
+
+    A liveness probe that touches the solver restarts a healthy task whenever a solve
+    is holding the worker threads, which turns a slow minute into an outage.
+    """
+    return {"status": "ok", "version": app.version}
+
+
+@app.get("/api/ready")
+def ready() -> JSONResponse:
+    """Readiness. Can this container actually plan, or has it merely started?
+
+    The failure worth catching is the process that is up and answering while missing
+    something it needs, because that is the one a port check calls healthy. Each probe
+    below stands for a file the image copies selectively and could stop copying:
+    business parameters, the travel snapshot, the built board.
+
+    Cheap on purpose - one parameter load and one travel leg, no solve - because a
+    load balancer runs this every few seconds on every task.
+    """
+    checks: dict[str, str] = {}
+
+    try:
+        business = BusinessParams.load()
+        checks["params"] = f"{sum(1 for _ in business.walk())} parameters"
+    except Exception as exc:
+        checks["params"] = f"FAILED: {exc}"
+        business = None
+
+    if business is not None:
+        try:
+            mode = TravelMode(os.environ.get("GLASS_GURU_TRAVEL", TravelMode.AUTO.value))
+            provider = build_travel(business, mode)
+            # The fixture's own depot and first stop. Hand-typed coordinates looked
+            # equivalent and were not: the addresses are geocoded, so a literal from
+            # the source landed in a different geohash cell than anything frozen.
+            from glass_guru.fixtures.sample_business import DEPOT, PROBE_STOP
+
+            leg = provider.leg(DEPOT, PROBE_STOP, _PROBE_AT)
+            checks["travel"] = f"{mode.value}: depot leg {leg.minutes:.0f} min"
+        except Exception as exc:
+            checks["travel"] = f"FAILED: {type(exc).__name__}: {exc}"
+
+    checks["board"] = "built" if WEB_DIST.exists() else "FAILED: no web/dist in the image"
+
+    failed = {name: detail for name, detail in checks.items() if detail.startswith("FAILED")}
+    return JSONResponse(
+        status_code=503 if failed else 200,
+        content={"status": "degraded" if failed else "ready", "checks": checks},
     )
 
 
@@ -571,7 +634,15 @@ def main() -> None:
     import uvicorn
 
     configure(service="glass-guru-api")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # Loopback by default: running `glass-guru-api` on a laptop should not put an
+    # unauthenticated dispatch board on the coffee-shop wifi. A container has to opt in
+    # by setting the host, which its own Dockerfile does - and must, or nothing outside
+    # the container can reach it, including a load balancer's health check.
+    uvicorn.run(
+        app,
+        host=os.environ.get("GLASS_GURU_API_HOST", "127.0.0.1"),
+        port=int(os.environ.get("GLASS_GURU_API_PORT", "8000")),
+    )
 
 
 with suppress(ImportError):  # pragma: no cover - only for `python -m`
