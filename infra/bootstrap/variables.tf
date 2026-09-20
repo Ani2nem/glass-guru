@@ -42,3 +42,16 @@ variable "eval_model_ids" {
     "us.amazon.nova-lite-v1:0",
   ]
 }
+
+variable "create_oidc_provider" {
+  description = <<-DESC
+    Create the GitHub OIDC provider, or adopt the one already in the account.
+
+    There can be only one per account, and any account that has previously connected a
+    repository to GitHub Actions already has it. Set false to reuse it. This changes
+    nothing about who can do what: the provider only establishes that a token really
+    came from GitHub, and the role trust policies decide the rest.
+  DESC
+  type        = bool
+  default     = true
+}

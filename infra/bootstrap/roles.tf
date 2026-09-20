@@ -17,7 +17,7 @@ data "aws_iam_policy_document" "evals_trust" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [local.oidc_arn]
     }
     condition {
       test     = "StringEquals"
@@ -80,7 +80,7 @@ data "aws_iam_policy_document" "deploy_trust" {
     actions = ["sts:AssumeRoleWithWebIdentity"]
     principals {
       type        = "Federated"
-      identifiers = [aws_iam_openid_connect_provider.github.arn]
+      identifiers = [local.oidc_arn]
     }
     condition {
       test     = "StringEquals"

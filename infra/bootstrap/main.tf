@@ -38,6 +38,11 @@ data "aws_caller_identity" "current" {}
 
 locals {
   account_id = data.aws_caller_identity.current.account_id
+  oidc_arn = (
+    var.create_oidc_provider
+    ? one(aws_iam_openid_connect_provider.github[*].arn)
+    : one(data.aws_iam_openid_connect_provider.github[*].arn)
+  )
   # Every claim GitHub can present for this repository. Written out rather than
   # wildcarded so that widening it is a visible diff.
   subject_main = "repo:${var.github_repository}:ref:refs/heads/main"
@@ -112,8 +117,24 @@ resource "aws_ecr_lifecycle_policy" "app" {
 
 # The whole point of Phase 3's CI: GitHub proves who it is with a short-lived token it
 # gets from AWS, and there is no access key anywhere to leak, rotate, or find in a log.
+#
+# There can be exactly one of these per account, and an account that has ever connected
+# any repository to GitHub Actions already has it - this one did, created months before
+# this project. So the stack adopts an existing provider rather than failing, and either
+# way the security boundary is unchanged: the provider only establishes that a token
+# genuinely came from GitHub. *Which* repository and *which* ref may do *what* is
+# decided entirely by the role trust policies in roles.tf. Sharing the provider with
+# another project grants that project nothing here.
 resource "aws_iam_openid_connect_provider" "github" {
+  count = var.create_oidc_provider ? 1 : 0
+
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = var.github_oidc_thumbprints
+}
+
+data "aws_iam_openid_connect_provider" "github" {
+  count = var.create_oidc_provider ? 0 : 1
+
+  url = "https://token.actions.githubusercontent.com"
 }
