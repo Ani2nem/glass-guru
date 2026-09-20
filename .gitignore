@@ -19,3 +19,6 @@ docker/osrm/data/
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Local CLI workspace: event log and plan history
+.glass-guru/

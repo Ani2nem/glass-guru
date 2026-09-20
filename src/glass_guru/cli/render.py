@@ -17,6 +17,8 @@ from collections.abc import Sequence
 from datetime import date, datetime, timedelta, tzinfo
 
 from glass_guru.config import BusinessParams, Provenance, calibration_banner
+from glass_guru.domain.autonomy import AutonomyDecision, AutonomyPolicy, decide
+from glass_guru.domain.diff import PlanDiff
 from glass_guru.domain.enums import NOT_A_FAILURE
 from glass_guru.domain.invariants import Violation
 from glass_guru.domain.models import (
@@ -31,6 +33,7 @@ from glass_guru.scheduler.booking import BookingOptions
 from glass_guru.scheduler.costing import RouteCost
 from glass_guru.scheduler.day_planner import DayPlanResult
 from glass_guru.scheduler.horizon import HorizonResult
+from glass_guru.scheduler.repair import RepairCandidate, RepairOptions
 
 RULE = "-" * 78
 
@@ -357,4 +360,77 @@ def render_slots(
             f"  Booking the cheapest rather than the dearest saves "
             f"{_money(options.savings_vs_worst)}."
         )
+    return "\n".join(lines)
+
+
+def render_repair(
+    options: RepairOptions,
+    recommended: RepairCandidate | None,
+    world: WorldState,
+    business: BusinessParams,
+    tz: tzinfo,
+    policy: AutonomyPolicy,
+) -> str:
+    """Repair candidates, side by side, with what each would cost in phone calls.
+
+    Deliberately not a single answer. Choosing between "keep every promise and serve
+    less" and "serve more and make two calls" is a judgement about this business on
+    this day; the engine's job is to price the options honestly.
+    """
+    lines: list[str] = []
+    lines += banner(business)
+    lines.append(f"REPAIR of {options.baseline.id} ({options.baseline.content_hash})")
+    lines.append(RULE)
+
+    for candidate in options.candidates:
+        decision = decide(candidate.diff, policy)
+        marker = "*" if candidate is recommended else " "
+        lines.append("")
+        lines.append(
+            f" {marker} {candidate.strategy.name:<18} "
+            f"{candidate.jobs_served:>2} served   "
+            f"{candidate.changes:>2} change(s)   "
+            f"{candidate.customer_calls} call(s)   "
+            f"[{candidate.diff.blast_radius.value}]"
+        )
+        lines.append(f"      {candidate.strategy.description}")
+        for change in candidate.diff.changes[:6]:
+            flag = "CALL" if change.customer_visible else "    "
+            lines.append(f"      {flag} {change.describe()}")
+        if len(candidate.diff.changes) > 6:
+            lines.append(f"      ... {len(candidate.diff.changes) - 6} more")
+        lines.append(f"      -> {decision.explain()}")
+
+    lines.append("")
+    lines.append(RULE)
+    if recommended is None:
+        lines.append("  no repair candidate available")
+    else:
+        lines.append(
+            f"  recommended: {recommended.strategy.name}"
+            f"  ({recommended.jobs_served} served, {recommended.customer_calls} call(s))"
+        )
+    return "\n".join(lines)
+
+
+def render_diff(
+    diff: PlanDiff,
+    before: PlanVersion,
+    after: PlanVersion,
+    decision: AutonomyDecision,
+) -> str:
+    lines = [
+        f"DIFF {before.id} ({before.content_hash}) -> {after.id} ({after.content_hash})",
+        RULE,
+        "",
+        f"  {diff.summary()}",
+        f"  blast radius: {diff.blast_radius.value}",
+        "",
+    ]
+    for change in diff.changes:
+        flag = "CALL" if change.customer_visible else "    "
+        lines.append(f"  {flag} {change.describe()}")
+    if not diff.changes:
+        lines.append("  (identical)")
+    lines += ["", RULE, f"  {decision.explain()}"]
     return "\n".join(lines)

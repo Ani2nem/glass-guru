@@ -3,7 +3,7 @@ PY   := $(VENV)/bin/python
 GG   := $(VENV)/bin/glass-guru
 
 .PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
-        params world travel osrm-setup osrm-up freeze-travel geocode clean
+        params world travel osrm-setup osrm-up freeze-travel geocode demo clean
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -28,6 +28,18 @@ typecheck:  ## Strict type check
 	$(VENV)/bin/mypy
 
 check: lint typecheck test  ## Everything CI will eventually gate on
+
+demo:  ## End-to-end Gate 3 walkthrough in a throwaway workspace
+	@rm -rf /tmp/glass-guru-demo
+	$(GG) --workspace /tmp/glass-guru-demo init
+	$(GG) --workspace /tmp/glass-guru-demo commit
+	$(GG) --workspace /tmp/glass-guru-demo event job-confirmed j-402 \
+	  --window-start 09:00 --window-end 15:00 --commitment-cost 250
+	$(GG) --workspace /tmp/glass-guru-demo event job-dispatched j-401 --at 06:05
+	$(GG) --workspace /tmp/glass-guru-demo event van-unavailable van-1 --at 10:40 --reason "wont start"
+	$(GG) --workspace /tmp/glass-guru-demo repair
+	$(GG) --workspace /tmp/glass-guru-demo repair --apply
+	$(GG) --workspace /tmp/glass-guru-demo diff
 
 board:  ## Render a day's schedule, e.g. make board DATE=2026-09-21
 	$(GG) solve $(if $(DATE),--date $(DATE),)

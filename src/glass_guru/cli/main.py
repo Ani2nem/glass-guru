@@ -9,31 +9,54 @@ from __future__ import annotations
 
 import argparse
 import sys
+import uuid
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date, datetime, time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from glass_guru.cli import render
+from glass_guru.cli.events import KINDS, EventArgumentError, build_event
 from glass_guru.config import BusinessParams
+from glass_guru.domain.autonomy import AutonomyPolicy, decide
+from glass_guru.domain.diff import diff_plans
 from glass_guru.domain.enums import Certification, ServiceType
-from glass_guru.domain.invariants import ValidationConfig, validate_plan
+from glass_guru.domain.invariants import ValidationConfig, summarize, validate_plan
 from glass_guru.domain.models import Job, Location, PlanVersion, TimeWindow
 from glass_guru.domain.state import WorldState, fold
 from glass_guru.domain.travel import TravelOracle
 from glass_guru.fixtures import scenarios
-from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at
+from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at, seed_events
 from glass_guru.geocoding import GeocodeError, Geocoder
+from glass_guru.persistence.log import PlanConflict, Workspace
 from glass_guru.scheduler.booking import suggest_booking_slots
 from glass_guru.scheduler.costing import cost_plan
 from glass_guru.scheduler.day_planner import DayPlanResult, SolveParams, plan_day
 from glass_guru.scheduler.horizon import HorizonParams, HorizonResult, plan_horizon
+from glass_guru.scheduler.repair import repair_plan
 from glass_guru.scheduler.travel.base import OverrideAdjustedProvider, TravelProvider
 from glass_guru.scheduler.travel.factory import TravelMode, build_travel, describe
 
+#: Workspace directory for this process, set once from --workspace.
+_WORKSPACE = Path(".glass-guru")
+
+
+def _workspace() -> Workspace:
+    return Workspace(_WORKSPACE)
+
 
 def _load_world(as_of: datetime | None = None) -> WorldState:
-    """The sample business. Replaced by the Postgres event log in a later increment."""
+    """World state from the workspace log if one exists, otherwise the sample fixture.
+
+    Falling back keeps read-only commands working in a fresh clone, while anything
+    that mutates state requires an initialised workspace - state that vanishes when
+    the process exits is worse than no state at all.
+    """
+    workspace = _workspace()
+    if workspace.exists:
+        # Fold the whole log: the latest recorded event is "now" for a replayed world.
+        return fold(workspace.events.read(), as_of=as_of)
     events, default_as_of = sample_world_at()
     return fold(events, as_of=as_of or default_as_of)
 
@@ -316,6 +339,203 @@ def cmd_slots(args: argparse.Namespace) -> int:
     return 0 if options.slots else 1
 
 
+def _require_workspace() -> Workspace | None:
+    workspace = _workspace()
+    if not workspace.exists:
+        print(
+            f"no workspace at {workspace.root}. Create one with:  glass-guru init",
+            file=sys.stderr,
+        )
+        return None
+    return workspace
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    """Seed a workspace from the sample business."""
+    workspace = _workspace()
+    try:
+        count = workspace.seed(seed_events())
+    except FileExistsError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(f"seeded {workspace.root} with {count} events")
+    print(workspace.describe())
+    return 0
+
+
+def cmd_event(args: argparse.Namespace) -> int:
+    """Append one typed event to the log."""
+    workspace = _require_workspace()
+    if workspace is None:
+        return 2
+
+    on_date = args.on or WEEK_START
+    business = BusinessParams.load(args.config)
+    tz = ZoneInfo(business.meta.timezone)
+
+    def moment(clock: str | None, fallback: time) -> datetime:
+        parsed = datetime.strptime(clock, "%H:%M").time() if clock else fallback
+        return datetime.combine(on_date, parsed, tzinfo=tz)
+
+    try:
+        event = build_event(
+            args.kind,
+            args.target,
+            at=moment(args.at, time(8, 0)),
+            dispatch_id=args.dispatch_id or f"cli-{uuid.uuid4().hex[:8]}",
+            until=moment(args.until, time(17, 0)) if args.until else None,
+            window_start=moment(args.window_start, time(8, 0)) if args.window_start else None,
+            window_end=moment(args.window_end, time(17, 0)) if args.window_end else None,
+            minutes=args.minutes,
+            multiplier=args.multiplier,
+            commitment_cost=args.commitment_cost,
+            reason=args.reason,
+        )
+    except (EventArgumentError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    workspace.events.append([event])
+    print(f"recorded {event.type}  {event.event_id}  dispatch={event.dispatch_id}")
+    return 0
+
+
+def cmd_commit(args: argparse.Namespace) -> int:
+    """Plan the horizon and commit it as the new head."""
+    workspace = _require_workspace()
+    if workspace is None:
+        return 2
+
+    business = BusinessParams.load(args.config)
+    tz = ZoneInfo(business.meta.timezone)
+    world = _load_world()
+    start = args.date or WEEK_START
+
+    head = workspace.plans.head()
+    travel = _travel_for(world, business)
+    params = SolveParams.from_business(business, tz)
+    horizon_params = HorizonParams.from_business(business)
+    result = plan_horizon(
+        world=world, travel=travel, start=start, params=params, horizon_params=horizon_params
+    )
+    plan = PlanVersion(
+        id=f"v{len(workspace.plans.history()) + 1:03d}",
+        parent_id=head.id if head else None,
+        created_at=world.as_of,
+        horizon_start=start,
+        horizon_end=date.fromordinal(start.toordinal() + horizon_params.days - 1),
+        routes=result.routes,
+        unserved=result.unserved,
+        label="committed",
+    )
+
+    violations = validate_plan(plan, world, travel, ValidationConfig(business_tz=tz))
+    if violations:
+        # A plan that fails its own invariants never reaches storage. This is the
+        # runtime guard, not a test.
+        print(summarize(violations), file=sys.stderr)
+        return 1
+
+    try:
+        workspace.plans.commit(plan, expected_parent=head.id if head else None)
+    except PlanConflict as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+
+    if head is not None:
+        print(diff_plans(head, plan, world).summary())
+    print(f"committed {plan.id} ({plan.content_hash}), {len(result.scheduled_job_ids)} jobs")
+    return 0
+
+
+def cmd_repair(args: argparse.Namespace) -> int:
+    """Repair the committed plan after a disruption, and say whether a human is needed."""
+    workspace = _require_workspace()
+    if workspace is None:
+        return 2
+    head = workspace.plans.head()
+    if head is None:
+        print("nothing committed yet; run:  glass-guru commit", file=sys.stderr)
+        return 2
+
+    business = BusinessParams.load(args.config)
+    tz = ZoneInfo(business.meta.timezone)
+    world = _load_world()
+    travel = _travel_for(world, business)
+    params = SolveParams.from_business(business, tz)
+    horizon_params = HorizonParams.from_business(business)
+    policy = AutonomyPolicy.from_business(business)
+
+    options = repair_plan(
+        world=world,
+        travel=travel,
+        baseline=head,
+        start=head.horizon_start,
+        params=params,
+        horizon_params=horizon_params,
+    )
+    recommended = options.best_by_fewest_calls
+    print(render.render_repair(options, recommended, world, business, tz, policy))
+
+    if not args.apply or recommended is None:
+        return 0
+
+    decision = decide(recommended.diff, policy)
+    if not decision.auto and not args.force:
+        print(f"\nnot applied - {decision.explain()}")
+        print("re-run with --force to apply anyway, once a dispatcher has agreed")
+        return 1
+
+    violations = validate_plan(recommended.plan, world, travel, ValidationConfig(business_tz=tz))
+    if violations:
+        print(summarize(violations), file=sys.stderr)
+        return 1
+    try:
+        workspace.plans.commit(recommended.plan, expected_parent=head.id)
+    except PlanConflict as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+    print(f"\napplied {recommended.plan.id} - {decision.explain()}")
+    return 0
+
+
+def cmd_history(args: argparse.Namespace) -> int:
+    workspace = _require_workspace()
+    if workspace is None:
+        return 2
+    print(workspace.describe())
+    for plan in workspace.plans.ancestry():
+        jobs = sum(len(r.stops) for r in plan.routes)
+        print(
+            f"  {plan.id:<8} {plan.content_hash}  {plan.created_at:%Y-%m-%d %H:%M}  "
+            f"{jobs:>3} job(s)  {plan.label or ''}"
+        )
+    return 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    workspace = _require_workspace()
+    if workspace is None:
+        return 2
+    chain = workspace.plans.ancestry()
+    if len(chain) < 2 and not (args.before and args.after):
+        print("need at least two plan versions to diff", file=sys.stderr)
+        return 2
+
+    before = workspace.plans.get(args.before) if args.before else chain[1]
+    after = workspace.plans.get(args.after) if args.after else chain[0]
+    if before is None or after is None:
+        print("no such plan version", file=sys.stderr)
+        return 2
+
+    business = BusinessParams.load(args.config)
+    world = _load_world()
+    policy = AutonomyPolicy.from_business(business)
+    diff = diff_plans(before, after, world)
+    print(render.render_diff(diff, before, after, decide(diff, policy)))
+    return 0
+
+
 def cmd_travel(args: argparse.Namespace) -> int:
     """Report the travel source, and optionally compare the three against each other."""
     business = BusinessParams.load(args.config)
@@ -369,6 +589,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--config", default=None, help="path to business_params.yaml (default: repo config/)"
     )
     parser.add_argument(
+        "--workspace",
+        default=".glass-guru",
+        help="directory holding the event log and plan history",
+    )
+    parser.add_argument(
         "--travel",
         choices=[m.value for m in TravelMode],
         default=TravelMode.AUTO.value,
@@ -394,6 +619,41 @@ def build_parser() -> argparse.ArgumentParser:
 
     params = sub.add_parser("params", help="business parameters and their provenance")
     params.set_defaults(func=cmd_params)
+
+    init = sub.add_parser("init", help="create a workspace seeded with the sample business")
+    init.set_defaults(func=cmd_init)
+
+    event = sub.add_parser("event", help="record a disruption or status change")
+    event.add_argument("kind", choices=KINDS)
+    event.add_argument("target", nargs="?", default=None, help="van, worker or job id")
+    event.add_argument("--at", default=None, metavar="HH:MM", help="when it happened")
+    event.add_argument("--until", default=None, metavar="HH:MM")
+    event.add_argument("--on", type=_parse_date, default=None, help="date, default Monday")
+    event.add_argument("--window-start", default=None, metavar="HH:MM")
+    event.add_argument("--window-end", default=None, metavar="HH:MM")
+    event.add_argument("--minutes", type=int, default=None)
+    event.add_argument("--multiplier", type=float, default=None)
+    event.add_argument("--commitment-cost", type=float, default=0.0)
+    event.add_argument("--reason", default="")
+    event.add_argument("--dispatch-id", default=None, help="correlation id for tracing")
+    event.set_defaults(func=cmd_event)
+
+    commit = sub.add_parser("commit", help="plan the horizon and commit it as the head")
+    commit.add_argument("--date", type=_parse_date, default=None)
+    commit.set_defaults(func=cmd_commit)
+
+    repair = sub.add_parser("repair", help="repair the committed plan after a disruption")
+    repair.add_argument("--apply", action="store_true", help="commit the recommendation")
+    repair.add_argument("--force", action="store_true", help="apply even if it needs review")
+    repair.set_defaults(func=cmd_repair)
+
+    history = sub.add_parser("history", help="plan versions, newest first")
+    history.set_defaults(func=cmd_history)
+
+    diff = sub.add_parser("diff", help="compare two plan versions")
+    diff.add_argument("before", nargs="?", default=None)
+    diff.add_argument("after", nargs="?", default=None)
+    diff.set_defaults(func=cmd_diff)
 
     slots = sub.add_parser("slots", help="price a prospective job into the horizon")
     slots.add_argument("--address", default=None, help="street address to geocode")
@@ -431,9 +691,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    global _TRAVEL_MODE
+    global _TRAVEL_MODE, _WORKSPACE
     args = build_parser().parse_args(argv)
     _TRAVEL_MODE = TravelMode(args.travel)
+    _WORKSPACE = Path(args.workspace)
     result: int = args.func(args)
     return result
 

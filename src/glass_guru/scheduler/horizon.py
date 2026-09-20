@@ -24,7 +24,7 @@ driving order.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, tzinfo
 
@@ -410,15 +410,22 @@ def plan_horizon(
     params: SolveParams,
     horizon_params: HorizonParams,
     candidate_job_ids: Sequence[JobId] | None = None,
+    locked_job_ids: Sequence[JobId] = (),
+    pinned_days: Mapping[JobId, date] | None = None,
 ) -> HorizonResult:
     """Plan a rolling horizon: assign days, route each day, then correct and repeat."""
     horizon = _dates(start, horizon_params.days)
-    candidates = (
-        [world.jobs[j] for j in candidate_job_ids if j in world.jobs]
-        if candidate_job_ids is not None
-        else world.schedulable_jobs()
-    )
+    if candidate_job_ids is not None:
+        candidates = [world.jobs[j] for j in candidate_job_ids if j in world.jobs]
+    elif locked_job_ids:
+        # Repair mode: work already in flight must be carried into the new plan, not
+        # quietly dropped because it is no longer "schedulable".
+        candidates = world.active_jobs()
+    else:
+        candidates = world.schedulable_jobs()
+    locked = set(locked_job_ids)
 
+    pinned = dict(pinned_days or {})
     overrides: dict[date, int] = {}
     assignment: dict[JobId, date] = {}
     unplaceable: list[UnservedJob] = []
@@ -429,12 +436,17 @@ def plan_horizon(
         rounds = round_index + 1
         assignment, unplaceable = assign_days(
             world=world,
-            jobs=candidates,
+            jobs=[j for j in candidates if j.id not in locked],
             horizon=horizon,
             params=params,
             horizon_params=horizon_params,
             capacity_override=overrides or None,
         )
+        # Locked work keeps the day it is already on; day assignment has no say.
+        for job_id in locked:
+            placement = pinned.get(job_id)
+            if placement is not None:
+                assignment[job_id] = placement
 
         day_results = {}
         spilled: list[JobId] = []
@@ -448,6 +460,7 @@ def plan_horizon(
                 on_date=on_date,
                 candidate_job_ids=todays,
                 params=params,
+                locked_job_ids=[j for j in todays if j in locked],
             )
             day_results[on_date] = result
             scheduled = {job_id for route in result.routes for job_id in route.job_ids}
