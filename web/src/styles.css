@@ -5,19 +5,35 @@
    monitor for eight hours is a worse default than it looks in a screenshot. */
 
 :root {
-  --bg: #0a0c10;
-  --panel: #14181f;
-  --raised: #1b212a;
-  --ink: #e9edf3;
-  --muted: #8b95a6;
-  --faint: #5c6675;
-  --line: #242b36;
-  --line-strong: #323b49;
+  /* The palette, as specified.
+       #000000  black          backgrounds and app surfaces
+       #FFFFFF  white          typography
+       #09091A  Uber Ebony     raised surfaces, high-end contrast
+       #C0C0C8  French Gray    borders and muted text
+       #1FBAD6  Safety Blue    interactive states, used sparingly
+       #06C167  Eats Green     positive states
 
-  --accent: #5b9cff;
-  --ok: #3ddc97;
-  --warn: #f2b134;
-  --error: #ff6b6b;
+     Two additions, stated rather than smuggled in: the palette carries no warning or
+     error tone, and a dispatch board needs both. A message quoting a time the plan
+     cannot support has to look wrong, and a crew who has gone off the road has to be
+     findable at a glance. Both are picked to sit with the six above rather than to
+     shout over them. */
+  --bg: #000000;
+  --panel: #09091a;
+  --raised: #12121f;
+  --ink: #ffffff;
+  --muted: #c0c0c8;
+  /* Nudged up from #6e6e7d, which measured 3.93:1 on the panel and is used on 11px
+     hour labels - below the 4.5:1 that small text needs. This is the lightest value
+     on the same hue that passes. */
+  --faint: #787880;
+  --line: #1c1c2c;
+  --line-strong: #2b2b3d;
+
+  --accent: #1fbad6;
+  --ok: #06c167;
+  --warn: #f0a13a;
+  --error: #ff5a5f;
 
   color-scheme: dark;
 }
@@ -64,8 +80,8 @@ button {
 }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: 0.45; cursor: default; }
-button.primary { background: var(--accent); color: #05080e; border-color: var(--accent); font-weight: 600; }
-button.primary:hover:not(:disabled) { background: #7cb0ff; }
+button.primary { background: var(--accent); color: #000000; border-color: var(--accent); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: #4fd0e6; }
 button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
 
 textarea, select, input {
@@ -74,7 +90,7 @@ textarea, select, input {
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: #0e1218;
+  background: #000000;
   color: var(--ink);
   margin-bottom: 10px;
 }
@@ -113,13 +129,13 @@ textarea::placeholder { color: var(--faint); }
   white-space: nowrap;
   cursor: help;
 }
-.chip--warn { border-color: #4a3a12; color: var(--warn); background: #1a1508; }
+.chip--warn { border-color: #4a3a18; color: var(--warn); background: #17130a; }
 
 .banner {
   padding: 10px 18px;
-  background: #2a1214;
-  color: #ffc9c9;
-  border-bottom: 1px solid #47201f;
+  background: #24080b;
+  color: #ffc4c6;
+  border-bottom: 1px solid #4a1d20;
   font-size: 13px;
   flex: 0 0 auto;
 }
@@ -178,7 +194,7 @@ button.link {
   font-size: 12px;
   cursor: pointer;
 }
-button.link:hover:not(:disabled) { color: #9cc4ff; }
+button.link:hover:not(:disabled) { color: #6fd6e8; }
 
 .main {
   background: var(--panel);
@@ -192,8 +208,8 @@ button.link:hover:not(:disabled) { color: #9cc4ff; }
 .tabs select { width: auto; margin: 0; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #2b333f; border-radius: 6px; }
-::-webkit-scrollbar-thumb:hover { background: #3a4452; }
+::-webkit-scrollbar-thumb { background: #2b2b3d; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #3d3d55; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 /* -------------------------------------------------------------------- gantt */
@@ -234,7 +250,7 @@ button.link:hover:not(:disabled) { color: #9cc4ff; }
   position: relative;
   overflow: hidden;
   height: 34px;
-  background: #0e1218;
+  background: #000000;
   border: 1px solid var(--line);
   border-radius: 6px;
 }
@@ -251,21 +267,42 @@ button.link:hover:not(:disabled) { color: #9cc4ff; }
   overflow: hidden;
   white-space: nowrap;
   text-align: left;
-  color: #eaf1ff;
+  color: #ffffff;
 }
 .bar:hover { border-color: var(--ink); z-index: 2; }
 .bar--selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 3; }
 
 /* Colour carries commitment state, because "can this move?" is the question a
    dispatcher asks of every bar on the board. */
-.bar--provisional { background: #24456f; }
-.bar--confirmed   { background: #1d5a45; }
-.bar--dispatched  { background: #6d5314; }
-.bar--completed   { background: #2b313b; color: var(--muted); }
+.bar--provisional { background: #0d3f4a; }
+.bar--confirmed   { background: #04432a; }
+.bar--dispatched  { background: #5a3d0f; }
+.bar--completed   { background: #1c1c2c; color: var(--muted); }
 /* Marks a bar the window could not show in full, so a truncated day is visibly
    truncated rather than silently shortened. */
 .bar--clipped { border-right: 3px solid var(--warn); }
-.bar__label { pointer-events: none; }
+/* The label scrolls through on hover when it does not fit, and sits still when it
+   does. The distance comes from JS because CSS cannot measure overflow; the pause at
+   each end is what makes it readable rather than hypnotic. */
+.bar__label {
+  pointer-events: none;
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.bar:hover .bar__label[style*="--shift"],
+.bar:focus-visible .bar__label[style*="--shift"] {
+  text-overflow: clip;
+  animation: train var(--travel, 2s) ease-in-out infinite alternate;
+}
+@keyframes train {
+  0%, 18% { transform: translateX(0); }
+  82%, 100% { transform: translateX(calc(var(--shift) * -1)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar:hover .bar__label[style*="--shift"] { animation: none; }
+}
 
 .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 14px; flex-wrap: wrap; }
 .legend span { display: flex; align-items: center; gap: 6px; }
@@ -296,7 +333,7 @@ button.link:hover:not(:disabled) { color: #9cc4ff; }
 .fields dd { margin: 0; overflow-wrap: anywhere; }
 .fields em { color: var(--warn); font-style: normal; }
 
-.commitment { background: #1a1508; border: 1px solid #3b2f0d; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.commitment { background: #17130a; border: 1px solid #3a2f12; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
 .quote { margin: 6px 0 0; font-style: italic; color: var(--warn); font-size: 13px; }
 
 .ask ul { margin: 6px 0 12px; padding-left: 20px; }
@@ -312,7 +349,7 @@ button.link:hover:not(:disabled) { color: #9cc4ff; }
   padding: 10px 12px;
   background: var(--raised);
 }
-.slot--best { border-color: var(--ok); background: #0f2019; }
+.slot--best { border-color: var(--ok); background: #041a10; }
 .slot__cost { font-weight: 700; font-size: 15px; }
 .slot__why { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 
@@ -325,13 +362,13 @@ button.link:hover:not(:disabled) { color: #9cc4ff; }
 .candidate header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .candidate h3 { text-transform: capitalize; }
 
-.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--accent); color: #05080e; border-radius: 4px; padding: 2px 6px; font-weight: 700; }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--accent); color: #000000; border-radius: 4px; padding: 2px 6px; font-weight: 700; }
 .tag--call { background: var(--warn); }
 
 .metrics { display: flex; gap: 12px; font-size: 13px; margin: 10px 0; flex-wrap: wrap; }
-.blast { border-radius: 4px; padding: 2px 8px; background: #2b313b; font-size: 12px; }
-.blast--customer_visible { background: #3a1618; color: #ffb4b4; }
-.blast--crew_only { background: #1c2740; color: #a8c5ff; }
+.blast { border-radius: 4px; padding: 2px 8px; background: #1c1c2c; font-size: 12px; }
+.blast--customer_visible { background: #3a1013; color: #ffb4b6; }
+.blast--crew_only { background: #06303a; color: #7fd9e8; }
 
 .diff { margin: 8px 0; padding-left: 18px; font-size: 13px; }
 .diff li { margin-bottom: 3px; }
@@ -340,7 +377,7 @@ button.link:hover:not(:disabled) { color: #9cc4ff; }
 .messages { margin-top: 16px; }
 .msg { border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--raised); }
 /* A held draft states a time the plan does not support. It must look wrong. */
-.msg--held { border-color: var(--error); background: #23100f; }
+.msg--held { border-color: var(--error); background: #250b0d; }
 .msg header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .msg p { margin: 0; font-size: 14px; }
 

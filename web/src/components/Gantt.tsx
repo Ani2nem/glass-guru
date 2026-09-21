@@ -1,3 +1,5 @@
+import { type CSSProperties, useRef, useState } from "react";
+
 import type { Plan, Route, Stop } from "../types";
 
 // The working day the board draws. Crews start at 06:00 for pre-opening storefront
@@ -66,6 +68,20 @@ function StopBar({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
+  // A short job is a narrow bar, and a narrow bar cannot show "Rodriguez Storefront".
+  // Hovering scrolls the label through, at a constant speed, and only when it actually
+  // overflows - measured rather than assumed, because a bar that jiggles a name which
+  // already fits is worse than one that does nothing.
+  const label = useRef<HTMLSpanElement>(null);
+  const [shift, setShift] = useState(0);
+
+  function measure() {
+    const el = label.current;
+    if (!el) return;
+    const overflow = el.scrollWidth - el.clientWidth;
+    setShift(overflow > 1 ? overflow : 0);
+  }
+
   const left = pct(stop.start_minute);
   const width = Math.max(1.2, Math.min(100 - left, pct(stop.end_minute) - left));
   const clipped = stop.end_minute > DAY_END || stop.start_minute < DAY_START;
@@ -77,6 +93,8 @@ function StopBar({
       className={`bar bar--${tone}${clipped ? " bar--clipped" : ""}${selected ? " bar--selected" : ""}`}
       style={{ left: `${left}%`, width: `${width}%` }}
       onClick={() => onSelect(stop.job_id)}
+      onMouseEnter={measure}
+      onFocus={measure}
       title={
         `${stop.customer_name} - ${stop.service_type}\n` +
         `${clock(stop.start_minute)}-${clock(stop.end_minute)}\n` +
@@ -84,7 +102,22 @@ function StopBar({
         `${stop.commitment_state}${stop.crew_size > 1 ? ` · needs ${stop.crew_size}` : ""}`
       }
     >
-      <span className="bar__label">{stop.customer_name}</span>
+      <span
+        ref={label}
+        className="bar__label"
+        style={
+          shift > 0
+            ? ({
+                "--shift": `${shift}px`,
+                // Constant speed rather than constant duration, so a long name does
+                // not race past while a short one crawls.
+                "--travel": `${Math.max(1.2, shift / 40)}s`,
+              } as CSSProperties)
+            : undefined
+        }
+      >
+        {stop.customer_name}
+      </span>
     </button>
   );
 }
