@@ -94,8 +94,11 @@ export function ProposalPanel({ onChanged }: { onChanged: () => void }) {
   }
 
   return (
-    <section className="panel">
-      <h2>Proposals</h2>
+    <section className="panel panel--fix">
+      <h2>Fix the day</h2>
+      <p className="panel__hint">
+        Prices the ways out of a disruption. Two or three options, never one answer.
+      </p>
       <button
         className="primary"
         disabled={busy}

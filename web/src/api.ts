@@ -5,6 +5,7 @@
 import type {
   Intake,
   Message,
+  Note,
   Plan,
   Repair,
   Triage,
@@ -58,6 +59,9 @@ export const api = {
   acceptTriage: (events: Record<string, unknown>[]) =>
     post<{ recorded: number }>("/api/triage/accept", { events }),
   intake: (text: string) => post<Intake>("/api/intake", { text }),
+  /** One box: the classifier picks the agent, `kind` overrides it. */
+  note: (text: string, kind?: "booking" | "disruption") =>
+    post<Note>(`/api/note${kind ? `?kind=${kind}` : ""}`, { text }),
   comms: (strategy: string) =>
     post<Message[]>(`/api/comms?strategy=${encodeURIComponent(strategy)}`),
 };

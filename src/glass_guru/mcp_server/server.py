@@ -38,7 +38,7 @@ from glass_guru.domain.enums import Certification, ServiceType
 from glass_guru.domain.models import Job, Location, TimeWindow, UnservedJob
 from glass_guru.domain.state import WorldState
 from glass_guru.fixtures.sample_business import WEEK_START
-from glass_guru.geocoding import GeocodeError, Geocoder
+from glass_guru.geocoding import GeocodeError, for_service_area
 from glass_guru.mcp_server.models import (
     BookingSummary,
     ChangeSummary,
@@ -221,7 +221,7 @@ def suggest_booking_slots(
             if latitude is not None and longitude is not None:
                 location = Location(lat=latitude, lon=longitude, address=address)
             elif address:
-                location = Geocoder().geocode(address)
+                location = for_service_area().geocode(address)
             else:
                 return ToolError(
                     error="MissingLocation",

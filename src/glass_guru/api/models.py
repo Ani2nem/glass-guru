@@ -196,6 +196,20 @@ class TriageView(Api):
     repairs: int = 0
 
 
+class NoteView(Api):
+    """One note, read by whichever agent it turned out to be for.
+
+    Exactly one of ``booking`` and ``disruption`` is populated. The board used to ask
+    the dispatcher to choose before typing, with two identical-looking boxes, and the
+    first person to use it put a broken van into the one that books appointments.
+    """
+
+    kind: str
+    why: str = ""
+    booking: IntakeView | None = None
+    disruption: TriageView | None = None
+
+
 class MessageView(Api):
     job_id: str
     channel: str

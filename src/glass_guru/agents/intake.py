@@ -38,7 +38,7 @@ from glass_guru.config import BusinessParams
 from glass_guru.domain.catalog import Estimate, describe_for_prompt, lookup
 from glass_guru.domain.enums import GlassType, Priority, PropertyType, ServiceType
 from glass_guru.domain.models import GlassSpec, Job, Location, Material, Provenance
-from glass_guru.geocoding import GeocodeError, Geocoder
+from glass_guru.geocoding import GeocodeError, Geocoder, for_service_area
 from glass_guru.obs.tracing import record, span
 
 
@@ -290,7 +290,7 @@ def intake(
         geocode_note = ""
         if call.address:
             try:
-                location = (geocoder or Geocoder()).geocode(call.address)
+                location = (geocoder or for_service_area()).geocode(call.address)
             except GeocodeError as exc:
                 geocode_note = str(exc)
                 missing = (*missing, "an address we can find on the map")

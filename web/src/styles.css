@@ -1,183 +1,454 @@
-/* A dispatch board, not a marketing page. Dense, high contrast, no animation:
-   somebody reads this while a customer is on the phone. */
+/* A dispatch board, not a marketing page. Dense where density helps, generous where
+   reading matters: somebody uses this with a customer on the phone.
+
+   Dark because this sits open all day next to a phone, and a white field filling a
+   monitor for eight hours is a worse default than it looks in a screenshot. */
 
 :root {
-  --bg: #f6f7f9;
-  --panel: #ffffff;
-  --ink: #16181d;
-  --muted: #6b7280;
-  --line: #e3e6ea;
-  --accent: #2563eb;
-  --warn: #b45309;
-  --error: #b91c1c;
-  --ok: #047857;
-  color-scheme: light;
+  /* The palette, as specified.
+       #000000  black          backgrounds and app surfaces
+       #FFFFFF  white          typography
+       #09091A  Uber Ebony     raised surfaces, high-end contrast
+       #C0C0C8  French Gray    borders and muted text
+       #1FBAD6  Safety Blue    interactive states, used sparingly
+       #06C167  Eats Green     positive states
+
+     Two additions, stated rather than smuggled in: the palette carries no warning or
+     error tone, and a dispatch board needs both. A message quoting a time the plan
+     cannot support has to look wrong, and a crew who has gone off the road has to be
+     findable at a glance. Both are picked to sit with the six above rather than to
+     shout over them. */
+  --bg: #000000;
+  --panel: #09091a;
+  --raised: #12121f;
+  --ink: #ffffff;
+  --muted: #c0c0c8;
+  /* Nudged up from #6e6e7d, which measured 3.93:1 on the panel and is used on 11px
+     hour labels - below the 4.5:1 that small text needs. This is the lightest value
+     on the same hue that passes. */
+  --faint: #787880;
+  --line: #1c1c2c;
+  --line-strong: #2b2b3d;
+
+  --accent: #1fbad6;
+  --ok: #06c167;
+  --warn: #f0a13a;
+  --error: #ff5a5f;
+
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-h1 { font-size: 16px; margin: 0; }
-h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-h3 { font-size: 13px; margin: 0 0 4px; }
+h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+h2 {
+  font-size: 12px;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  font-weight: 600;
+}
+h3 { font-size: 14px; margin: 0 0 6px; font-weight: 600; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 
 .muted { color: var(--muted); }
+.faint { color: var(--faint); }
 .warn { color: var(--warn); }
 .error { color: var(--error); }
 .ok { color: var(--ok); }
 
 button {
   font: inherit;
-  padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
   cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
 }
 button:hover:not(:disabled) { border-color: var(--accent); }
-button:disabled { opacity: 0.5; cursor: default; }
-button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+button:disabled { opacity: 0.45; cursor: default; }
+button.primary { background: var(--accent); color: #000000; border-color: var(--accent); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: #4fd0e6; }
+button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
 
 textarea, select, input {
   font: inherit;
   width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #000000;
+  color: var(--ink);
+  margin-bottom: 10px;
 }
+textarea:focus, select:focus, input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+textarea::placeholder { color: var(--faint); }
 
 /* ---------------------------------------------------------------- structure */
+
+.app { display: flex; flex-direction: column; height: 100%; }
 
 .topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
+  gap: 18px;
+  padding: 12px 18px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
 }
-.topbar__plan { display: flex; gap: 12px; align-items: center; }
-.topbar__actions { margin-left: auto; }
+.topbar__plan { display: flex; gap: 14px; align-items: center; font-size: 13px; }
+.topbar__actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* Every cost on screen rests on numbers nobody has validated, and that belongs in
+   front of the reader. It does not belong across the whole width in warning yellow:
+   it is a standing caveat, not an incident, and a banner that never changes stops
+   being read within a day. A chip in the top bar says it permanently and quietly. */
+.chip {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: help;
+}
+.chip--warn { border-color: #4a3a18; color: var(--warn); background: #17130a; }
 
 .banner {
-  padding: 7px 16px;
-  background: #fef3c7;
-  color: #78350f;
-  border-bottom: 1px solid #fde68a;
+  padding: 10px 18px;
+  background: #24080b;
+  color: #ffc4c6;
+  border-bottom: 1px solid #4a1d20;
   font-size: 13px;
+  flex: 0 0 auto;
 }
-.banner--error { background: #fee2e2; color: #7f1d1d; border-color: #fecaca; }
 
+/* Panels across the top, board underneath at the full width of the window. A
+   five-day horizon on four crews is a wide thing, and squeezing it between two
+   sidebars left every bar too narrow to read the customer's name in. */
 .layout {
-  display: grid;
-  grid-template-columns: 320px minmax(0, 1fr) 360px;
-  gap: 12px;
-  padding: 12px;
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
-@media (max-width: 1200px) { .layout { grid-template-columns: 1fr; } }
 
-.sidebar { display: flex; flex-direction: column; gap: 12px; }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
-.main { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 60vh; }
-.tabs { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; }
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(380px, 1fr) minmax(340px, 0.85fr);
+  gap: 14px;
+  align-items: start;
+  flex: 0 0 auto;
+}
+@media (max-width: 1000px) { .workbench { grid-template-columns: 1fr; } }
+
+.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* The panels are tall once an agent has answered. Capping them keeps the calendar on
+   screen without scrolling the page, and each scrolls inside itself instead. */
+.workbench .panel { max-height: 48vh; overflow-y: auto; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+/* One box now, and its edge takes the colour of whatever the note turned out to be.
+   Two boxes that looked identical is how "van 3 won't start" became a customer named
+   Dan who wanted auto glass. */
+.panel--note { border-left: 3px solid var(--line-strong); }
+.panel--fix { border-left: 3px solid var(--ok); }
+.panel--today { border-left: 3px solid var(--muted); }
+.panel--booking { border-left-color: var(--accent); }
+.panel--disruption { border-left-color: var(--warn); }
+.panel__hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+
+/* What the classifier decided, and the way to disagree with it. */
+.routed { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 4px; font-size: 12px; }
+.tag--booking { background: var(--accent); }
+.tag--disruption { background: var(--warn); }
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: 12px;
+  cursor: pointer;
+}
+button.link:hover:not(:disabled) { color: #6fd6e8; }
+
+.main {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
 .tabs select { width: auto; margin: 0; }
 
-/* -------------------------------------------------------------------- gantt */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2b2b3d; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #3d3d55; }
+::-webkit-scrollbar-track { background: transparent; }
 
-.day { margin-bottom: 20px; }
-.day__header { display: flex; align-items: baseline; gap: 10px; }
-.day__scale { position: relative; height: 16px; margin: 4px 0 2px 150px; border-bottom: 1px solid var(--line); }
-.day__scale span { position: absolute; font-size: 10px; color: var(--muted); transform: translateX(-50%); }
+/* ----------------------------------------------------------------- calendar */
 
-.route { display: grid; grid-template-columns: 150px minmax(0, 1fr) 180px; align-items: center; gap: 8px; padding: 3px 0; }
-.route__who { display: flex; flex-direction: column; line-height: 1.2; font-size: 12px; }
-.route__track { position: relative; overflow: hidden; height: 26px; background: repeating-linear-gradient(90deg, #fafbfc 0 1px, transparent 1px 100%); border-radius: 4px; }
-.route__stats { display: flex; gap: 8px; font-size: 11px; justify-content: flex-end; }
+/* The calendar is a light surface on a black app, deliberately. It is the thing you
+   look at all day and the only thing on screen with real information density, so it
+   gets to be the bright object rather than another dark panel among dark panels. */
 
-.bar {
-  position: absolute;
-  top: 3px;
-  height: 20px;
-  padding: 0 6px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 4px;
-  font-size: 11px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-align: left;
+.cal {
+  --cal-bg: #f7f7f9;
+  --cal-line: #e4e4ea;
+  --cal-ink: #09091a;
+  /* Measured against the lightest surface it sits on, which is the completed-block
+     grey rather than the calendar background. #6b6b78 was 4.46:1 there - a miss. */
+  --cal-muted: #696976;
+
+  background: var(--cal-bg);
+  border-radius: 14px;
+  padding: 14px;
+  color: var(--cal-ink);
 }
+
+.cal__days {
+  display: grid;
+  grid-template-columns: 60px repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+@media (max-width: 900px) { .cal__days { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
+
+.cal__day {
+  background: #ffffff;
+  border: 1px solid var(--cal-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+/* A day with nothing on it is still a day. The old board dropped it entirely, which
+   made an empty Friday look like a bug rather than an answer. */
+.cal__day--free { background: transparent; border-style: dashed; }
+.cal__dow { font-size: 12px; color: var(--cal-muted); text-transform: lowercase; }
+.cal__date { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.cal__count { font-size: 11px; color: var(--cal-muted); }
+
+.cal__grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 60px repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 900px) { .cal__grid { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
+
+.cal__gutter { position: relative; }
+.cal__gutter span {
+  position: absolute;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--cal-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cal__column { position: relative; border-radius: 10px; background: #ffffff; }
+.cal__line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--cal-line); }
+
+.block {
+  position: absolute;
+  border: none;
+  border-radius: 10px;
+  padding: 6px 9px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  cursor: pointer;
+  color: var(--cal-ink);
+  font-size: 12px;
+  line-height: 1.25;
+}
+/* Turning the board on its side is what fixed the labels. A short job used to be a
+   narrow sliver with no room for a name; it is now a short block the full width of a
+   day, which holds the customer, the time and often the crew. No truncation, and no
+   text moving about to be read. */
+.block__what { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.block__when { color: var(--cal-muted); font-variant-numeric: tabular-nums; }
+.block__who { color: var(--cal-muted); overflow-wrap: anywhere; }
+
 /* Colour carries commitment state, because "can this move?" is the question a
-   dispatcher asks of every bar on the board. */
-.bar--provisional { background: #dbeafe; }
-.bar--confirmed   { background: #bbf7d0; }
-.bar--dispatched  { background: #fde68a; }
-.bar--completed   { background: #e5e7eb; }
-/* Marks a bar the window could not show in full, so a truncated day is visibly
-   truncated rather than silently shortened. */
-.bar--clipped { border-right: 3px solid var(--warn); }
-.bar__label { pointer-events: none; }
+   dispatcher asks of every block. Tinted from the palette's own blue and green so a
+   light surface reads as the same product as the dark one around it. */
+.block--provisional { background: #d8f2f8; }
+.block--confirmed   { background: #cdf2e2; }
+.block--dispatched  { background: #fde8c8; }
+.block--completed   { background: #ececf1; color: var(--cal-muted); }
+.block:hover { filter: brightness(0.96); }
+.block--selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 3; }
+
+.cal__crews {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cal-line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.cal__crewday { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; }
+.cal__crewday > .muted { min-width: 34px; color: var(--cal-muted); }
+.cal__crew { color: var(--cal-ink); }
+.cal__crew .muted { color: var(--cal-muted); }
+.cal__crew .warn { color: #a45f0c; } /* 4.65:1 on the calendar ground */
+
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 12px; flex-wrap: wrap; }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* The detail that appears when a block is clicked. The calendar answers "what is the
+   shape of the week"; this answers "what is that". */
+.detail {
+  background: var(--raised);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.detail header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
+.detail dt { color: var(--muted); }
+.detail dd { margin: 0; }
 
 /* ---------------------------------------------------------------------- map */
 
-.map { height: 62vh; border-radius: 6px; }
+.map { height: 64vh; border-radius: 10px; }
 
 /* ------------------------------------------------------------------- intake */
 
-.fields { display: grid; grid-template-columns: 76px 1fr; gap: 2px 8px; margin: 10px 0; font-size: 13px; }
+.fields { display: grid; grid-template-columns: 92px 1fr; gap: 4px 10px; margin: 12px 0; font-size: 14px; }
 .fields dt { color: var(--muted); }
-.fields dd { margin: 0; }
+.fields dd { margin: 0; overflow-wrap: anywhere; }
 .fields em { color: var(--warn); font-style: normal; }
 
-.commitment { background: #fef3c7; border-radius: 6px; padding: 8px; margin-bottom: 10px; }
-.quote { margin: 4px 0 0; font-style: italic; color: #78350f; font-size: 12px; }
+.commitment { background: #17130a; border: 1px solid #3a2f12; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.quote { margin: 6px 0 0; font-style: italic; color: var(--warn); font-size: 13px; }
 
-.ask ul { margin: 4px 0 10px; padding-left: 18px; }
-.slots { display: flex; flex-direction: column; gap: 6px; }
-.slot { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
-.slot--best { border-color: var(--ok); background: #f0fdf4; }
-.slot__cost { font-weight: 600; }
-.slot__why { grid-column: 1 / -1; font-size: 12px; }
+.ask ul { margin: 6px 0 12px; padding-left: 20px; }
+.ask li { margin-bottom: 3px; }
 
-.events { margin: 6px 0; padding-left: 18px; font-size: 13px; }
+.slots { display: flex; flex-direction: column; gap: 8px; }
+.slot {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--raised);
+}
+.slot--best { border-color: var(--ok); background: #041a10; }
+.slot__cost { font-weight: 700; font-size: 15px; }
+.slot__why { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+
+.events { margin: 8px 0; padding-left: 20px; font-size: 14px; }
 
 /* ---------------------------------------------------------------- proposals */
 
-.candidate { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-top: 10px; }
+.candidate { border: 1px solid var(--line-strong); border-radius: 10px; padding: 12px 14px; margin-top: 12px; background: var(--raised); }
 .candidate--rec { border-color: var(--accent); }
-.candidate header { display: flex; align-items: center; gap: 8px; }
+.candidate header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .candidate h3 { text-transform: capitalize; }
 
-.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; background: var(--accent); color: #fff; border-radius: 3px; padding: 1px 5px; }
+.tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--accent); color: #000000; border-radius: 4px; padding: 2px 6px; font-weight: 700; }
 .tag--call { background: var(--warn); }
 
-.metrics { display: flex; gap: 10px; font-size: 12px; margin: 8px 0; flex-wrap: wrap; }
-.blast { border-radius: 3px; padding: 1px 6px; background: #e5e7eb; }
-.blast--customer_visible { background: #fee2e2; color: #7f1d1d; }
-.blast--crew_only { background: #e0e7ff; color: #3730a3; }
+.metrics { display: flex; gap: 12px; font-size: 13px; margin: 10px 0; flex-wrap: wrap; }
+.blast { border-radius: 4px; padding: 2px 8px; background: #1c1c2c; font-size: 12px; }
+.blast--customer_visible { background: #3a1013; color: #ffb4b6; }
+.blast--crew_only { background: #06303a; color: #7fd9e8; }
 
-.diff { margin: 6px 0; padding-left: 16px; font-size: 12px; }
-.diff li { margin-bottom: 2px; }
-.actions { display: flex; gap: 6px; margin-top: 8px; }
+.diff { margin: 8px 0; padding-left: 18px; font-size: 13px; }
+.diff li { margin-bottom: 3px; }
+.actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 
-.messages { margin-top: 14px; }
-.msg { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-top: 8px; }
+.messages { margin-top: 16px; }
+.msg { border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--raised); }
 /* A held draft states a time the plan does not support. It must look wrong. */
-.msg--held { border-color: var(--error); background: #fef2f2; }
-.msg header { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
-.msg p { margin: 0; font-size: 13px; }
+.msg--held { border-color: var(--error); background: #250b0d; }
+.msg header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.msg p { margin: 0; font-size: 14px; }
 
-.roster { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.roster li { padding: 1px 0; }
-.unserved { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 10px; }
-.unserved p { margin: 3px 0; font-size: 13px; }
+.roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 2px 14px;
+}
+.roster li { padding: 3px 0; }
+
+/* A different ground from the roster above it: same panel, different question. The
+   two ran together as one grey wall, and this is the half you act on. */
+.workload {
+  margin-top: 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.workload h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.workload__day { display: flex; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.workload__day:first-of-type { border-top: none; padding-top: 0; }
+.workload__dow {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 34px;
+  padding-top: 2px;
+}
+.workload ul { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 0; }
+/* Larger than it was, and on two lines rather than one run-on sentence: who, then
+   how hard they are being worked. */
+.workload li { padding: 3px 0; font-size: 14px; line-height: 1.35; }
+.workload__who { display: block; font-weight: 600; }
+.workload__who .muted { font-weight: 400; font-size: 12px; }
+.workload__stats { display: block; font-size: 13px; }
+.workload__stats strong { color: var(--ink); }
+
+.unserved { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
+.unserved p { margin: 5px 0; font-size: 13px; }
