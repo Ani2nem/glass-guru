@@ -7,9 +7,11 @@ the bottom is the one that matters most: it was found by clicking, not by reason
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 from glass_guru.fixtures.sample_business import seed_events
@@ -341,3 +343,52 @@ def test_streaming_is_refused_when_it_is_billed_by_the_second(client: TestClient
     response = client.get("/api/stream")
     assert response.status_code == 409
     assert "poll" in response.json()["detail"]["remedy"]
+
+
+def test_an_address_on_the_wrong_coast_is_refused_not_crashed(client: TestClient):
+    """The bug a dispatcher actually hit, reported as a 500.
+
+    "2nd ave" typed during a Seattle call resolved to 2nd Avenue, Manhattan - a global
+    geocoder ranks by prominence and has no idea where the vans are. The solver then
+    asked the travel snapshot for a leg to New York, 2,403 miles away, and the cache
+    miss surfaced as Internal Server Error.
+    """
+    from glass_guru.domain.models import Location
+    from glass_guru.geocoding import OutsideServiceArea, for_service_area
+
+    geocoder = for_service_area()
+    manhattan = Location(lat=40.7589, lon=-73.9668, address="2nd Ave, Manhattan")
+    with pytest.raises(OutsideServiceArea) as raised:
+        geocoder._check_in_area("2nd ave", manhattan)
+    assert raised.value.miles > 2000
+    assert "service area" in str(raised.value)
+
+
+def test_the_search_is_bounded_to_the_service_area():
+    """A bias that merely prefers nearby results still returns the far one when nothing
+    closer matches, which is exactly the failing case. It has to be a hard bound."""
+    from glass_guru.geocoding import for_service_area
+
+    box = for_service_area()._viewbox()
+    assert box is not None
+    west, north, east, south = (float(v) for v in box.split(","))
+    assert west < -122.3 < east and south < 47.57 < north, "the depot is inside its own box"
+    # A degree of longitude covers less ground than a degree of latitude this far
+    # north - about 47 miles against 69 - so the box has to be wider than it is tall
+    # by roughly 1/cos(47.6 degrees). Treating them as equal clips real addresses.
+    expected = 1 / math.cos(math.radians(47.57))
+    assert (east - west) / (north - south) == pytest.approx(expected, rel=0.02)
+
+
+def test_a_new_address_explains_itself_rather_than_failing(client: TestClient):
+    """The frozen snapshot refuses to invent a leg, which is right for tests and wrong
+    mid-call. The answer is a remedy, not a stack trace."""
+    from glass_guru.api.main import _travel_cache_miss
+    from glass_guru.scheduler.travel.cache import CacheMiss
+
+    # The handler ignores the request; typing it honestly beats a None the checker
+    # has to be told to overlook.
+    request = Request({"type": "http", "method": "GET", "path": "/", "headers": []})
+    response = _travel_cache_miss(request, CacheMiss("no cached leg for x|y|weekday|early"))
+    assert response.status_code == 409
+    assert b"warm" in response.body, "it must say which mode fixes it"

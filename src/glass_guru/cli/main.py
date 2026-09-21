@@ -28,7 +28,7 @@ from glass_guru.domain.state import WorldState, fold
 from glass_guru.domain.travel import TravelOracle
 from glass_guru.fixtures import scenarios
 from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at, seed_events
-from glass_guru.geocoding import GeocodeError, Geocoder
+from glass_guru.geocoding import GeocodeError, for_service_area
 from glass_guru.obs.correlation import dispatch, require_dispatch_id
 from glass_guru.obs.tracing import configure, span
 from glass_guru.persistence.log import PlanConflict, Workspace
@@ -292,7 +292,7 @@ def cmd_slots(args: argparse.Namespace) -> int:
     tz = ZoneInfo(business.meta.timezone)
     world = _load_world()
 
-    geocoder = Geocoder()
+    geocoder = for_service_area()
     if args.lat is not None and args.lon is not None:
         location = Location(lat=args.lat, lon=args.lon, address=args.address or "")
     elif args.address:

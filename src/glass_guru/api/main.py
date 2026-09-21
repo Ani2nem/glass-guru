@@ -23,7 +23,7 @@ from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,9 +44,11 @@ from glass_guru.api.models import (
 )
 from glass_guru.cli.events import EventArgumentError, build_event
 from glass_guru.config import BusinessParams
+from glass_guru.geocoding import GeocodeError, OutsideServiceArea
 from glass_guru.obs.correlation import dispatch, new_dispatch_id
 from glass_guru.obs.tracing import configure, span
 from glass_guru.persistence.log import Workspace
+from glass_guru.scheduler.travel.cache import CacheMiss
 from glass_guru.scheduler.travel.factory import TravelMode, build_travel
 from glass_guru.service import DispatchService, ServiceError
 
@@ -122,6 +124,61 @@ def _fail(exc: Exception, status: int = 400, remedy: str = "") -> HTTPException:
 
 
 # --------------------------------------------------------------------------- health
+
+
+# --------------------------------------------------------------------- failures
+#
+# Registered once for the whole app rather than caught per route. Both of these arise
+# several layers below the endpoint - inside the solver, inside the travel cache - and
+# a route that forgot to catch one returned "Internal Server Error" to a dispatcher for
+# something with a perfectly good explanation.
+
+
+@app.exception_handler(OutsideServiceArea)
+def _outside_service_area(_: Request, exc: OutsideServiceArea) -> JSONResponse:
+    """Not a failure to understand the address. A business answer."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "OutsideServiceArea",
+            "detail": str(exc),
+            "remedy": "check the address, or book it as an out-of-area job deliberately",
+        },
+    )
+
+
+@app.exception_handler(GeocodeError)
+def _geocode_failed(_: Request, exc: GeocodeError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "GeocodeError",
+            "detail": str(exc),
+            "remedy": "add a street number, or a city, and try again",
+        },
+    )
+
+
+@app.exception_handler(CacheMiss)
+def _travel_cache_miss(_: Request, exc: CacheMiss) -> JSONResponse:
+    """A real address nobody has ever quoted before.
+
+    The frozen snapshot covers the fixture's geography and refuses to invent a leg it
+    does not have, which is right for tests and wrong mid-call. `warm` mode answers
+    from the snapshot and asks OSRM for the rest.
+    """
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": "CacheMiss",
+            "detail": str(exc),
+            "remedy": (
+                "this address is not in the frozen travel snapshot. Start OSRM and run "
+                "with live routing:  docker compose up -d osrm  then  "
+                "GLASS_GURU_TRAVEL=warm make api"
+            ),
+        },
+    )
 
 
 def stream_mode() -> str:
