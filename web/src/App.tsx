@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, subscribe } from "./api";
-import { Gantt } from "./components/Gantt";
+import { Calendar } from "./components/Calendar";
 import { NotePanel } from "./components/NotePanel";
 import { ProposalPanel } from "./components/ProposalPanel";
 import { RouteMap } from "./components/RouteMap";
@@ -168,7 +168,7 @@ export default function App() {
                   </dl>
                 </div>
               )}
-              <Gantt plan={plan} selected={selected} onSelect={setSelected} />
+              <Calendar plan={plan} selected={selected} onSelect={setSelected} />
             </>
           )}
           {plan && view === "map" && <RouteMap plan={plan} day={day} />}

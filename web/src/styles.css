@@ -212,104 +212,125 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 ::-webkit-scrollbar-thumb:hover { background: #3d3d55; }
 ::-webkit-scrollbar-track { background: transparent; }
 
-/* -------------------------------------------------------------------- gantt */
+/* ----------------------------------------------------------------- calendar */
 
-.day { margin-bottom: 26px; }
-.day__header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-.day__header h3 { font-size: 15px; margin: 0; }
-.day--empty { opacity: 0.55; }
+/* The calendar is a light surface on a black app, deliberately. It is the thing you
+   look at all day and the only thing on screen with real information density, so it
+   gets to be the bright object rather than another dark panel among dark panels. */
 
-.day__scale {
-  position: relative;
-  height: 18px;
-  margin: 0 0 4px 196px;
-  border-bottom: 1px solid var(--line);
+.cal {
+  --cal-bg: #f7f7f9;
+  --cal-line: #e4e4ea;
+  --cal-ink: #09091a;
+  /* Measured against the lightest surface it sits on, which is the completed-block
+     grey rather than the calendar background. #6b6b78 was 4.46:1 there - a miss. */
+  --cal-muted: #696976;
+
+  background: var(--cal-bg);
+  border-radius: 14px;
+  padding: 14px;
+  color: var(--cal-ink);
 }
-.day__scale span {
-  position: absolute;
-  font-size: 11px;
-  color: var(--faint);
-  transform: translateX(-50%);
-}
 
-.route {
+.cal__days {
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr) 190px;
-  align-items: center;
-  gap: 12px;
-  padding: 5px 0;
+  grid-template-columns: 60px repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
 }
-/* Was 150px with the names on one line, so "Marcus + Priya [van-3]" was cut off and
-   a dispatcher could not tell who was on a route. Wider, and the name wraps rather
-   than being clipped. */
-.route__who { display: flex; flex-direction: column; line-height: 1.3; font-size: 13px; min-width: 0; }
-.route__who strong { font-weight: 600; overflow-wrap: anywhere; }
-.route__who .muted { font-size: 11px; }
+@media (max-width: 900px) { .cal__days { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
 
-.route__track {
+.cal__day {
+  background: #ffffff;
+  border: 1px solid var(--cal-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+/* A day with nothing on it is still a day. The old board dropped it entirely, which
+   made an empty Friday look like a bug rather than an answer. */
+.cal__day--free { background: transparent; border-style: dashed; }
+.cal__dow { font-size: 12px; color: var(--cal-muted); text-transform: lowercase; }
+.cal__date { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.cal__count { font-size: 11px; color: var(--cal-muted); }
+
+.cal__grid {
   position: relative;
-  overflow: hidden;
-  height: 34px;
-  background: #000000;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  display: grid;
+  grid-template-columns: 60px repeat(5, minmax(0, 1fr));
+  gap: 8px;
 }
-.route__stats { display: flex; gap: 10px; font-size: 12px; justify-content: flex-end; }
+@media (max-width: 900px) { .cal__grid { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
 
-.bar {
+.cal__gutter { position: relative; }
+.cal__gutter span {
   position: absolute;
-  top: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 5px;
-  font-size: 12px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-align: left;
-  color: #ffffff;
+  right: 6px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--cal-muted);
+  font-variant-numeric: tabular-nums;
 }
-.bar:hover { border-color: var(--ink); z-index: 2; }
-.bar--selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 3; }
+
+.cal__column { position: relative; border-radius: 10px; background: #ffffff; }
+.cal__line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--cal-line); }
+
+.block {
+  position: absolute;
+  border: none;
+  border-radius: 10px;
+  padding: 6px 9px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  cursor: pointer;
+  color: var(--cal-ink);
+  font-size: 12px;
+  line-height: 1.25;
+}
+/* Turning the board on its side is what fixed the labels. A short job used to be a
+   narrow sliver with no room for a name; it is now a short block the full width of a
+   day, which holds the customer, the time and often the crew. No truncation, and no
+   text moving about to be read. */
+.block__what { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.block__when { color: var(--cal-muted); font-variant-numeric: tabular-nums; }
+.block__who { color: var(--cal-muted); overflow-wrap: anywhere; }
 
 /* Colour carries commitment state, because "can this move?" is the question a
-   dispatcher asks of every bar on the board. */
-.bar--provisional { background: #0d3f4a; }
-.bar--confirmed   { background: #04432a; }
-.bar--dispatched  { background: #5a3d0f; }
-.bar--completed   { background: #1c1c2c; color: var(--muted); }
-/* Marks a bar the window could not show in full, so a truncated day is visibly
-   truncated rather than silently shortened. */
-.bar--clipped { border-right: 3px solid var(--warn); }
-/* The label scrolls through on hover when it does not fit, and sits still when it
-   does. The distance comes from JS because CSS cannot measure overflow; the pause at
-   each end is what makes it readable rather than hypnotic. */
-.bar__label {
-  pointer-events: none;
-  display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.bar:hover .bar__label[style*="--shift"],
-.bar:focus-visible .bar__label[style*="--shift"] {
-  text-overflow: clip;
-  animation: train var(--travel, 2s) ease-in-out infinite alternate;
-}
-@keyframes train {
-  0%, 18% { transform: translateX(0); }
-  82%, 100% { transform: translateX(calc(var(--shift) * -1)); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bar:hover .bar__label[style*="--shift"] { animation: none; }
-}
+   dispatcher asks of every block. Tinted from the palette's own blue and green so a
+   light surface reads as the same product as the dark one around it. */
+.block--provisional { background: #d8f2f8; }
+.block--confirmed   { background: #cdf2e2; }
+.block--dispatched  { background: #fde8c8; }
+.block--completed   { background: #ececf1; color: var(--cal-muted); }
+.block:hover { filter: brightness(0.96); }
+.block--selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 3; }
 
-.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 14px; flex-wrap: wrap; }
+.cal__crews {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cal-line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+.cal__crewday { display: flex; gap: 14px; flex-wrap: wrap; align-items: baseline; }
+.cal__crewday > .muted { min-width: 34px; color: var(--cal-muted); }
+.cal__crew { color: var(--cal-ink); }
+.cal__crew .muted { color: var(--cal-muted); }
+.cal__crew .warn { color: #a45f0c; } /* 4.65:1 on the calendar ground */
+
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 12px; flex-wrap: wrap; }
 .legend span { display: flex; align-items: center; gap: 6px; }
 .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 
-/* The detail that appears when a bar is clicked. The board answers "what is the
-   shape of the day"; this answers "what is that". */
+/* The detail that appears when a block is clicked. The calendar answers "what is the
+   shape of the week"; this answers "what is that". */
 .detail {
   background: var(--raised);
   border: 1px solid var(--line-strong);
