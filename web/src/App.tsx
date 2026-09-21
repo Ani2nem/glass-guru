@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, subscribe } from "./api";
-import { DisruptionPanel } from "./components/DisruptionPanel";
 import { Gantt } from "./components/Gantt";
-import { IntakePanel } from "./components/IntakePanel";
+import { NotePanel } from "./components/NotePanel";
 import { ProposalPanel } from "./components/ProposalPanel";
 import { RouteMap } from "./components/RouteMap";
 import type { Plan, World } from "./types";
@@ -91,11 +90,33 @@ export default function App() {
         </div>
       )}
 
+      {/* Panels across the top, board underneath at the full width of the window.
+          A five-day horizon on four crews is a wide thing; squeezing it between two
+          sidebars left every bar too narrow to read the customer's name in. */}
       <div className="layout">
-        <aside className="sidebar">
-          <IntakePanel />
-          <DisruptionPanel onChanged={() => void refresh()} />
-        </aside>
+        <section className="workbench">
+          <NotePanel onChanged={() => void refresh()} />
+          <ProposalPanel onChanged={() => void refresh()} />
+          {world && (
+            <section className="panel">
+              <h2>Today</h2>
+              <ul className="roster">
+                {world.workers.map((w) => (
+                  <li key={w.id} className={w.available ? "" : "warn"}>
+                    <strong>{w.name}</strong> <span className="muted">{w.shift}</span>
+                    {!w.available && " - unavailable"}
+                  </li>
+                ))}
+                {world.vans.map((v) => (
+                  <li key={v.id} className={v.available ? "muted" : "warn"}>
+                    {v.id}
+                    {!v.available && " - out of service"}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </section>
 
         <main className="main">
           <div className="tabs">
@@ -171,28 +192,6 @@ export default function App() {
           )}
         </main>
 
-        <aside className="sidebar">
-          <ProposalPanel onChanged={() => void refresh()} />
-          {world && (
-            <section className="panel">
-              <h2>Today</h2>
-              <ul className="roster">
-                {world.workers.map((w) => (
-                  <li key={w.id} className={w.available ? "" : "warn"}>
-                    <strong>{w.name}</strong> <span className="muted">{w.shift}</span>
-                    {!w.available && " - unavailable"}
-                  </li>
-                ))}
-                {world.vans.map((v) => (
-                  <li key={v.id} className={v.available ? "muted" : "warn"}>
-                    {v.id}
-                    {!v.available && " - out of service"}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </aside>
       </div>
     </div>
   );

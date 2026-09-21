@@ -124,28 +124,32 @@ textarea::placeholder { color: var(--faint); }
   flex: 0 0 auto;
 }
 
+/* Panels across the top, board underneath at the full width of the window. A
+   five-day horizon on four crews is a wide thing, and squeezing it between two
+   sidebars left every bar too narrow to read the customer's name in. */
 .layout {
-  display: grid;
-  grid-template-columns: 360px minmax(0, 1fr) 380px;
-  gap: 14px;
-  padding: 14px;
-  align-items: stretch;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-@media (max-width: 1400px) { .layout { grid-template-columns: 330px minmax(0, 1fr); } }
-@media (max-width: 1050px) { .layout { grid-template-columns: 1fr; overflow: auto; } }
-
-/* Each column scrolls on its own, so reading the board never scrolls the call notes
-   out of view, which is exactly what you do not want mid-call. */
-.sidebar {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  overflow-y: auto;
+  padding: 14px;
+  flex: 1 1 auto;
   min-height: 0;
-  padding-right: 2px;
+  overflow-y: auto;
 }
+
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(340px, 1.1fr) minmax(220px, 0.6fr);
+  gap: 14px;
+  align-items: start;
+  flex: 0 0 auto;
+}
+@media (max-width: 1200px) { .workbench { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 800px) { .workbench { grid-template-columns: 1fr; } }
+
+/* The panels are tall when an agent has just answered. Capping them keeps the board
+   on screen without a scroll, and each scrolls inside itself instead. */
+.workbench > .panel { max-height: 46vh; overflow-y: auto; }
 
 .panel {
   background: var(--panel);
@@ -153,20 +157,36 @@ textarea::placeholder { color: var(--faint); }
   border-radius: 12px;
   padding: 16px;
 }
-/* The two left-hand panels do different jobs and used to look identical, so notes
-   about a broken van went into the box that books appointments. A coloured edge and
-   a one-line subtitle make the difference visible before anyone types. */
-.panel--intake { border-left: 3px solid var(--accent); }
-.panel--disruption { border-left: 3px solid var(--warn); }
+/* One box now, and its edge takes the colour of whatever the note turned out to be.
+   Two boxes that looked identical is how "van 3 won't start" became a customer named
+   Dan who wanted auto glass. */
+.panel--note { border-left: 3px solid var(--line-strong); }
+.panel--booking { border-left-color: var(--accent); }
+.panel--disruption { border-left-color: var(--warn); }
 .panel__hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
+
+/* What the classifier decided, and the way to disagree with it. */
+.routed { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 4px; font-size: 12px; }
+.tag--booking { background: var(--accent); }
+.tag--disruption { background: var(--warn); }
+button.link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: 12px;
+  cursor: pointer;
+}
+button.link:hover:not(:disabled) { color: #9cc4ff; }
 
 .main {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 16px;
-  overflow-y: auto;
+  padding: 18px;
   min-height: 0;
+  flex: 1 1 auto;
 }
 .tabs { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
 .tabs select { width: auto; margin: 0; }

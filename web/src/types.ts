@@ -182,3 +182,11 @@ export interface Message {
   grounded: boolean;
   issues: string[];
 }
+
+/** One note, read by whichever agent it turned out to be for. */
+export interface Note {
+  kind: "booking" | "disruption";
+  why: string;
+  booking: Intake | null;
+  disruption: Triage | null;
+}

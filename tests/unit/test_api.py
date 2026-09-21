@@ -14,6 +14,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
+from glass_guru.api.models import TriageView
 from glass_guru.fixtures.sample_business import seed_events
 from glass_guru.persistence.log import Workspace
 
@@ -392,3 +393,53 @@ def test_a_new_address_explains_itself_rather_than_failing(client: TestClient):
     response = _travel_cache_miss(request, CacheMiss("no cached leg for x|y|weekday|early"))
     assert response.status_code == 409
     assert b"warm" in response.body, "it must say which mode fixes it"
+
+
+# ------------------------------------------------------------------ one box
+
+
+def test_a_note_is_routed_to_the_right_agent(client: TestClient, monkeypatch):
+    """The board used to ask the dispatcher which box to type into, and they got it
+    wrong on the first try. The classifier answers instead."""
+    from glass_guru.agents.router import NoteRouting
+
+    monkeypatch.setattr(
+        "glass_guru.agents.router.route_note",
+        lambda *_a, **_k: type(
+            "E", (), {"value": NoteRouting(kind="disruption", why="a van is off the road")}
+        )(),
+    )
+    monkeypatch.setattr(
+        "glass_guru.api.main.run_triage",
+        lambda request: TriageView(state="ok", summary=request.text),
+    )
+
+    body = client.post("/api/note", json={"text": "van 3 won't start"}).json()
+    assert body["kind"] == "disruption"
+    assert body["why"] == "a van is off the road"
+    assert body["booking"] is None, "only the agent that read it should answer"
+
+
+def test_the_dispatcher_can_overrule_the_classifier(client: TestClient, monkeypatch):
+    """What makes routing by model safe here.
+
+    A misroute costs one click rather than a wrong job on the schedule, and the
+    classifier is skipped entirely when the answer is already known - so an override
+    cannot be silently re-overridden.
+    """
+    called = False
+
+    def should_not_run(*_a, **_k):
+        nonlocal called
+        called = True
+        raise AssertionError("the classifier ran despite an explicit kind")
+
+    monkeypatch.setattr("glass_guru.agents.router.route_note", should_not_run)
+    monkeypatch.setattr(
+        "glass_guru.api.main.run_triage", lambda request: TriageView(state="ok", summary="")
+    )
+
+    body = client.post("/api/note?kind=disruption", json={"text": "anything"}).json()
+    assert body["kind"] == "disruption"
+    assert body["why"] == "", "nothing was classified, so there is no reason to show"
+    assert called is False

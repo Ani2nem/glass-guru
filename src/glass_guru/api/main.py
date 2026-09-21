@@ -34,6 +34,7 @@ from glass_guru.api.models import (
     EventRequest,
     IntakeView,
     MessageView,
+    NoteView,
     ParamView,
     PlanView,
     RepairView,
@@ -447,6 +448,28 @@ def record_event(request: EventRequest) -> dict[str, str]:
 
 
 # -------------------------------------------------------------------------- agents
+
+
+@app.post("/api/note", response_model=NoteView)
+def read_note(request: TextRequest, kind: str | None = Query(default=None)) -> NoteView:
+    """One box. Work out what the note is, then hand it to the right agent.
+
+    ``kind`` overrides the classification, which is how the dispatcher corrects it
+    without retyping. The override is the reason routing by model is safe here: the
+    worst case costs one click, not a wrong job on the schedule.
+    """
+    from glass_guru.agents.llm.factory import build_llm
+    from glass_guru.agents.router import NoteKind, route_note
+
+    why = ""
+    if kind is None:
+        routed = route_note(build_llm(), request.text)
+        kind = routed.value.kind if routed.value else NoteKind.BOOKING.value
+        why = routed.value.why if routed.value else "could not tell, assumed a booking"
+
+    if kind == NoteKind.DISRUPTION.value:
+        return NoteView(kind=kind, why=why, disruption=run_triage(request))
+    return NoteView(kind=NoteKind.BOOKING.value, why=why, booking=run_intake(request))
 
 
 @app.post("/api/triage", response_model=TriageView)
