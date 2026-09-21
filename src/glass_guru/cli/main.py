@@ -8,6 +8,7 @@ both by hand and as snapshot tests.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
@@ -40,7 +41,11 @@ from glass_guru.scheduler.travel.base import OverrideAdjustedProvider, TravelPro
 from glass_guru.scheduler.travel.factory import TravelMode, build_travel, describe
 
 #: Workspace directory for this process, set once from --workspace.
-_WORKSPACE = Path(".glass-guru")
+#: Left as written rather than wrapped in Path, because `Path("s3://bucket/x")`
+#: quietly becomes the relative directory `s3:/bucket/x` - so the CLI silently created
+#: a local folder with a URI for a name instead of talking to S3, and the deployed
+#: workspace was unreachable from the terminal.
+_WORKSPACE: Path | str = ".glass-guru"
 
 
 def _workspace() -> Workspace:
@@ -352,16 +357,46 @@ def _require_workspace() -> Workspace | None:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    """Seed a workspace from the sample business."""
+    """Seed a workspace from the sample business.
+
+    Asking for a workspace that already exists is not an error, the way `git init` on
+    an existing repository is not an error: the state the caller wanted is the state
+    they have. The first version printed the refusal to stderr and exited 2, which
+    stopped a copy-pasted walkthrough dead on its second run and never said what to do.
+    """
     workspace = _workspace()
-    try:
-        count = workspace.seed(seed_events())
-    except FileExistsError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
+
+    if workspace.exists and not args.force:
+        print(workspace.describe())
+        print("already initialised - nothing to do. `init --force` starts over.")
+        return 0
+
+    if args.force and workspace.exists:
+        removed = _discard(workspace)
+        print(f"discarded {removed}")
+
+    count = workspace.seed(seed_events())
     print(f"seeded {workspace.root} with {count} events")
     print(workspace.describe())
     return 0
+
+
+def _discard(workspace: Workspace) -> str:
+    """Throw away a workspace so it can be seeded again. Local directories only.
+
+    Refused on S3 on purpose. The deployed runtime holds no permission to delete an
+    object - the log is append-only and plan versions are immutable, so nothing it does
+    legitimately needs one - and a convenience flag that quietly wanted that permission
+    would be an argument for granting it.
+    """
+    root = workspace.root
+    if not isinstance(root, Path):
+        raise SystemExit(
+            f"refusing to erase {root}: that is a deployed workspace holding a real "
+            "business's history. Delete it deliberately with the AWS console or CLI."
+        )
+    shutil.rmtree(root)
+    return str(root)
 
 
 def cmd_event(args: argparse.Namespace) -> int:
@@ -678,7 +713,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--workspace",
         default=".glass-guru",
-        help="directory holding the event log and plan history",
+        help="where the event log and plan history live: a directory, or s3://bucket/prefix",
     )
     parser.add_argument(
         "--travel",
@@ -708,6 +743,11 @@ def build_parser() -> argparse.ArgumentParser:
     params.set_defaults(func=cmd_params)
 
     init = sub.add_parser("init", help="create a workspace seeded with the sample business")
+    init.add_argument(
+        "--force",
+        action="store_true",
+        help="discard an existing workspace and seed a fresh one (local only)",
+    )
     init.set_defaults(func=cmd_init)
 
     event = sub.add_parser("event", help="record a disruption or status change")
@@ -792,7 +832,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     global _TRAVEL_MODE, _WORKSPACE
     args = build_parser().parse_args(argv)
     _TRAVEL_MODE = TravelMode(args.travel)
-    _WORKSPACE = Path(args.workspace)
+    _WORKSPACE = args.workspace
 
     configure(service="glass-guru-cli")
     # One id per invocation, so a command's solves, commits and writes are one trace -
@@ -801,8 +841,55 @@ def main(argv: Sequence[str] | None = None) -> int:
         dispatch(args.dispatch_id) as dispatch_id,
         span(f"cli.{args.command}", dispatch_id=dispatch_id),
     ):
-        result: int = args.func(args)
+        try:
+            result: int = args.func(args)
+        except FileExistsError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        except Exception as exc:
+            remedy = _remedy_for(exc)
+            if remedy is None:
+                raise
+            print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+            print(remedy, file=sys.stderr)
+            return 2
     return result
+
+
+#: Failures a person is likely to hit at the terminal, and what to do about each. A
+#: stack trace is the right answer for a bug and the wrong one for "you are not logged
+#: in", which is by far the more common of the two.
+_REMEDIES: tuple[tuple[str, str], ...] = (
+    (
+        "NoCredentialsError",
+        "No AWS credentials. Export AWS_PROFILE, or use a local workspace:\n"
+        "  glass-guru --workspace .glass-guru <command>",
+    ),
+    (
+        "NoSuchBucket",
+        "That bucket does not exist. Check the name, or see infra/app/README.md for\n"
+        "how the deployed workspace bucket is created.",
+    ),
+    (
+        "AccessDenied",
+        "Those credentials cannot reach that bucket. Check AWS_PROFILE and the\n"
+        "bucket policy; the runtime role is deliberately narrow.",
+    ),
+    (
+        "EndpointConnectionError",
+        "Could not reach AWS. Check the network, or use a local workspace.",
+    ),
+)
+
+
+def _remedy_for(exc: Exception) -> str | None:
+    """What to tell someone about this failure, or None if we have nothing useful."""
+    name = type(exc).__name__
+    code = getattr(exc, "response", {}).get("Error", {}).get("Code", "")
+    for key, remedy in _REMEDIES:
+        if key in (name, code):
+            return remedy
+    return None
 
 
 if __name__ == "__main__":

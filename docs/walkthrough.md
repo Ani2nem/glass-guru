@@ -22,9 +22,12 @@ export AWS_PROFILE=glass-guru AWS_REGION=us-east-1   # for the agent steps only
 ## In the browser
 
 ```bash
-.venv/bin/glass-guru init     # seed the sample business, once
+.venv/bin/glass-guru init     # seed the sample business
 make dev                      # board on :5173, API on :8000
 ```
+
+`init` is safe to run again: if the workspace is already there it says so and does
+nothing. `init --force` throws it away and seeds a fresh one.
 
 Then the loop the product exists for.
 
