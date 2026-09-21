@@ -215,7 +215,8 @@ class Workspace:
         """Initialise an empty workspace. Refuses to overwrite an existing one."""
         if self.exists:
             raise FileExistsError(
-                f"{self.root} already holds an event log; delete it to start over"
+                f"{self.root} already holds an event log with {len(self.events)} event(s). "
+                "Seeding again would append a second business on top of the first."
             )
         batch = list(events)
         self.events.append(batch)
