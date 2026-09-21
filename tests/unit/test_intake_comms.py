@@ -353,3 +353,47 @@ def test_grounding_is_checked_on_the_text_not_the_intent():
         allowed={"15:10", "monday"},
     )
     assert {i.phrase.lower() for i in issues} == {"09:00", "friday"}
+
+
+# ------------------------------------------------- a model that will not say no
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["N/A", "n/a", "N/A.", "none", "None", "unknown", "not given", "TBD", "-", "  ", "?"],
+)
+def test_a_model_writing_nothing_is_read_as_nothing(written: str):
+    """Asked for a field it was not told, a model would rather answer than leave a
+    blank. "N/A" is perfectly truthy, and that is the whole bug."""
+    from glass_guru.agents.intake import CallExtraction
+
+    assert CallExtraction(phone=written).phone == ""
+
+
+@pytest.mark.parametrize("written", ["206-555-0142", "Maria", "2nd ave", "0", "N/A Glass Co"])
+def test_a_real_answer_survives(written: str):
+    """The check has to be exact. A customer called "None Ltd" is a stretch, but a
+    company with N/A in its name is not, and clipping it would be a worse bug."""
+    from glass_guru.agents.intake import CallExtraction
+
+    assert CallExtraction(customer_name=written).customer_name == written
+
+
+def test_a_missing_number_is_asked_for_rather_than_filled_in():
+    """The failure as a dispatcher met it.
+
+    A caller said "callback" and never gave the number. The model wrote "N/A", which
+    counted as answered: not in the missing list, not in "still to ask", shown on
+    screen as a value. The dispatcher hangs up without the number and the job is
+    unbookable for a reason nobody was told.
+    """
+    from glass_guru.agents.intake import REQUIRED_FIELDS, CallExtraction
+
+    call = CallExtraction(
+        customer_name="Maria",
+        phone="N/A",
+        address="2nd ave",
+        service_type="storefront_glass",
+    )
+    missing = [label for field, label in REQUIRED_FIELDS if not getattr(call, field)]
+    assert missing == ["a callback number"]

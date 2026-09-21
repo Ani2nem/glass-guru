@@ -30,7 +30,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from glass_guru.agents.llm.base import LLMProvider
 from glass_guru.agents.structured import Example, Extraction, extract
@@ -56,10 +56,54 @@ class CommitmentSignal(StrEnum):
     ALREADY_RESCHEDULED = "already_rescheduled"
 
 
+#: Things a model writes when it means "nothing".
+#:
+#: Asked for a field it was not told, a model would rather answer than leave a blank,
+#: so it fills in "N/A" or "unknown" - and a string like that is perfectly truthy. A
+#: caller who said "callback" and then never gave the number came back with phone set
+#: to "N/A", which counted as answered: not in the missing list, not in "still to ask",
+#: shown on screen as a value. The dispatcher hangs up without the number.
+#:
+#: Normalised on the model rather than at the one place that noticed, because every
+#: consumer downstream has the same problem and none of them should have to know.
+_NOT_AN_ANSWER = frozenset(
+    {
+        "",
+        "-",
+        "--",
+        "n/a",
+        "na",
+        "none",
+        "null",
+        "nil",
+        "unknown",
+        "unspecified",
+        "not given",
+        "not provided",
+        "not stated",
+        "not available",
+        "missing",
+        "tbd",
+        "tba",
+        "?",
+    }
+)
+
+
+def stated(value: str) -> str:
+    """The value, or empty if the model was really saying it did not know."""
+    return "" if value.strip().lower().strip(".") in _NOT_AN_ANSWER else value.strip()
+
+
 class CallExtraction(BaseModel):
     """What the model heard. Nothing here is a scheduling decision."""
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def _blank_out_non_answers(cls, value: object) -> object:
+        return stated(value) if isinstance(value, str) else value
 
     customer_name: str = Field(default="", description="The caller's name, if given.")
     phone: str = Field(default="", description="Callback number, digits as spoken.")
