@@ -237,37 +237,6 @@ export function Calendar({
         ))}
       </div>
 
-      {/* Utilisation, driving and idle time per crew. The calendar answers "what does
-          Wednesday look like"; this answers "is anybody sitting around", which the
-          old row-per-crew layout showed for free and a day-per-column one does not. */}
-      <div className="cal__crews">
-        {dates.map((date) => {
-          const routes = byDate.get(date) ?? [];
-          if (routes.length === 0) return null;
-          return (
-            <div key={date} className="cal__crewday">
-              <span className="muted">
-                {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" })}
-              </span>
-              {routes.map((route) => (
-                <span key={route.crew_id} className="cal__crew">
-                  <strong>{route.worker_names.join(" + ")}</strong>
-                  <span className="muted"> {route.van_id}</span>
-                  {" · "}
-                  {Math.round(route.utilization * 100)}% on site
-                  {" · "}
-                  {route.travel_minutes}m driving
-                  {route.idle_minutes > 0 && <span className="warn"> · {route.idle_minutes}m idle</span>}
-                  {route.overtime_minutes > 0 && (
-                    <span className="warn"> · OT {route.overtime_minutes}m</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-
       {plan.routes.length === 0 && <p className="muted">Nothing scheduled.</p>}
     </div>
   );

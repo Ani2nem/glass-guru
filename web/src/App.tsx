@@ -3,6 +3,7 @@ import { ApiError, api, subscribe } from "./api";
 import { Calendar } from "./components/Calendar";
 import { NotePanel } from "./components/NotePanel";
 import { ProposalPanel } from "./components/ProposalPanel";
+import { TodayPanel } from "./components/TodayPanel";
 import { RouteMap } from "./components/RouteMap";
 import type { Plan, World } from "./types";
 
@@ -95,27 +96,13 @@ export default function App() {
           sidebars left every bar too narrow to read the customer's name in. */}
       <div className="layout">
         <section className="workbench">
-          <NotePanel onChanged={() => void refresh()} />
-          <ProposalPanel onChanged={() => void refresh()} />
-          {world && (
-            <section className="panel">
-              <h2>Today</h2>
-              <ul className="roster">
-                {world.workers.map((w) => (
-                  <li key={w.id} className={w.available ? "" : "warn"}>
-                    <strong>{w.name}</strong> <span className="muted">{w.shift}</span>
-                    {!w.available && " - unavailable"}
-                  </li>
-                ))}
-                {world.vans.map((v) => (
-                  <li key={v.id} className={v.available ? "muted" : "warn"}>
-                    {v.id}
-                    {!v.available && " - out of service"}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          <div className="stack">
+            <NotePanel onChanged={() => void refresh()} />
+            {/* Directly under the note, because that is what produces it: something
+                goes wrong, and these are the ways out of it. */}
+            <ProposalPanel onChanged={() => void refresh()} />
+          </div>
+          {world && <TodayPanel world={world} plan={plan} />}
         </section>
 
         <main className="main">

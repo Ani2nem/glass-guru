@@ -155,17 +155,18 @@ textarea::placeholder { color: var(--faint); }
 
 .workbench {
   display: grid;
-  grid-template-columns: minmax(340px, 1fr) minmax(340px, 1.1fr) minmax(220px, 0.6fr);
+  grid-template-columns: minmax(380px, 1fr) minmax(340px, 0.85fr);
   gap: 14px;
   align-items: start;
   flex: 0 0 auto;
 }
-@media (max-width: 1200px) { .workbench { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 800px) { .workbench { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .workbench { grid-template-columns: 1fr; } }
 
-/* The panels are tall when an agent has just answered. Capping them keeps the board
-   on screen without a scroll, and each scrolls inside itself instead. */
-.workbench > .panel { max-height: 46vh; overflow-y: auto; }
+.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* The panels are tall once an agent has answered. Capping them keeps the calendar on
+   screen without scrolling the page, and each scrolls inside itself instead. */
+.workbench .panel { max-height: 48vh; overflow-y: auto; }
 
 .panel {
   background: var(--panel);
@@ -177,6 +178,8 @@ textarea::placeholder { color: var(--faint); }
    Two boxes that looked identical is how "van 3 won't start" became a customer named
    Dan who wanted auto glass. */
 .panel--note { border-left: 3px solid var(--line-strong); }
+.panel--fix { border-left: 3px solid var(--ok); }
+.panel--today { border-left: 3px solid var(--muted); }
 .panel--booking { border-left-color: var(--accent); }
 .panel--disruption { border-left-color: var(--warn); }
 .panel__hint { font-size: 12px; color: var(--muted); margin: -4px 0 10px; }
@@ -402,9 +405,50 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .msg header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .msg p { margin: 0; font-size: 14px; }
 
-.roster { list-style: none; margin: 0; padding: 0; font-size: 14px; }
-.roster li { padding: 3px 0; border-bottom: 1px solid var(--line); }
-.roster li:last-child { border-bottom: none; }
+.roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 2px 14px;
+}
+.roster li { padding: 3px 0; }
+
+/* A different ground from the roster above it: same panel, different question. The
+   two ran together as one grey wall, and this is the half you act on. */
+.workload {
+  margin-top: 16px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.workload h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.workload__day { display: flex; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line); }
+.workload__day:first-of-type { border-top: none; padding-top: 0; }
+.workload__dow {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 34px;
+  padding-top: 2px;
+}
+.workload ul { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 0; }
+/* Larger than it was, and on two lines rather than one run-on sentence: who, then
+   how hard they are being worked. */
+.workload li { padding: 3px 0; font-size: 14px; line-height: 1.35; }
+.workload__who { display: block; font-weight: 600; }
+.workload__who .muted { font-weight: 400; font-size: 12px; }
+.workload__stats { display: block; font-size: 13px; }
+.workload__stats strong { color: var(--ink); }
 
 .unserved { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
 .unserved p { margin: 5px 0; font-size: 13px; }
