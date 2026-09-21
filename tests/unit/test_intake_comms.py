@@ -397,3 +397,44 @@ def test_a_missing_number_is_asked_for_rather_than_filled_in():
     )
     missing = [label for field, label in REQUIRED_FIELDS if not getattr(call, field)]
     assert missing == ["a callback number"]
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["Nguyen Glass", "ask Maria", "call the shop", "12345", "N/A", "the mobile"],
+)
+def test_a_phone_field_that_could_not_be_dialled_is_blank(written: str):
+    """Blanking "N/A" was not enough, and this is what came next.
+
+    Told to produce a phone and given no number, the model does not give up - it
+    reaches for the nearest string and writes the company name in. Phone: Nguyen Glass
+    is worse than Phone: N/A, because it looks like data.
+    """
+    from glass_guru.agents.intake import CallExtraction
+
+    assert CallExtraction(phone=written).phone == ""
+
+
+@pytest.mark.parametrize(
+    "written",
+    ["206-555-0142", "(206) 555 0142", "+44 20 7946 0958", "555-0142", "206 555 0142 ext 4"],
+)
+def test_a_number_someone_could_actually_ring_survives(written: str):
+    """The bar is "could this be dialled", not "does it match a format". A validator
+    strict enough to reject a real customer is a worse bug than the one it fixes."""
+    from glass_guru.agents.intake import CallExtraction
+
+    assert CallExtraction(phone=written).phone == written
+
+
+@pytest.mark.parametrize("written", ["maria", "maria@", "@glass.com", "maria@glass", "n/a"])
+def test_an_address_without_an_at_is_not_an_email(written: str):
+    from glass_guru.agents.intake import CallExtraction
+
+    assert CallExtraction(email=written).email == ""
+
+
+def test_a_real_email_survives():
+    from glass_guru.agents.intake import CallExtraction
+
+    assert CallExtraction(email="maria@nguyenglass.com").email == "maria@nguyenglass.com"
