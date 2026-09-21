@@ -15,9 +15,15 @@ Travel times come from a committed snapshot, so nothing below needs the network 
 Only the two agent steps need AWS credentials; everything else runs in a fresh clone.
 
 ```bash
-export GLASS_GURU_TRAVEL=frozen
 export AWS_PROFILE=glass-guru AWS_REGION=us-east-1   # for the agent steps only
+export GLASS_GURU_TRAVEL=warm                        # see below
+docker compose up -d osrm                            # the routing backend warm mode uses
 ```
+
+`warm` rather than `frozen` matters the moment you type a real address.
+The committed snapshot covers the fixture's geography and refuses to invent a leg it does not have, which is right for tests and wrong mid-call: quoting a customer the system has never driven to fails with a cache miss.
+`warm` answers from the snapshot and asks OSRM for anything new.
+`frozen` is still the default everywhere else, and still what CI and the evals use.
 
 ## In the browser
 
@@ -36,8 +42,9 @@ The board opens with no head, so the Gantt is empty.
 Commit one and five days of routes appear, coloured by commitment state, because "can this move?" is the question asked of every bar.
 
 **Take a call.**
-Paste messy notes into the intake panel on the left.
-Watch both halves: what was captured, and what still has to be asked.
+Paste messy notes into the box on the left - the only one.
+A classifier reads the note first and decides whether it is a booking or a disruption, says why, and hands it to the right agent; one click overrides it if it gets it wrong.
+Watch both halves of what comes back: what was captured, and what still has to be asked.
 A silently half-filled form discovered after the call is worse than no form.
 Confirm a priced slot and the job appears as `confirmed`.
 
@@ -45,10 +52,12 @@ Confirm a priced slot and the job appears as `confirmed`.
 Check that the new slots are priced against the *updated* plan, and that the first customer's window has not moved.
 
 **Break something.**
-Type `Dan called, van 3 won't start, he's stuck at the Henderson site` into the disruption panel.
+Type `Dan called, van 3 won't start, he's stuck at the Henderson site` into the same box.
+It should come back tagged as a disruption rather than as a customer named Dan, which is what it used to do when there were two boxes.
 Review the typed events before recording them; nothing an agent extracts is stored until a person agrees to it.
 
 **Choose a repair.**
+Press "Repair the plan" under *Fix the day*.
 Several priced candidates, each with how many customers would need telling and a deterministic autonomy verdict.
 A customer-visible change cannot be applied without an explicit override, and the button says "Approve and apply" rather than "Apply".
 

@@ -12,24 +12,13 @@ reload; Vite proxies `/api` across.
 
 ## Layout
 
-Three columns, because a dispatcher is doing three things at once.
+**Top left - one box.** Type what you just heard, whoever called and whatever it was about. A classifier decides whether it is a booking or a disruption and hands it to the right agent, showing which it chose and why; one click overrides it. There were two boxes here and the first person to use the board typed a broken van into the one that books appointments.
 
-**Left - the phone.** Intake takes call notes and fills a job while the customer is
-still talking. What it shows in two halves is the point: what was captured, and what
-still has to be asked. A silently half-filled form discovered after the call is worse
-than no form. Below it, disruptions: type what you heard, review the typed events, then
-record them. Nothing an agent extracts is stored until a person agrees to it.
+Under it, **Fix the day**: the priced ways out of whatever just went wrong. Two or three options rather than one answer, each with how many customers would need telling and whether the rules allow it to apply without review.
 
-**Middle - the plan.** A Gantt per crew per day, or the same routes on a map. Bar
-colour carries commitment state, because "can this move?" is the question asked of
-every bar. Each row ends with on-site percentage and idle minutes - the two figures
-that make a technically valid but obviously wrong plan look wrong, and neither is
-something an invariant check can judge.
+**Top right - crews.** Who is available, and underneath, how hard the week is working each of them. On-site percentage and idle minutes are the two figures that make a technically valid but obviously wrong plan look wrong, and neither is something an invariant check can judge.
 
-**Right - proposals.** Repair candidates, each with how many customers would need
-telling and whether the rules allow it to apply without review. Several priced options
-rather than one answer, because choosing between "keep every promise and serve less"
-and "serve more and make two calls" is a judgement about this business today.
+**Below, the full width of the window - the week.** Days across, time down, work as blocks, on a light surface so the one thing with real information density is the bright object on the screen. Colour carries commitment state, because "can this move?" is the question asked of every block. Click one for the detail the grid cannot show at a glance.
 
 ## Things the board deliberately makes hard
 
