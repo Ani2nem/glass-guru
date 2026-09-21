@@ -35,8 +35,12 @@ export function IntakePanel() {
   const draft = result?.draft;
 
   return (
-    <section className="panel">
-      <h2>Take a call</h2>
+    <section className="panel panel--intake">
+      <h2>New booking</h2>
+      {/* The two left-hand panels looked identical, so a note about a broken van went
+          into the box that books appointments and came back as a customer called Dan
+          wanting auto glass. Saying what each is for costs one line. */}
+      <p className="panel__hint">A customer wants work done. Books a job.</p>
       <textarea
         value={text}
         rows={5}

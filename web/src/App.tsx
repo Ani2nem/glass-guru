@@ -15,6 +15,7 @@ export default function App() {
   const [view, setView] = useState<View>("board");
   const [day, setDay] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
   const refresh = useCallback(async () => {
@@ -35,6 +36,8 @@ export default function App() {
   }, [refresh]);
 
   const days = [...new Set(plan?.routes.map((r) => r.date) ?? [])].sort();
+  const selectedStop =
+    plan?.routes.flatMap((r) => r.stops).find((s) => s.job_id === selected) ?? null;
 
   return (
     <div className="app">
@@ -53,6 +56,15 @@ export default function App() {
           <span className="muted">nothing committed</span>
         )}
         <div className="topbar__actions">
+          {world?.calibration_warning && (
+            // Every cost on screen rests on numbers nobody has validated, and that
+            // belongs in front of the reader. It does not belong across the full width
+            // in warning yellow: it is a standing caveat, not an incident, and a banner
+            // that never changes stops being read within a day.
+            <span className="chip chip--warn" title={world.calibration_warning}>
+              estimated costs
+            </span>
+          )}
           <button
             className="primary"
             disabled={busy}
@@ -72,11 +84,6 @@ export default function App() {
         </div>
       </header>
 
-      {world?.calibration_warning && (
-        // Every cost on this screen rests on numbers nobody has validated. That
-        // belongs in front of the reader, not in a config file they will never open.
-        <div className="banner">{world.calibration_warning}</div>
-      )}
       {error && (
         <div className="banner banner--error">
           {error.message}
@@ -109,7 +116,40 @@ export default function App() {
           </div>
 
           {!plan && <p className="muted">No plan yet. Press “Plan the week”.</p>}
-          {plan && view === "board" && <Gantt plan={plan} onSelect={() => undefined} />}
+          {plan && view === "board" && (
+            <>
+              {selectedStop && (
+                <div className="detail">
+                  <header>
+                    <h3>{selectedStop.customer_name}</h3>
+                    <span className={`blast blast--${selectedStop.commitment_state}`}>
+                      {selectedStop.commitment_state}
+                    </span>
+                    <button style={{ marginLeft: "auto" }} onClick={() => setSelected(null)}>
+                      Close
+                    </button>
+                  </header>
+                  <dl>
+                    <dt>Work</dt>
+                    <dd>{selectedStop.service_type.replace(/_/g, " ")}</dd>
+                    <dt>On site</dt>
+                    <dd>
+                      {selectedStop.arrival.slice(11, 16)} to {selectedStop.departure.slice(11, 16)}
+                    </dd>
+                    <dt>Drive there</dt>
+                    <dd>
+                      {selectedStop.travel_minutes} min · {selectedStop.travel_miles} mi
+                    </dd>
+                    <dt>Crew</dt>
+                    <dd>{selectedStop.crew_size === 1 ? "one fitter" : `${selectedStop.crew_size} fitters`}</dd>
+                    <dt>Job</dt>
+                    <dd><code>{selectedStop.job_id}</code></dd>
+                  </dl>
+                </div>
+              )}
+              <Gantt plan={plan} selected={selected} onSelect={setSelected} />
+            </>
+          )}
           {plan && view === "map" && <RouteMap plan={plan} day={day} />}
 
           {plan && plan.unserved.length > 0 && (

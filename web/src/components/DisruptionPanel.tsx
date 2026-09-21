@@ -44,8 +44,9 @@ export function DisruptionPanel({ onChanged }: { onChanged: () => void }) {
   }
 
   return (
-    <section className="panel">
-      <h2>Something happened</h2>
+    <section className="panel panel--disruption">
+      <h2>Disruption</h2>
+      <p className="panel__hint">Something broke or someone is out. Changes today's plan.</p>
       <textarea
         value={text}
         rows={3}
