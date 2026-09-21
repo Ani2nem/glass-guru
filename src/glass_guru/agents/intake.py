@@ -95,6 +95,35 @@ def stated(value: str) -> str:
     return "" if value.strip().lower().strip(".") in _NOT_AN_ANSWER else value.strip()
 
 
+#: The fewest digits that could be a phone number. Seven is a local US number; ten
+#: with an area code. Low on purpose - the job is to reject "Nguyen Glass", not to
+#: adjudicate international dialling plans.
+_PHONE_DIGITS = 7
+
+
+def phone_or_blank(value: str) -> str:
+    """The value if it could be a phone number, otherwise nothing.
+
+    Blanking "N/A" was not enough. Told to produce a phone and given no number, the
+    model does not give up - it reaches for the nearest string and writes the company
+    name in. The form then reads Phone: Nguyen Glass, which is worse than N/A, because
+    it looks like data.
+
+    A phone number is checkable, so it gets checked rather than trusted. That is the
+    same line the whole system is drawn on: the model reads the call, and anything
+    with a verifiable shape is verified.
+    """
+    if sum(character.isdigit() for character in value) < _PHONE_DIGITS:
+        return ""
+    return value
+
+
+def email_or_blank(value: str) -> str:
+    """Same argument, same reason. An address without an @ is not one."""
+    local, _, domain = value.partition("@")
+    return value if local and "." in domain else ""
+
+
 class CallExtraction(BaseModel):
     """What the model heard. Nothing here is a scheduling decision."""
 
@@ -104,6 +133,16 @@ class CallExtraction(BaseModel):
     @classmethod
     def _blank_out_non_answers(cls, value: object) -> object:
         return stated(value) if isinstance(value, str) else value
+
+    @field_validator("phone", mode="after")
+    @classmethod
+    def _only_something_that_could_be_dialled(cls, value: str) -> str:
+        return phone_or_blank(value)
+
+    @field_validator("email", mode="after")
+    @classmethod
+    def _only_something_that_could_be_emailed(cls, value: str) -> str:
+        return email_or_blank(value)
 
     customer_name: str = Field(default="", description="The caller's name, if given.")
     phone: str = Field(default="", description="Callback number, digits as spoken.")
