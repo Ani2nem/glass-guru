@@ -9,6 +9,26 @@ import type { Plan, World } from "./types";
 
 type View = "board" | "map";
 
+/**
+ * A violation as a dispatcher would say it.
+ *
+ * The checker writes for the checker: "[van_unavailable] van is scheduled during a
+ * recorded outage (crew=crew-van-3 van=van-3)". Every part of that is useful and none
+ * of it is a sentence. The code in brackets is the rule that fired, which matters in
+ * a test and not on a phone call, and the parenthetical is the detail that actually
+ * says which van.
+ */
+function readable(violation: string): string {
+  const withoutCode = violation.replace(/^\[[a-z_]+\]\s*/, "");
+  const [, body = withoutCode, detail = ""] = withoutCode.match(/^(.*?)\s*\((.*)\)$/) ?? [];
+  const parts = detail
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((pair) => pair.replace("=", " "))
+    .join(", ");
+  return parts ? `${body} - ${parts}` : body;
+}
+
 export default function App() {
   const [world, setWorld] = useState<World | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -49,7 +69,7 @@ export default function App() {
             <span className="muted">{plan.content_hash}</span>
             <span>${plan.cost.total.toFixed(2)}</span>
             <span className={plan.feasible ? "ok" : "error"}>
-              {plan.feasible ? "invariants pass" : `${plan.violations.length} violation(s)`}
+              {plan.feasible ? "plan holds" : "plan no longer holds"}
             </span>
           </div>
         ) : (
@@ -84,6 +104,22 @@ export default function App() {
         </div>
       </header>
 
+      {plan && !plan.feasible && (
+        /* "1 violation(s)" is a true statement that tells a dispatcher nothing. What
+           they need is what broke and what to do about it, which is exactly what
+           recording a disruption produces: the committed plan still sends a van out
+           that is off the road. */
+        <div className="banner banner--stale">
+          <strong>The committed plan no longer works.</strong>{" "}
+          Something recorded since it was made contradicts it:
+          <ul>
+            {plan.violations.map((violation) => (
+              <li key={violation}>{readable(violation)}</li>
+            ))}
+          </ul>
+          Use <strong>Fix the day</strong> to see the ways out, or re-plan from scratch.
+        </div>
+      )}
       {error && (
         <div className="banner banner--error">
           {error.message}
