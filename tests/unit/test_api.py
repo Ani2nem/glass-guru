@@ -487,7 +487,10 @@ def test_health_and_readiness_stay_open(client: TestClient, monkeypatch):
     and neither can hold a secret."""
     monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
     assert client.get("/api/health").status_code == 200
-    assert client.get("/api/ready").status_code == 200
+    # Not asserted as 200: readiness answers 503 wherever the board has not been
+    # built, which is every CI run. The property here is that the key does not stand
+    # in front of it, so what matters is that it is not a 401.
+    assert client.get("/api/ready").status_code != 401
 
 
 def test_readiness_says_whether_anything_is_guarding_the_door(client: TestClient, monkeypatch):
