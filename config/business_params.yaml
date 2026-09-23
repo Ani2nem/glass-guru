@@ -172,7 +172,11 @@ travel:
     am_peak:
       value: 1.45
       source: estimated
-      note: "07:00-09:30. Replace with sampled Google corridor data."
+      note: >-
+        07:00-09:30. Invented. Recurring congestion is knowable in advance and
+        wants typical-speed sampling per corridor per hour, cached. Live incident
+        feeds are a different thing and do not replace this - see
+        scheduler/travel/incidents.py.
     midday:
       value: 1.05
       source: estimated
@@ -180,7 +184,9 @@ travel:
     pm_peak:
       value: 1.50
       source: estimated
-      note: "15:00-18:30. Replace with sampled Google corridor data."
+      note: >-
+        15:00-18:30. Invented, and the largest single fiction in the cost model:
+        every evening route is priced on this number.
     evening:
       value: 0.90
       source: estimated

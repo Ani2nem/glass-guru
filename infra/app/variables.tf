@@ -54,15 +54,40 @@ variable "timeout_seconds" {
 
 variable "public" {
   description = <<-DESC
-    Whether anyone with the URL can open the board.
+    Whether the function URL itself is reachable without an AWS signature.
 
-    True by default because a demo nobody can open is not a demo, and the board carries
-    synthetic data for a fictional business. Set false and the function URL requires a
-    signed request, which is the right setting the moment real customer addresses are
-    in it.
+    True means AuthType NONE, and the application's own API key is then the only thing
+    between the internet and this business's schedule - so `api_key` is required with
+    it, and a precondition in main.tf refuses the combination that leaves the door open.
+
+    False means AuthType AWS_IAM: every request must be SigV4-signed, which is right
+    the moment real customer addresses are in it, and which a browser cannot do.
   DESC
   type        = bool
   default     = true
+}
+
+variable "api_key" {
+  description = <<-DESC
+    Shared key the application requires on every /api call.
+
+    A shared key rather than JWTs, deliberately: there is one dispatcher and no
+    identity provider, and a signing key nobody rotates is worse than a shared secret
+    somebody does. This is the seam that becomes a real dependency when there are
+    users.
+
+    Pass it with -var or TF_VAR_api_key; never commit it. Health and readiness stay
+    open, because a load balancer and a deploy smoke test decide whether the container
+    works and neither can hold a secret.
+  DESC
+  type        = string
+  default     = ""
+  sensitive   = true
+
+  validation {
+    condition     = var.api_key == "" || length(var.api_key) >= 24
+    error_message = "An API key shorter than 24 characters is not worth having."
+  }
 }
 
 variable "travel_mode" {

@@ -240,7 +240,7 @@ def test_liveness_does_no_work(client: TestClient):
 def test_readiness_reports_each_thing_the_image_could_have_failed_to_ship(client: TestClient):
     """The three checks stand for three things the image copies selectively."""
     body = client.get("/api/ready").json()
-    assert set(body["checks"]) == {"params", "travel", "board"}
+    assert set(body["checks"]) == {"params", "travel", "board", "auth"}
     assert body["checks"]["params"] == "35 parameters"
     assert body["checks"]["travel"].startswith("frozen:")
 
@@ -445,3 +445,56 @@ def test_the_dispatcher_can_overrule_the_classifier(client: TestClient, monkeypa
     assert body["kind"] == "disruption"
     assert body["why"] == "", "nothing was classified, so there is no reason to show"
     assert called is False
+
+
+# ------------------------------------------------------------------------ auth
+
+
+def test_without_a_key_configured_everything_is_open(client: TestClient):
+    """What makes `make dev` work with no setup. Safe only because the deployment
+    refuses to be public without one."""
+    assert client.get("/api/world").status_code == 200
+
+
+def test_with_a_key_configured_an_unauthenticated_call_is_refused(client: TestClient, monkeypatch):
+    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    response = client.get("/api/world")
+    assert response.status_code == 401
+    assert "X-API-Key" in response.json()["remedy"]
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {"X-API-Key": "s3cret"},
+        {"Authorization": "Bearer s3cret"},
+        {"authorization": "bearer s3cret"},
+    ],
+)
+def test_either_header_carries_the_key(client: TestClient, monkeypatch, headers: dict[str, str]):
+    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    assert client.get("/api/world", headers=headers).status_code == 200
+
+
+def test_a_wrong_key_is_refused(client: TestClient, monkeypatch):
+    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    assert client.get("/api/world", headers={"X-API-Key": "s3cre"}).status_code == 401
+    assert client.get("/api/world", headers={"X-API-Key": "s3cretx"}).status_code == 401
+
+
+def test_health_and_readiness_stay_open(client: TestClient, monkeypatch):
+    """A load balancer and a deploy smoke test decide whether this container works,
+    and neither can hold a secret."""
+    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    assert client.get("/api/health").status_code == 200
+    # Not asserted as 200: readiness answers 503 wherever the board has not been
+    # built, which is every CI run. The property here is that the key does not stand
+    # in front of it, so what matters is that it is not a 401.
+    assert client.get("/api/ready").status_code != 401
+
+
+def test_readiness_says_whether_anything_is_guarding_the_door(client: TestClient, monkeypatch):
+    """Running open is a legitimate local choice. Running open without knowing is not."""
+    assert "open" in client.get("/api/ready").json()["checks"]["auth"]
+    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    assert client.get("/api/ready").json()["checks"]["auth"] == "api key required"
