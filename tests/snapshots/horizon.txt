@@ -1,6 +1,6 @@
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-HORIZON 2026-09-21..2026-09-25  (7253faa7cb5205aa)
+HORIZON 2026-09-21..2026-09-25  (ecd8176e5ae09e26)
 ------------------------------------------------------------------------------
 
   Mon 21 Sep   3 crew   5 job(s)   190min driving
@@ -23,8 +23,8 @@ HORIZON 2026-09-21..2026-09-25  (7253faa7cb5205aa)
   Tue 22 Sep   1 crew   2 job(s)   93min driving
 
     crew-van-1   Marcus + Priya   [van-1]
-        07:26-10:26  Delgado Storefront         storefront_glass                33min drive  needs 2
-        11:00-12:40  Brennan Residence          residential_window_replacement  34min drive  
+        07:00-10:00  Delgado Storefront         storefront_glass                33min drive  needs 2
+        10:34-12:14  Brennan Residence          residential_window_replacement  34min drive  
                      travel 93min / 59.4mi  (186 person-min)   idle 0min   on-site 75%
 
   Wed 23 Sep   2 crew   2 job(s)   199min driving
@@ -39,8 +39,8 @@ HORIZON 2026-09-21..2026-09-25  (7253faa7cb5205aa)
 
   Thu 24 Sep   1 crew   1 job(s)   45min driving
 
-    crew-van-1   Dan   [van-1]
-        08:26-11:26  Whitfield Tempered         residential_window_replacement  26min drive  
+    crew-van-1   Marcus   [van-1]
+        08:00-11:00  Whitfield Tempered         residential_window_replacement  26min drive  
                      travel 45min / 21.3mi  (45 person-min)   idle 0min   on-site 80%
 
 ------------------------------------------------------------------------------

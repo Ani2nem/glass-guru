@@ -3,7 +3,7 @@ Ken calls in sick. He is the only worker who cannot do overtime.
 
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (41433d9466e0adac)
+PLAN 2026-09-21  (781527602cd79b77)
 ------------------------------------------------------------------------------
 
   crew-van-1   Alex   [van-1]
@@ -11,11 +11,11 @@ PLAN 2026-09-21  (41433d9466e0adac)
                    travel 39min / 15.6mi  (39 person-min)   idle 0min   on-site 54%
 
   crew-van-3   Marcus + Priya   [van-3]
-      06:24-08:54  Rodriguez Storefront       storefront_glass                23min drive  needs 2
-                   ..33 min gap, leaves 09:27
+      06:23-08:53  Rodriguez Storefront       storefront_glass                23min drive  needs 2
+                   ..34 min gap, leaves 09:27
       10:00-12:30  Patel Shower Door          shower_door_install             33min drive  
       12:48-14:48  Chen Residence             residential_window_replacement  18min drive  
-                   travel 91min / 44.2mi  (182 person-min)   idle 33min   on-site 77%   OT 10min
+                   travel 91min / 44.2mi  (182 person-min)   idle 34min   on-site 77%   OT 10min
 
   crew-van-4   Sofia   [van-4]
       08:34-10:04  Okonkwo Auto Glass         auto_glass                      34min drive  
