@@ -1,121 +1,114 @@
 {
-  "depot": {
-    "display_name": "3800, 1st Avenue South, Beacon Hill, Seattle, King County, Washington, 98134, United States",
-    "importance": 7.72983901731444e-05,
-    "lat": 47.5701002,
-    "lon": -122.3333967,
-    "query": "3800 1st Ave S, Seattle, WA"
-  },
   "j-401": {
-    "display_name": "1520, 2nd Avenue, Central Business District, Belltown, Seattle, King County, Washington, 98101, United States",
-    "importance": 7.72983901731444e-05,
-    "lat": 47.6099131,
-    "lon": -122.3391933,
-    "query": "1520 2nd Ave, Seattle, WA"
+    "display_name": "South Main Street, Keller, Tarrant County, Texas, 76248, United States",
+    "importance": 0.05340471580071714,
+    "lat": 32.9034439,
+    "lon": -97.2572861,
+    "query": "1200 S Main St, Keller, TX"
   },
   "j-402": {
-    "display_name": "Ballard Avenue Northwest, Ballard, Seattle, King County, Washington, 98107, United States",
-    "importance": 0.05341063172350649,
-    "lat": 47.6636357,
-    "lon": -122.3799214,
-    "query": "4410 Ballard Ave NW, Seattle, WA"
+    "display_name": "2201, North Tarrant Parkway, Fort Worth, Tarrant County, Texas, 76177, United States",
+    "importance": 9.99999999995449e-06,
+    "lat": 32.898449,
+    "lon": -97.328317,
+    "query": "2201 N Tarrant Pkwy, Fort Worth, TX"
   },
   "j-403": {
-    "display_name": "North 45th Street, Wallingford, Seattle, King County, Washington, 98103, United States",
-    "importance": 0.05341063172350649,
-    "lat": 47.6613967,
-    "lon": -122.3453437,
-    "query": "1800 N 45th St, Seattle, WA"
+    "display_name": "420, Main Street, Downtown Fort Worth, Sundance Square, Fort Worth, Tarrant County, Texas, 76102, United States",
+    "importance": 9.99999999995449e-06,
+    "lat": 32.7549068,
+    "lon": -97.3315104,
+    "query": "420 Main St, Fort Worth, TX"
   },
   "j-404": {
-    "display_name": "6200, Airport Way South, Van Asselt, South Seattle, Seattle, King County, Washington, 98108, United States",
-    "importance": 9.99999999995449e-06,
-    "lat": 47.548593,
-    "lon": -122.315742,
-    "query": "6200 Airport Way S, Seattle, WA"
+    "display_name": "North Main Street, Fort Worth, Tarrant County, Texas, 76131, United States",
+    "importance": 0.05340471580071714,
+    "lat": 32.8474396,
+    "lon": -97.3601908,
+    "query": "101 N Main St, Saginaw, TX"
   },
   "j-405": {
-    "display_name": "10200, Aurora Avenue North, Greenwood, Seattle, King County, Washington, 98133, United States",
-    "importance": 7.72983901731444e-05,
-    "lat": 47.7030858,
-    "lon": -122.3441272,
-    "query": "10200 Aurora Ave N, Seattle, WA"
+    "display_name": "West Byron Nelson Boulevard, Roanoke, Denton County, Texas, 76262, United States",
+    "importance": 0.05338901274128325,
+    "lat": 33.012465,
+    "lon": -97.235635,
+    "query": "300 W Byron Nelson Blvd, Roanoke, TX"
   },
   "j-406": {
-    "display_name": "2600, East Madison Street, Madison Valley, Capitol Hill, Seattle, King County, Washington, 98112, United States",
-    "importance": 9.99999999995449e-06,
-    "lat": 47.622151,
-    "lon": -122.298318,
-    "query": "2600 E Madison St, Seattle, WA"
+    "display_name": "Trophy Club Drive, Trophy Club, Denton County, Texas, 76262, United States",
+    "importance": 0.05338901274128325,
+    "lat": 33.0071443,
+    "lon": -97.202265,
+    "query": "5100 Trophy Club Dr, Trophy Club, TX"
   },
   "j-407": {
-    "display_name": "800, Pike Street, Central Business District, First Hill, Seattle, King County, Washington, 98101, United States",
-    "importance": 7.72983901731444e-05,
-    "lat": 47.6124044,
-    "lon": -122.3320743,
-    "query": "800 Pike St, Seattle, WA"
+    "display_name": "LEGOLAND Discovery Center Dallas/Fort Worth, 3000, Grapevine Mills Parkway, Grapevine, Tarrant County, Texas, 76051, United States",
+    "importance": 0.36081278497828223,
+    "lat": 32.9666172,
+    "lon": -97.0434683,
+    "query": "3000 Grapevine Mills Pkwy, Grapevine, TX"
   },
   "j-408": {
-    "display_name": "5500, Sand Point Way Northeast, Hawthorne Hills, Bryant, Laurelhurst, Seattle, King County, Washington, 98105, United States",
-    "importance": 9.99999999995449e-06,
-    "lat": 47.668518,
-    "lon": -122.273029,
-    "query": "5500 Sand Point Way NE, Seattle, WA"
+    "display_name": "Denton Highway, Watauga, Tarrant County, Texas, 76148, United States",
+    "importance": 0.05340471580071714,
+    "lat": 32.8775842,
+    "lon": -97.2614911,
+    "query": "8851 Denton Hwy, Watauga, TX"
   },
   "j-409": {
-    "display_name": "Des Moines Memorial Dr S & S 108th St, Des Moines Memorial Drive South, Burien, King County, Washington, 98041, United States",
-    "importance": 6.192492561222275e-05,
-    "lat": 47.5064874,
-    "lon": -122.3039219,
-    "query": "Des Moines Memorial Dr, Burien, WA"
+    "display_name": "Grapevine Highway, North Richland Hills, Tarrant County, Texas, 76054, United States",
+    "importance": 0.053389409475852564,
+    "lat": 32.8549297,
+    "lon": -97.1871334,
+    "query": "6401 Grapevine Hwy, North Richland Hills, TX"
   },
   "j-410": {
-    "display_name": "2400, 4th Avenue South, Beacon Hill, Seattle, King County, Washington, 98134, United States",
+    "display_name": "501, North Watson Road, Arlington, Tarrant County, Texas, 76011, United States",
     "importance": 9.99999999995449e-06,
-    "lat": 47.581769,
-    "lon": -122.328934,
-    "query": "2400 4th Ave S, Seattle, WA"
+    "lat": 32.747363,
+    "lon": -97.063207,
+    "query": "501 N Watson Rd, Arlington, TX"
   },
   "w-alex": {
-    "display_name": "Bellevue, King County, Washington, United States",
-    "importance": 0.5588737497342101,
-    "lat": 47.6144219,
-    "lon": -122.192337,
-    "query": "Bellevue, WA"
+    "display_name": "Lewisville, Denton County, Texas, United States",
+    "importance": 0.5216678343410324,
+    "lat": 33.046233,
+    "lon": -96.994174,
+    "query": "Lewisville, TX"
   },
   "w-dan": {
-    "display_name": "Laurelhurst, Seattle, King County, Washington, 98105, United States",
-    "importance": 0.3172483997907332,
-    "lat": 47.6612922,
-    "lon": -122.2773163,
-    "query": "Laurelhurst, Seattle, WA"
+    "display_name": "Denton County, Texas, United States",
+    "importance": 0.5999617356325528,
+    "lat": 33.1838787,
+    "lon": -97.1413417,
+    "query": "Denton, TX"
   },
   "w-ken": {
-    "display_name": "Northgate, Seattle, King County, Washington, 98125, United States",
-    "importance": 0.34566654831183224,
-    "lat": 47.7095862,
-    "lon": -122.3233343,
-    "query": "Northgate, Seattle, WA"
+    "display_name": "Alliance Town Center, Fort Worth, Tarrant County, Texas, United States",
+    "importance": 0.08007138246738381,
+    "lat": 32.9088503,
+    "lon": -97.3139885,
+    "query": "Alliance, Fort Worth, TX"
   },
   "w-marcus": {
-    "display_name": "Wallingford, Seattle, King County, Washington, 98013, United States",
-    "importance": 0.3453315576369598,
-    "lat": 47.6594631,
-    "lon": -122.3343417,
-    "query": "Wallingford, Seattle, WA"
+    "display_name": "Southlake, Tarrant County, Texas, 76092, United States",
+    "importance": 0.50639699057416,
+    "lat": 32.9412363,
+    "lon": -97.1341783,
+    "query": "Southlake, TX"
   },
   "w-priya": {
-    "display_name": "Georgetown, Seattle, King County, Washington, 98108, United States",
-    "importance": 0.33749181912886295,
-    "lat": 47.5489326,
-    "lon": -122.3300573,
-    "query": "Georgetown, Seattle, WA"
+    "display_name": "2600, East Belknap Street, Fort Worth, Tarrant County, Texas, 76111, United States",
+    "importance": 7.138246738379519e-05,
+    "lat": 32.7695647,
+    "lon": -97.3086085,
+    "query": "2600 E Belknap St, Fort Worth, TX"
   },
   "w-sofia": {
-    "display_name": "Rainier Beach, Seattle, King County, Washington, 98118, United States",
-    "importance": 0.32771111640952466,
-    "lat": 47.5230762,
-    "lon": -122.270288,
-    "query": "Rainier Beach, Seattle, WA"
+    "display_name": "Hurst, Tarrant County, Texas, United States",
+    "importance": 0.49310485071894505,
+    "lat": 32.8234621,
+    "lon": -97.1705678,
+    "query": "Hurst, TX"
   }
 }

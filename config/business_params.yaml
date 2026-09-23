@@ -12,7 +12,7 @@
 
 meta:
   name: "Sample Glass Co (fixture)"
-  timezone: "America/Los_Angeles"
+  timezone: "America/Chicago"
   currency: "USD"
 
 labor:

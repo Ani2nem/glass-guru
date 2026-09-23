@@ -142,8 +142,8 @@ class Geocoder:
         """The bounding box to search inside, as Nominatim wants it.
 
         A degree of latitude is about 69 miles everywhere; a degree of longitude
-        shrinks with the cosine of latitude, which at Seattle's 47.6 degrees leaves
-        about 47 miles. Treating them as equal would make the box half again too
+        shrinks with the cosine of latitude, which at the depot's 33 degrees leaves
+        about 58 miles. Treating them as equal would make the box half again too
         narrow east to west, and clip addresses that are genuinely in range.
         """
         if self.near is None or self.radius_miles is None:

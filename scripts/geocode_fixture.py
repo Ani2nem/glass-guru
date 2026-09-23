@@ -82,9 +82,13 @@ def main() -> int:
     drifts: list[tuple[str, float]] = []
 
     for key, address, invented in targets:
-        # Addresses in the fixture are fully qualified; appending a city to one that
-        # already names a different city is how "Bellevue" became a street in Seattle.
-        query = address if ", WA" in address else f"{address}, Seattle, WA"
+        # The fixture's addresses already name their city and state. An earlier
+        # version appended ", Seattle, WA" to anything that did not say ", WA",
+        # which quietly turned every Texas address into "…, Fort Worth, TX,
+        # Seattle, WA" and matched nothing at all. Fully qualified addresses need
+        # no help; the service-area bound in glass_guru.geocoding is what stops a
+        # bare street name resolving to the wrong state.
+        query = address
         if key not in cache:
             try:
                 hit = geocode(query)

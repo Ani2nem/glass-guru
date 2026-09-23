@@ -74,7 +74,7 @@ class OsrmTravelProvider:
     def health(self) -> bool:
         """Whether the backend is up and answering routing queries."""
         try:
-            self._table([Location(lat=47.60, lon=-122.33), Location(lat=47.62, lon=-122.35)])
+            self._table([Location(lat=33.00, lon=-97.34), Location(lat=32.90, lon=-97.33)])
         except Exception:
             return False
         return True

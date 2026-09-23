@@ -29,15 +29,20 @@ from glass_guru.domain.models import (
 )
 from glass_guru.domain.state import WorldState
 
-TZ = timezone(timedelta(hours=-7))
+#: Must match the business timezone the solver is given, or every generated
+#: shift is offset by the difference and the checker disagrees for a reason
+#: that has nothing to do with the property being tested.
+TZ = timezone(timedelta(hours=-5))
 DAY = date(2026, 9, 21)
 
 #: A few square miles around one depot. Random points over a continent would make
-#: every job unreachable and every generated world trivially infeasible.
-LAT = st.floats(min_value=47.50, max_value=47.72, allow_nan=False, allow_infinity=False)
-LON = st.floats(min_value=-122.42, max_value=-122.20, allow_nan=False, allow_infinity=False)
+#: every job unreachable and every generated world trivially infeasible. Centred on
+#: Haslet, where the business is, so generated geography and real geography agree
+#: about how far apart things tend to be.
+LAT = st.floats(min_value=32.85, max_value=33.15, allow_nan=False, allow_infinity=False)
+LON = st.floats(min_value=-97.45, max_value=-97.15, allow_nan=False, allow_infinity=False)
 
-DEPOT = Location(lat=47.5701, lon=-122.3334, address="depot")
+DEPOT = Location(lat=33.0020, lon=-97.3424, address="depot")
 
 
 def at(hour: int, minute: int = 0) -> datetime:

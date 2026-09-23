@@ -349,7 +349,7 @@ def test_streaming_is_refused_when_it_is_billed_by_the_second(client: TestClient
 def test_an_address_on_the_wrong_coast_is_refused_not_crashed(client: TestClient):
     """The bug a dispatcher actually hit, reported as a 500.
 
-    "2nd ave" typed during a Seattle call resolved to 2nd Avenue, Manhattan - a global
+    "main st" typed during a call near Fort Worth resolves nationwide - a global
     geocoder ranks by prominence and has no idea where the vans are. The solver then
     asked the travel snapshot for a leg to New York, 2,403 miles away, and the cache
     miss surfaced as Internal Server Error.
@@ -361,7 +361,9 @@ def test_an_address_on_the_wrong_coast_is_refused_not_crashed(client: TestClient
     manhattan = Location(lat=40.7589, lon=-73.9668, address="2nd Ave, Manhattan")
     with pytest.raises(OutsideServiceArea) as raised:
         geocoder._check_in_area("2nd ave", manhattan)
-    assert raised.value.miles > 2000
+    # Far enough that no service radius could plausibly reach it. The exact figure
+    # is a property of where the depot happens to be, so it is not asserted.
+    assert raised.value.miles > 1000
     assert "service area" in str(raised.value)
 
 
@@ -373,11 +375,11 @@ def test_the_search_is_bounded_to_the_service_area():
     box = for_service_area()._viewbox()
     assert box is not None
     west, north, east, south = (float(v) for v in box.split(","))
-    assert west < -122.3 < east and south < 47.57 < north, "the depot is inside its own box"
+    assert west < -97.34 < east and south < 33.00 < north, "the depot is inside its own box"
     # A degree of longitude covers less ground than a degree of latitude this far
     # north - about 47 miles against 69 - so the box has to be wider than it is tall
     # by roughly 1/cos(47.6 degrees). Treating them as equal clips real addresses.
-    expected = 1 / math.cos(math.radians(47.57))
+    expected = 1 / math.cos(math.radians(33.00))
     assert (east - west) / (north - south) == pytest.approx(expected, rel=0.02)
 
 

@@ -42,7 +42,7 @@ PROPERTY = settings(
 
 def params(**overrides: object) -> SolveParams:
     return SolveParams(
-        business_tz=ZoneInfo("America/Los_Angeles"),
+        business_tz=ZoneInfo("America/Chicago"),
         max_solve_seconds=5.0,
         **overrides,  # type: ignore[arg-type]
     )

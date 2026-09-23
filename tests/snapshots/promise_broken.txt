@@ -3,20 +3,20 @@ Chen was given a nine-to-half-eleven window and arranged her morning around it. 
 
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (45a210fea5cd899c)
+PLAN 2026-09-21  (7ecb97297ed6b36b)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      10:51-11:36  Nakamura Screens           screen_repair                   21min drive  
-                   travel 43min / 22.1mi  (43 person-min)   idle 0min   on-site 51%
+      10:45-11:30  Nakamura Screens           screen_repair                   15min drive  
+                   travel 30min / 15.6mi  (30 person-min)   idle 0min   on-site 60%
 
   crew-van-3   Priya   [van-3]
-      10:47-13:17  Patel Shower Door          shower_door_install             17min drive  
-                   travel 35min / 13.6mi  (35 person-min)   idle 0min   on-site 81%
+      10:59-13:29  Patel Shower Door          shower_door_install             29min drive  
+                   travel 59min / 40.0mi  (59 person-min)   idle 0min   on-site 72%
 
   crew-van-4   Alex   [van-4]
-      10:38-12:08  Okonkwo Auto Glass         auto_glass                       8min drive  
-                   travel 26min / 12.0mi  (26 person-min)   idle 0min   on-site 78%
+      10:55-12:25  Okonkwo Auto Glass         auto_glass                      25min drive  
+                   travel 51min / 24.6mi  (51 person-min)   idle 0min   on-site 64%
 
   UNSERVED - could not fit
       j-401  Rodriguez Storefront       no_capacity_in_horizon
@@ -37,8 +37,8 @@ PLAN 2026-09-21  (45a210fea5cd899c)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $95.68   vehicle $31.03   overtime $0.00   late $0.00
-        unserved $3,540.00   TOTAL $3,666.71
-  solver objective $3,703.55  (+$36.84 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $128.80   vehicle $52.20   overtime $0.00   late $0.00
+        unserved $3,540.00   TOTAL $3,721.00
+  solver objective $3,772.57  (+$51.57 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

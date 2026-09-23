@@ -31,3 +31,7 @@ web/node_modules/
 *.tfstate.*
 .terraform/
 crash.log
+
+# OSM source extracts and the built road network. Large, reproducible from
+# scripts/setup_osrm.sh, and not something to put in a repository.
+docker/osrm/data/

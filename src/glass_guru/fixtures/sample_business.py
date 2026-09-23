@@ -34,7 +34,8 @@ from glass_guru.domain.models import (
     Worker,
 )
 
-#: Business timezone. Seattle, which is where the sample geography sits.
+#: Business timezone. Haslet, Texas, north of Fort Worth, which is where the
+#: sample geography sits.
 
 #: Real coordinates, resolved by ``scripts/geocode_fixture.py`` and committed so the
 #: fixture is reproducible without network access. The literals passed to :func:`_geo`
@@ -56,17 +57,18 @@ def _geo(key: str, lat: float, lon: float, address: str) -> Location:
     return Location(lat=float(entry["lat"]), lon=float(entry["lon"]), address=address)
 
 
-BUSINESS_TZ = timezone(timedelta(hours=-7))
+#: Central Daylight Time. The business is in Haslet, north of Fort Worth.
+BUSINESS_TZ = timezone(timedelta(hours=-5))
 
 #: Monday of the sample week. All scenarios are anchored to this.
 WEEK_START = date(2026, 9, 21)
 
-DEPOT = _geo("depot", 47.6205, -122.3493, "3800 1st Ave S, Seattle, WA")
+DEPOT = _geo("depot", 33.0019853, -97.3423728, "150 Blue Mound Rd W #807, Haslet, TX 76052")
 
 #: The downtown storefront, exported so the API's readiness probe can ask for a leg
 #: the committed snapshot actually holds. Keyed the same way the job is, so it moves
 #: with the geocode cache rather than drifting away from it.
-PROBE_STOP = _geo("j-401", 47.6145, -122.3400, "1520 2nd Ave, Seattle, WA")
+PROBE_STOP = _geo("j-401", 32.7549, -97.3315, "420 Main St, Fort Worth, TX")
 
 #: Standard shift for most of the roster.
 DAY_SHIFT = tuple(DayHours(weekday=d, start=time(8, 0), end=time(17, 0)) for d in range(5))
@@ -99,7 +101,7 @@ WORKERS: tuple[Worker, ...] = (
             }
         ),
         working_hours=EARLY_SHIFT,
-        home_location=_geo("w-marcus", 47.6588, -122.3120, "Wallingford, Seattle, WA"),
+        home_location=_geo("w-marcus", 32.9409, -97.1302, "Southlake, TX"),
         loaded_cost_per_hour=62.0,
     ),
     Worker(
@@ -113,7 +115,7 @@ WORKERS: tuple[Worker, ...] = (
             }
         ),
         working_hours=EARLY_SHIFT,
-        home_location=_geo("w-priya", 47.5480, -122.3140, "Georgetown, Seattle, WA"),
+        home_location=_geo("w-priya", 32.7696, -97.3086, "2600 E Belknap St, Fort Worth, TX"),
         loaded_cost_per_hour=60.0,
     ),
     Worker(
@@ -123,7 +125,7 @@ WORKERS: tuple[Worker, ...] = (
             {Certification.RESIDENTIAL_GLAZING, Certification.TEMPERED_SAFETY}
         ),
         working_hours=DAY_SHIFT,
-        home_location=_geo("w-dan", 47.6820, -122.2570, "Laurelhurst, Seattle, WA"),
+        home_location=_geo("w-dan", 33.1866, -97.108, "Denton, TX"),
         loaded_cost_per_hour=55.0,
     ),
     Worker(
@@ -131,7 +133,7 @@ WORKERS: tuple[Worker, ...] = (
         name="Sofia",
         certifications=frozenset({Certification.AUTO_GLASS, Certification.TEMPERED_SAFETY}),
         working_hours=DAY_SHIFT,
-        home_location=_geo("w-sofia", 47.5301, -122.2860, "Rainier Beach, Seattle, WA"),
+        home_location=_geo("w-sofia", 32.8091, -97.2, "Hurst, TX"),
         loaded_cost_per_hour=57.0,
     ),
     Worker(
@@ -139,7 +141,7 @@ WORKERS: tuple[Worker, ...] = (
         name="Ken",
         certifications=frozenset({Certification.RESIDENTIAL_GLAZING, Certification.SCREEN_REPAIR}),
         working_hours=DAY_SHIFT,
-        home_location=_geo("w-ken", 47.7010, -122.3430, "Northgate, Seattle, WA"),
+        home_location=_geo("w-ken", 32.9678, -97.2902, "Alliance, Fort Worth, TX"),
         loaded_cost_per_hour=48.0,
         overtime_eligible=False,
     ),
@@ -150,7 +152,7 @@ WORKERS: tuple[Worker, ...] = (
             {Certification.SCREEN_REPAIR, Certification.SHOWER_DOOR, Certification.AUTO_GLASS}
         ),
         working_hours=DAY_SHIFT,
-        home_location=_geo("w-alex", 47.6100, -122.2000, "Bellevue, WA"),
+        home_location=_geo("w-alex", 33.0431, -97.0165, "Lewisville, TX"),
         loaded_cost_per_hour=52.0,
     ),
 )
@@ -242,28 +244,28 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-401",
         name="Rodriguez Storefront",
-        lat=47.6145,
-        lon=-122.3400,
-        address="1520 2nd Ave, Seattle, WA",
+        lat=32.9034,
+        lon=-97.2573,
+        address="1200 S Main St, Keller, TX",
         service=ServiceType.STOREFRONT_GLASS,
         duration=150,
         certs={Certification.COMMERCIAL_STOREFRONT},
         crew=2,
         day=0,
-        win=(6, 9),
+        win=(6, 10),
         hardness=WindowHardness.HARD,
         priority=Priority.HIGH,
         revenue=2800.0,
         property_type=PropertyType.COMMERCIAL,
-        notes="Must finish before doors open at 09:00. Alley access only.",
+        notes="Must finish before doors open at 10:00. Alley access only.",
         glass=GlassSpec(pane_count=2, glass_type=GlassType.LAMINATED),
     ),
     _job(
         jid="j-402",
         name="Chen Residence",
-        lat=47.6710,
-        lon=-122.3870,
-        address="4410 Ballard Ave NW, Seattle, WA",
+        lat=32.8984,
+        lon=-97.3283,
+        address="2201 N Tarrant Pkwy, Fort Worth, TX",
         service=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
         duration=120,
         certs={Certification.RESIDENTIAL_GLAZING},
@@ -276,9 +278,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-403",
         name="Patel Shower Door",
-        lat=47.6620,
-        lon=-122.3130,
-        address="1800 N 45th St, Seattle, WA",
+        lat=32.7549,
+        lon=-97.3315,
+        address="420 Main St, Fort Worth, TX",
         service=ServiceType.SHOWER_DOOR_INSTALL,
         duration=150,
         certs={Certification.SHOWER_DOOR},
@@ -290,9 +292,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-404",
         name="Okonkwo Auto Glass",
-        lat=47.5450,
-        lon=-122.3000,
-        address="6200 Airport Way S, Seattle, WA",
+        lat=32.8474,
+        lon=-97.3602,
+        address="101 N Main St, Saginaw, TX",
         service=ServiceType.AUTO_GLASS,
         duration=90,
         certs={Certification.AUTO_GLASS},
@@ -305,9 +307,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-405",
         name="Nakamura Screens",
-        lat=47.7050,
-        lon=-122.3350,
-        address="10200 Aurora Ave N, Seattle, WA",
+        lat=33.0125,
+        lon=-97.2356,
+        address="300 W Byron Nelson Blvd, Roanoke, TX",
         service=ServiceType.SCREEN_REPAIR,
         duration=45,
         certs={Certification.SCREEN_REPAIR},
@@ -321,9 +323,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-406",
         name="Whitfield Tempered",
-        lat=47.6350,
-        lon=-122.2900,
-        address="2600 E Madison St, Seattle, WA",
+        lat=33.0071,
+        lon=-97.2023,
+        address="5100 Trophy Club Dr, Trophy Club, TX",
         service=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
         duration=180,
         certs={Certification.TEMPERED_SAFETY, Certification.RESIDENTIAL_GLAZING},
@@ -340,9 +342,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-407",
         name="Delgado Storefront",
-        lat=47.6010,
-        lon=-122.3310,
-        address="800 Pike St, Seattle, WA",
+        lat=32.9666,
+        lon=-97.0435,
+        address="3000 Grapevine Mills Pkwy, Grapevine, TX",
         service=ServiceType.STOREFRONT_GLASS,
         duration=180,
         certs={Certification.COMMERCIAL_STOREFRONT},
@@ -356,9 +358,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-408",
         name="Brennan Residence",
-        lat=47.6890,
-        lon=-122.2610,
-        address="5500 Sand Point Way NE, Seattle, WA",
+        lat=32.8776,
+        lon=-97.2615,
+        address="8851 Denton Hwy, Watauga, TX",
         service=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
         duration=100,
         certs={Certification.RESIDENTIAL_GLAZING},
@@ -374,9 +376,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-409",
         name="Alvarez Screens",
-        lat=47.4400,
-        lon=-122.2400,
-        address="Des Moines Memorial Dr, Burien, WA",
+        lat=32.8549,
+        lon=-97.1871,
+        address="6401 Grapevine Hwy, North Richland Hills, TX",
         service=ServiceType.SCREEN_REPAIR,
         duration=45,
         certs={Certification.SCREEN_REPAIR},
@@ -388,9 +390,9 @@ JOBS: tuple[Job, ...] = (
     _job(
         jid="j-410",
         name="Tran Auto Glass",
-        lat=47.5900,
-        lon=-122.3100,
-        address="2400 4th Ave S, Seattle, WA",
+        lat=32.7474,
+        lon=-97.0632,
+        address="501 N Watson Rd, Arlington, TX",
         service=ServiceType.AUTO_GLASS,
         duration=75,
         certs={Certification.AUTO_GLASS},

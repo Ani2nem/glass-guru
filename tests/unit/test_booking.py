@@ -101,10 +101,22 @@ def test_the_cheapest_slot_shares_a_day_with_nearby_work(world, travel, params, 
 
 
 def test_a_dedicated_trip_is_explained_as_one(world, travel, params, business):
+    """A day with nothing else on it means the whole round trip is this job's.
+
+    The assertion used to be that a dedicated trip is the dearest option, which was
+    true of the old geography and is not a property of anything. Moving the business
+    produced a day costing twice the dedicated trip on six minutes of extra driving:
+    it was the fullest day in the week, and the insertion tipped a crew into overtime.
+    Cheaper to drive half an hour on an empty Friday than to buy an hour of overtime
+    on a full Monday, which is the sort of thing the dollar objective exists to notice.
+
+    What a dedicated trip does guarantee is that none of its travel is shared, so its
+    *added travel* is the largest. That is the property worth asserting.
+    """
     options = quote(world, travel, params, business, draft_at(world, "j-402"))
     lonely = [s for s in options.slots if "dedicated trip" in s.reason]
     assert lonely, "an otherwise-empty day should be described as a dedicated trip"
-    assert lonely[-1].marginal_cost == max(s.marginal_cost for s in options.slots)
+    assert lonely[-1].added_travel_minutes == max(s.added_travel_minutes for s in options.slots)
 
 
 # ------------------------------------------------------------------ safety

@@ -3,23 +3,25 @@ The shower-door install runs two hours over while the crew is on site.
 
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (593ed8410d1f9e4a)
+PLAN 2026-09-21  (add351ceef014c89)
 ------------------------------------------------------------------------------
 
-  crew-van-1   Ken   [van-1]
-      08:29-09:14  Nakamura Screens           screen_repair                   29min drive  
-      09:33-11:33  Chen Residence             residential_window_replacement  19min drive  
-                   travel 70min / 23.0mi  (70 person-min)   idle 0min   on-site 70%
+  crew-van-1   Marcus + Priya   [van-1]
+      06:23-08:53  Rodriguez Storefront       storefront_glass                23min drive  needs 2
+      09:09-11:09  Chen Residence             residential_window_replacement  16min drive  
+                   travel 56min / 24.9mi  (112 person-min)   idle 0min   on-site 83%
 
-  crew-van-3   Marcus + Priya   [van-3]
-      06:10-08:40  Rodriguez Storefront       storefront_glass                10min drive  needs 2
-                   ..68 min gap, leaves 09:48
-      10:00-14:30  Patel Shower Door          shower_door_install             12min drive  
-                   travel 40min / 14.9mi  (80 person-min)   idle 68min   on-site 80%
+  crew-van-2   Ken   [van-2]
+      08:19-09:04  Nakamura Screens           screen_repair                   19min drive  
+                   travel 39min / 15.6mi  (39 person-min)   idle 0min   on-site 54%
 
-  crew-van-4   Alex   [van-4]
-      08:11-09:41  Okonkwo Auto Glass         auto_glass                      11min drive  
-                   travel 29min / 12.0mi  (29 person-min)   idle 0min   on-site 76%
+  crew-van-3   Alex   [van-3]
+      10:00-14:30  Patel Shower Door          shower_door_install             40min drive  
+                   travel 70min / 40.0mi  (70 person-min)   idle 0min   on-site 79%
+
+  crew-van-4   Sofia   [van-4]
+      08:34-10:04  Okonkwo Auto Glass         auto_glass                      34min drive  
+                   travel 60min / 24.6mi  (60 person-min)   idle 0min   on-site 60%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
@@ -34,8 +36,8 @@ PLAN 2026-09-21  (593ed8410d1f9e4a)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $164.68   vehicle $32.43   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $197.11
-  solver objective $244.09  (+$46.98 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $258.52   vehicle $68.37   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $326.89
+  solver objective $384.91  (+$58.02 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

@@ -28,7 +28,7 @@ from glass_guru.domain.state import Unavailability
 from glass_guru.fixtures.sample_business import WEEK_START, _at
 from glass_guru.obs.correlation import dispatch
 
-TZ = ZoneInfo("America/Los_Angeles")
+TZ = ZoneInfo("America/Chicago")
 
 
 class Person(BaseModel):
