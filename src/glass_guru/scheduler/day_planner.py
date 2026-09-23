@@ -979,12 +979,30 @@ def plan_day(
     # objective above the largest possible tie-break value makes this exact rather than
     # approximate - no tie-break can ever outweigh a single cent of real cost.
     primary = sum(terms)
-    tie_break = sum(
+
+    # Two tie-breaks, ordered. Idle time between jobs is not charged for, so a crew
+    # that could start at 06:23 may equally start at 06:24 and the objective cannot
+    # tell - which showed up as golden snapshots differing by one minute between
+    # architectures, the same way the crew assignment did before it was broken. Earlier
+    # is also simply better: slack belongs at the end of a day, where an overrun can
+    # use it, rather than at the start where it cannot.
+    #
+    # `start` is only constrained when its job is actually visited, so an unvisited
+    # pair sits at zero and contributes nothing.
+    earliness = sum(start.values())
+    earliness_ceiling = len(jobs) * num_crews * MINUTES_PER_DAY
+
+    # Then, among plans that are equal on cost and on timing, prefer earlier-named
+    # workers on earlier vans.
+    worker_order = sum(
         assign[worker.id, k] * (rank * num_crews + k)
         for rank, worker in enumerate(workers)
         for k in range(num_crews)
     )
-    tie_break_ceiling = len(workers) * num_crews * (len(workers) * num_crews + 1)
+    worker_ceiling = len(workers) * num_crews * (len(workers) * num_crews + 1)
+
+    tie_break = earliness * (worker_ceiling + 1) + worker_order
+    tie_break_ceiling = (earliness_ceiling + 1) * (worker_ceiling + 1)
     model.minimize(primary * (tie_break_ceiling + 1) + tie_break)
 
     # --------------------------------------------------------------------- solve

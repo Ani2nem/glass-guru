@@ -42,7 +42,7 @@ from glass_guru.agents.structured import extract
 from glass_guru.fixtures.sample_business import WEEK_START
 from glass_guru.obs.correlation import dispatch
 
-TZ = ZoneInfo("America/Los_Angeles")
+TZ = ZoneInfo("America/Chicago")
 
 
 @pytest.fixture

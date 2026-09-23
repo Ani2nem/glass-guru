@@ -1,55 +1,52 @@
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-HORIZON 2026-09-21..2026-09-25  (aa2732bfd9090d3b)
+HORIZON 2026-09-21..2026-09-25  (ecd8176e5ae09e26)
 ------------------------------------------------------------------------------
 
-  Mon 21 Sep   3 crew   5 job(s)   139min driving
+  Mon 21 Sep   3 crew   5 job(s)   190min driving
 
     crew-van-1   Ken   [van-1]
-        08:29-09:14  Nakamura Screens           screen_repair                   29min drive  
-        09:33-11:33  Chen Residence             residential_window_replacement  19min drive  
-                     travel 70min / 23.0mi  (70 person-min)   idle 0min   on-site 70%
+        08:19-09:04  Nakamura Screens           screen_repair                   19min drive  
+                     travel 39min / 15.6mi  (39 person-min)   idle 0min   on-site 54%
 
     crew-van-3   Marcus + Priya   [van-3]
-        06:10-08:40  Rodriguez Storefront       storefront_glass                10min drive  needs 2
-                     ..68 min gap, leaves 09:48
-        10:00-12:30  Patel Shower Door          shower_door_install             12min drive  
-                     travel 40min / 14.9mi  (80 person-min)   idle 68min   on-site 74%
+        06:23-08:53  Rodriguez Storefront       storefront_glass                23min drive  needs 2
+                     ..34 min gap, leaves 09:27
+        10:00-12:30  Patel Shower Door          shower_door_install             33min drive  
+        12:48-14:48  Chen Residence             residential_window_replacement  18min drive  
+                     travel 91min / 44.2mi  (182 person-min)   idle 34min   on-site 77%   OT 10min
 
     crew-van-4   Alex   [van-4]
-        08:11-09:41  Okonkwo Auto Glass         auto_glass                      11min drive  
-                     travel 29min / 12.0mi  (29 person-min)   idle 0min   on-site 76%
+        08:34-10:04  Okonkwo Auto Glass         auto_glass                      34min drive  
+                     travel 60min / 24.6mi  (60 person-min)   idle 0min   on-site 60%
 
-  Tue 22 Sep   2 crew   2 job(s)   77min driving
+  Tue 22 Sep   1 crew   2 job(s)   93min driving
 
     crew-van-1   Marcus + Priya   [van-1]
-        07:45-10:45  Delgado Storefront         storefront_glass                13min drive  needs 2
-                     travel 25min / 7.7mi  (50 person-min)   idle 0min   on-site 88%
+        07:00-10:00  Delgado Storefront         storefront_glass                33min drive  needs 2
+        10:34-12:14  Brennan Residence          residential_window_replacement  34min drive  
+                     travel 93min / 59.4mi  (186 person-min)   idle 0min   on-site 75%
 
-    crew-van-2   Dan   [van-2]
-        09:00-10:40  Brennan Residence          residential_window_replacement  28min drive  
-                     travel 52min / 19.2mi  (52 person-min)   idle 0min   on-site 66%
-
-  Wed 23 Sep   2 crew   2 job(s)   53min driving
+  Wed 23 Sep   2 crew   2 job(s)   199min driving
 
     crew-van-1   Ken   [van-1]
-        08:20-09:05  Alvarez Screens            screen_repair                   20min drive  
-                     travel 38min / 11.0mi  (38 person-min)   idle 0min   on-site 54%
+        08:43-09:28  Alvarez Screens            screen_repair                   43min drive  
+                     travel 87min / 43.0mi  (87 person-min)   idle 0min   on-site 34%
 
     crew-van-4   Alex   [van-4]
-        08:08-09:23  Tran Auto Glass            auto_glass                       8min drive  
-                     travel 15min / 2.0mi  (15 person-min)   idle 0min   on-site 83%
+        09:03-10:18  Tran Auto Glass            auto_glass                      63min drive  
+                     travel 112min / 67.1mi  (112 person-min)   idle 0min   on-site 40%
 
-  Thu 24 Sep   1 crew   1 job(s)   36min driving
+  Thu 24 Sep   1 crew   1 job(s)   45min driving
 
-    crew-van-1   Dan   [van-1]
-        08:20-11:20  Whitfield Tempered         residential_window_replacement  20min drive  
-                     travel 36min / 10.6mi  (36 person-min)   idle 0min   on-site 83%
+    crew-van-1   Marcus   [van-1]
+        08:00-11:00  Whitfield Tempered         residential_window_replacement  26min drive  
+                     travel 45min / 21.3mi  (45 person-min)   idle 0min   on-site 80%
 
 ------------------------------------------------------------------------------
-  cost  travel $340.40   vehicle $65.21   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $405.61
-  solver objective $476.55  (+$70.94 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $654.12   vehicle $178.90   overtime $4.60   late $0.00
+        unserved $0.00   TOTAL $837.62
+  solver objective $1,004.22  (+$166.60 vs actual)   status OPTIMAL   N.NNNs
   10/10 jobs placed across 4 day(s)   1 assignment round(s)
 
   invariants: 0 violations

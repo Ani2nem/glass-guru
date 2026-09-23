@@ -41,7 +41,9 @@ from glass_guru.fixtures.sample_business import _at
 from glass_guru.geocoding import Geocoder
 from glass_guru.obs.correlation import dispatch
 
-TZ = ZoneInfo("America/Los_Angeles")
+#: Must match BUSINESS_TZ in the fixture, or a message saying 15:10 is checked
+#: against a plan that reads 13:10 and every grounded draft is rejected.
+TZ = ZoneInfo("America/Chicago")
 NOW = datetime(2026, 9, 21, 9, 0, tzinfo=TZ)
 
 
@@ -58,8 +60,8 @@ def geocoder() -> Geocoder:
 
 CALL = {
     "customer_name": "Sarah Chen",
-    "phone": "206-555-0142",
-    "address": "4410 Ballard Ave NW, Seattle, WA",
+    "phone": "817-555-0142",
+    "address": "2201 N Tarrant Pkwy, Fort Worth, TX",
     "service_type": "residential_window_replacement",
     "description": "Two front-room windows broken",
     "pane_count": 2,
@@ -370,7 +372,7 @@ def test_a_model_writing_nothing_is_read_as_nothing(written: str):
     assert CallExtraction(phone=written).phone == ""
 
 
-@pytest.mark.parametrize("written", ["206-555-0142", "Maria", "2nd ave", "0", "N/A Glass Co"])
+@pytest.mark.parametrize("written", ["817-555-0142", "Maria", "2nd ave", "0", "N/A Glass Co"])
 def test_a_real_answer_survives(written: str):
     """The check has to be exact. A customer called "None Ltd" is a stretch, but a
     company with N/A in its name is not, and clipping it would be a worse bug."""
@@ -417,7 +419,7 @@ def test_a_phone_field_that_could_not_be_dialled_is_blank(written: str):
 
 @pytest.mark.parametrize(
     "written",
-    ["206-555-0142", "(206) 555 0142", "+44 20 7946 0958", "555-0142", "206 555 0142 ext 4"],
+    ["817-555-0142", "(206) 555 0142", "+44 20 7946 0958", "555-0142", "206 555 0142 ext 4"],
 )
 def test_a_number_someone_could_actually_ring_survives(written: str):
     """The bar is "could this be dialled", not "does it match a format". A validator

@@ -324,6 +324,8 @@ def test_the_tie_break_never_outweighs_a_cent_of_real_cost(world, travel, params
     result = solve(world, travel, params)
     assert result.status == "OPTIMAL"
     assert_feasible(result, world, travel)
-    # The value the fixture has always produced. If the tie-break could distort the
-    # objective, this is the number that would drift.
-    assert round(result.objective_cost, 2) == 244.09
+    # The value this fixture produces. It moved from 244.09 to 374.22 when the business
+    # moved from Seattle to Texas, which is the point of pinning it: a number that only
+    # changes when the geography does is a number that would catch a tie-break quietly
+    # buying a worse plan.
+    assert round(result.objective_cost, 2) == 374.22

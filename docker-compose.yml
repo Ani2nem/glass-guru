@@ -7,7 +7,7 @@ services:
     command: >
       osrm-routed --algorithm mld
       --max-table-size 2000
-      /data/Seattle.osrm
+      /data/DFW.osrm
     # The default table size of 100 is well under a 5-day horizon's ~130 stops, and
     # one table request is far cheaper than N^2 route calls.
     volumes:
@@ -27,7 +27,7 @@ services:
         - -c
         - >-
           exec 3<>/dev/tcp/127.0.0.1/5000 &&
-          printf 'GET /table/v1/driving/-122.33,47.60;-122.35,47.62 HTTP/1.0\r\nConnection: close\r\n\r\n' >&3 &&
+          printf 'GET /table/v1/driving/-97.34,33.00;-97.33,32.75 HTTP/1.0\r\nConnection: close\r\n\r\n' >&3 &&
           grep -q '"code":"Ok"' <&3
       interval: 10s
       timeout: 5s

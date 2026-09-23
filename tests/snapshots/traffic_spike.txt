@@ -3,23 +3,22 @@ A corridor-wide slowdown makes every leg 80% longer all morning.
 
 !  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (34ca4c98f80a6eac)
+PLAN 2026-09-21  (2845a068e4592700)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      08:52-09:37  Nakamura Screens           screen_repair                   52min drive  
-      10:02-12:02  Chen Residence             residential_window_replacement  25min drive  
-                   travel 99min / 23.0mi  (99 person-min)   idle 0min   on-site 62%
+      08:34-09:19  Nakamura Screens           screen_repair                   34min drive  
+                   travel 70min / 15.6mi  (70 person-min)   idle 0min   on-site 39%
 
   crew-van-3   Marcus + Priya   [van-3]
-      06:10-08:40  Rodriguez Storefront       storefront_glass                10min drive  needs 2
-                   ..58 min gap, leaves 09:38
-      10:00-12:30  Patel Shower Door          shower_door_install             22min drive  
-                   travel 50min / 14.9mi  (100 person-min)   idle 58min   on-site 74%
+      06:23-08:53  Rodriguez Storefront       storefront_glass                23min drive  needs 2
+      09:22-11:22  Chen Residence             residential_window_replacement  29min drive  
+      11:54-14:24  Patel Shower Door          shower_door_install             32min drive  
+                   travel 114min / 48.4mi  (228 person-min)   idle 0min   on-site 79%
 
   crew-van-4   Alex   [van-4]
-      08:20-09:50  Okonkwo Auto Glass         auto_glass                      20min drive  
-                   travel 52min / 12.0mi  (52 person-min)   idle 0min   on-site 63%
+      09:01-10:31  Okonkwo Auto Glass         auto_glass                      61min drive  
+                   travel 108min / 24.6mi  (108 person-min)   idle 0min   on-site 45%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
@@ -34,8 +33,8 @@ PLAN 2026-09-21  (34ca4c98f80a6eac)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $230.92   vehicle $32.43   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $263.35
-  solver objective $417.73  (+$154.38 vs actual)   status OPTIMAL   N.NNNs
+  cost  travel $373.52   vehicle $57.61   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $431.13
+  solver objective $613.34  (+$182.21 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

@@ -9,7 +9,8 @@ export function RouteMap({ plan, day }: { plan: Plan; day: string | null }) {
   const routes = plan.routes.filter((r) => !day || r.date === day);
   const depot: [number, number] = plan.depot.length === 2
     ? [plan.depot[0]!, plan.depot[1]!]
-    : [47.57, -122.33];
+    // The depot, for a plan with no stops to centre on. Haslet, Texas.
+    : [33.0020, -97.3424];
 
   return (
     <MapContainer center={depot} zoom={11} className="map" scrollWheelZoom>
