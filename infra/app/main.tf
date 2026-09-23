@@ -58,3 +58,23 @@ locals {
   name       = "glass-guru"
   account_id = data.aws_caller_identity.current.account_id
 }
+
+# The one combination that must not be possible: a function URL anyone can reach, in
+# front of an application that asks nobody who they are. Caught at plan time, because
+# the alternative is finding out about it from a stranger's booking.
+resource "terraform_data" "refuse_an_open_door" {
+  lifecycle {
+    precondition {
+      condition     = !var.public || var.api_key != ""
+      error_message = <<-ERR
+        A public function URL needs an API key.
+
+        Either set one:         -var "api_key=$(openssl rand -base64 24)"
+        or require a signature: -var "public=false"
+
+        With neither, anyone who learns the URL can read this business's schedule,
+        book against it, and record disruptions.
+      ERR
+    }
+  }
+}

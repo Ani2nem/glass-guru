@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from datetime import UTC, date, datetime, time
@@ -182,6 +183,59 @@ def _travel_cache_miss(_: Request, exc: CacheMiss) -> JSONResponse:
     )
 
 
+# ------------------------------------------------------------------------- auth
+#
+# A function URL with AuthType NONE is reachable by anyone who has the URL, and until
+# now nothing behind it asked who was calling. That is fine on a laptop and not fine
+# for a business's schedule, which this can read, change and book against.
+#
+# A shared key rather than JWTs, deliberately: there is one dispatcher and no identity
+# provider, and a signing key nobody rotates is worse than a shared secret somebody
+# does. When there are users, this is the seam that becomes a real dependency.
+
+
+def api_key() -> str:
+    return os.environ.get("GLASS_GURU_API_KEY", "")
+
+
+#: Reachable without a key. Health and readiness are how a load balancer and a deploy
+#: decide whether this container works, and neither can hold a secret.
+_OPEN_PATHS = frozenset({"/api/health", "/api/ready"})
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next: Any) -> Any:
+    """Refuse unauthenticated calls when a key is configured.
+
+    Unset means open, which is what makes `make dev` work with no setup. That default
+    is only safe because the deployment refuses to be public without one - terraform
+    will not apply a public function URL with no key, and /api/ready says which mode
+    it is in, so an open deployment cannot go unnoticed.
+    """
+    expected = api_key()
+    path = request.url.path
+    if not expected or path in _OPEN_PATHS or not path.startswith("/api/"):
+        return await call_next(request)
+
+    presented = request.headers.get("x-api-key", "")
+    if not presented:
+        bearer = request.headers.get("authorization", "")
+        presented = bearer[7:] if bearer.lower().startswith("bearer ") else ""
+
+    # Constant time: a comparison that returns early leaks the key one character at a
+    # time to anyone willing to measure.
+    if not presented or not secrets.compare_digest(presented, expected):
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "Unauthorized",
+                "detail": "this deployment requires an API key",
+                "remedy": "send it as X-API-Key, or as Authorization: Bearer <key>",
+            },
+        )
+    return await call_next(request)
+
+
 def stream_mode() -> str:
     """``sse`` or ``poll``. How the board should find out that something changed.
 
@@ -244,6 +298,9 @@ def ready() -> JSONResponse:
             checks["travel"] = f"FAILED: {type(exc).__name__}: {exc}"
 
     checks["board"] = "built" if WEB_DIST.exists() else "FAILED: no web/dist in the image"
+    # Not a failure - running open is a legitimate local choice. It is reported so that
+    # a deployment cannot be open without anybody being able to see that it is.
+    checks["auth"] = "api key required" if api_key() else "open, no key configured"
 
     failed = {name: detail for name, detail in checks.items() if detail.startswith("FAILED")}
     return JSONResponse(

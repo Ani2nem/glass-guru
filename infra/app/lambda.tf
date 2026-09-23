@@ -32,6 +32,10 @@ resource "aws_lambda_function" "app" {
       # which is the single change that makes this cheaper than a container rather than
       # more expensive. See stream_mode() in api/main.py.
       GLASS_GURU_STREAM = "poll"
+
+      # Empty means the application authenticates nobody, which terraform refuses to
+      # combine with a public URL. See the precondition in main.tf.
+      GLASS_GURU_API_KEY = var.api_key
     }
   }
 
@@ -44,6 +48,8 @@ resource "aws_lambda_function" "app" {
 }
 
 resource "aws_lambda_function_url" "app" {
+  depends_on = [terraform_data.refuse_an_open_door]
+
   function_name      = aws_lambda_function.app.function_name
   authorization_type = var.public ? "NONE" : "AWS_IAM"
 

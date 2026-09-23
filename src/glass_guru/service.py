@@ -25,8 +25,8 @@ from glass_guru.domain.autonomy import AutonomyDecision, AutonomyPolicy, decide
 from glass_guru.domain.diff import PlanDiff, diff_plans
 from glass_guru.domain.events import Event
 from glass_guru.domain.invariants import ValidationConfig, Violation, validate_plan
-from glass_guru.domain.models import CostBreakdown, CrewRoute, Job, PlanVersion
-from glass_guru.domain.state import WorldState, fold
+from glass_guru.domain.models import CostBreakdown, CrewRoute, Job, Location, PlanVersion
+from glass_guru.domain.state import TrafficOverride, WorldState, fold
 from glass_guru.obs.correlation import current_dispatch_id, dispatch
 from glass_guru.obs.tracing import record, span
 from glass_guru.persistence.log import PlanConflict, Workspace
@@ -46,6 +46,12 @@ from glass_guru.scheduler.repair import (
 )
 from glass_guru.scheduler.travel.base import OverrideAdjustedProvider, TravelProvider
 from glass_guru.scheduler.travel.factory import TravelMode, build_travel
+from glass_guru.scheduler.travel.incidents import (
+    IncidentFeed,
+    NoIncidentFeed,
+    build_feed,
+    overrides_from,
+)
 
 
 class ServiceError(RuntimeError):
@@ -75,10 +81,14 @@ class DispatchService:
         workspace: Workspace,
         business: BusinessParams | None = None,
         travel_mode: TravelMode | str = TravelMode.AUTO,
+        incident_feed: IncidentFeed | None = None,
     ) -> None:
         self.workspace = workspace
         self.business = business or BusinessParams.load()
         self.travel_mode = TravelMode(travel_mode)
+        # Live traffic is off unless configured, because a feed makes two solves of the
+        # same problem differ and the frozen snapshot exists to stop exactly that.
+        self._incident_feed = incident_feed if incident_feed is not None else build_feed()
         self.tz = ZoneInfo(self.business.meta.timezone)
         # Half of a quote is re-solving the untouched day, and that answer does not
         # change between one caller and the next. The key includes the exact job set,
@@ -95,15 +105,56 @@ class DispatchService:
         return fold(self.workspace.events.read(), as_of=as_of)
 
     def travel(self, world: WorldState) -> TravelProvider:
-        """Travel with the world's recorded traffic delays layered on.
+        """Travel with recorded traffic delays layered on, and live ones if configured.
 
         Providers stay pure; a TrafficDelay event reaches routing without any provider
-        knowing the event log exists.
+        knowing the event log exists, and a live incident joins by the same door rather
+        than by reaching into the matrix.
         """
         base = build_travel(self.business, self.travel_mode)
-        if not world.traffic_overrides:
+        overrides = tuple(world.traffic_overrides) + self.live_overrides(world)
+        if not overrides:
             return base
-        return OverrideAdjustedProvider(base, world.traffic_multiplier)
+        if len(overrides) == len(world.traffic_overrides):
+            return OverrideAdjustedProvider(base, world.traffic_multiplier)
+
+        def multiplier(origin_gh5: str, dest_gh5: str, at: datetime) -> float:
+            product = 1.0
+            for override in overrides:
+                if override.applies_to(origin_gh5, dest_gh5, at):
+                    product *= override.multiplier
+            return product
+
+        return OverrideAdjustedProvider(base, multiplier)
+
+    def live_overrides(self, world: WorldState) -> tuple[TrafficOverride, ...]:
+        """Whatever the traffic feed is reporting right now, as corridor multipliers.
+
+        Empty unless a feed is configured, which is what keeps a solve reproducible by
+        default. A feed that cannot be reached returns nothing rather than raising: a
+        booking must not fail because a third party is down, and planning on last
+        week's congestion is exactly what the system did before this existed.
+        """
+        feed = self._incident_feed
+        if feed is None or isinstance(feed, NoIncidentFeed):
+            return ()
+        depot = next(iter(self.business_depots(world)), None)
+        if depot is None:
+            return ()
+        try:
+            incidents = feed.fetch(
+                depot, float(self.business.service_area.radius_miles.value), world.as_of
+            )
+        except Exception:
+            return ()
+        return overrides_from(incidents, world.as_of)
+
+    @staticmethod
+    def business_depots(world: WorldState) -> tuple[Location, ...]:
+        seen: dict[str, Location] = {}
+        for van in world.vans.values():
+            seen.setdefault(van.home_depot.geohash7, van.home_depot)
+        return tuple(seen.values())
 
     def solve_params(self, *, allow_overtime: bool = True) -> SolveParams:
         return SolveParams.from_business(self.business, self.tz, allow_overtime=allow_overtime)
