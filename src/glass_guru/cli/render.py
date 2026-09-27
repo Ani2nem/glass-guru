@@ -27,9 +27,11 @@ from glass_guru.domain.models import (
     CrewRoute,
     Job,
     PlanVersion,
+    TimeWindow,
     UnservedJob,
 )
 from glass_guru.domain.state import WorldState
+from glass_guru.formatting import clock, clock_range
 from glass_guru.scheduler.booking import BookingOptions
 from glass_guru.scheduler.costing import RouteCost
 from glass_guru.scheduler.day_planner import DayPlanResult
@@ -40,7 +42,13 @@ RULE = "-" * 78
 
 
 def _hhmm(moment: datetime, tz: tzinfo) -> str:
-    return moment.astimezone(tz).strftime("%H:%M")
+    return clock(moment.astimezone(tz))
+
+
+def _window_label(window: TimeWindow, tz: tzinfo) -> str:
+    """`Mon 9:00 - 11:30 AM hard`, as a person reads it."""
+    start, end = window.start.astimezone(tz), window.end.astimezone(tz)
+    return f"{start:%a} {clock_range(start, end)} {window.hardness.value}"
 
 
 def _money(amount: float) -> str:
@@ -265,12 +273,7 @@ def render_world(world: WorldState, tz: tzinfo) -> str:
     lines += ["", "  JOBS"]
     for job in world.active_jobs():
         window = job.windows[0] if job.windows else None
-        when = (
-            f"{window.start.astimezone(tz):%a %H:%M}-{window.end.astimezone(tz):%H:%M}"
-            f" {window.hardness.value}"
-            if window
-            else "any time"
-        )
+        when = _window_label(window, tz) if window else "any time"
         lines.append(
             f"      {job.id:<8} {job.customer_name:<24} {job.service_type.value:<30}"
             f" {job.estimated_duration_min:>4}min  crew {job.crew_size}  {when}"
@@ -342,7 +345,7 @@ def render_slots(
         crew = " + ".join(slot.worker_names) or slot.crew_id
         lines.append("")
         lines.append(
-            f" {marker} {start:%a %d %b}  {start:%H:%M}-{end:%H:%M}   "
+            f" {marker} {start:%a %d %b}  {clock_range(start, end)}   "
             f"{_money(slot.marginal_cost):>9}   {crew}"
         )
         lines.append(f"      {slot.reason}")

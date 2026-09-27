@@ -5,7 +5,7 @@ import { NotePanel } from "./components/NotePanel";
 import { ProposalPanel } from "./components/ProposalPanel";
 import { TodayPanel } from "./components/TodayPanel";
 import { RouteMap } from "./components/RouteMap";
-import type { Plan, World } from "./types";
+import type { Plan, Week, World } from "./types";
 
 type View = "board" | "map";
 
@@ -36,13 +36,19 @@ export default function App() {
   const [day, setDay] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [week, setWeek] = useState<Week | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [nextWorld, nextPlan] = await Promise.all([api.world(), api.plan()]);
+      const [nextWorld, nextPlan, nextWeek] = await Promise.all([
+        api.world(),
+        api.plan(),
+        api.week(),
+      ]);
       setWorld(nextWorld);
       setPlan(nextPlan);
+      setWeek(nextWeek);
       setError(null);
     } catch (exc) {
       setError(exc as ApiError);
@@ -159,8 +165,7 @@ export default function App() {
             )}
           </div>
 
-          {!plan && <p className="muted">No plan yet. Press “Plan the week”.</p>}
-          {plan && view === "board" && (
+          {week && view === "board" && (
             <>
               {selectedStop && (
                 <div className="detail">
@@ -191,7 +196,7 @@ export default function App() {
                   </dl>
                 </div>
               )}
-              <Calendar plan={plan} selected={selected} onSelect={setSelected} />
+              <Calendar plan={plan} week={week} selected={selected} onSelect={setSelected} />
             </>
           )}
           {plan && view === "map" && <RouteMap plan={plan} day={day} />}

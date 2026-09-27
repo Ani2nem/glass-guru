@@ -25,6 +25,7 @@ from enum import StrEnum
 from glass_guru.domain.enums import CommitmentState
 from glass_guru.domain.models import JobId, PlanVersion, TimeWindow, VanId, WorkerId
 from glass_guru.domain.state import WorldState
+from glass_guru.formatting import clock
 
 
 class ChangeKind(StrEnum):
@@ -104,19 +105,18 @@ class JobChange:
     def describe(self) -> str:
         name = self.customer_name or self.job_id
         if self.kind is ChangeKind.ADDED and self.after:
-            return f"{name}: added {self.after.on_date:%a} {self.after.arrival:%H:%M}"
+            return f"{name}: added {self.after.on_date:%a} {clock(self.after.arrival)}"
         if self.kind is ChangeKind.DROPPED and self.before:
-            return f"{name}: dropped from {self.before.on_date:%a} {self.before.arrival:%H:%M}"
+            return f"{name}: dropped from {self.before.on_date:%a} {clock(self.before.arrival)}"
         if self.before and self.after:
             if self.kind is ChangeKind.RESCHEDULED:
                 return (
-                    f"{name}: {self.before.on_date:%a} {self.before.arrival:%H:%M}"
-                    f" -> {self.after.on_date:%a} {self.after.arrival:%H:%M}"
+                    f"{name}: {self.before.on_date:%a} {clock(self.before.arrival)}"
+                    f" -> {self.after.on_date:%a} {clock(self.after.arrival)}"
                 )
             if self.kind is ChangeKind.RETIMED:
-                return (
-                    f"{name}: {self.before.arrival:%H:%M} -> {self.after.arrival:%H:%M} (same crew)"
-                )
+                was, now = clock(self.before.arrival), clock(self.after.arrival)
+                return f"{name}: {was} -> {now} (same crew)"
             # Say which thing moved. A van swap with the same worker rendered as
             # "crew Dan -> Dan", which reads as a bug in the plan rather than a fact
             # about it.

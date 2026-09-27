@@ -28,6 +28,7 @@ from glass_guru.domain.state import WorldState, fold
 from glass_guru.domain.travel import TravelOracle
 from glass_guru.fixtures import scenarios
 from glass_guru.fixtures.sample_business import WEEK_START, sample_world_at, seed_events
+from glass_guru.formatting import clock_range
 from glass_guru.geocoding import GeocodeError, for_service_area
 from glass_guru.obs.correlation import dispatch, require_dispatch_id
 from glass_guru.obs.tracing import configure, span
@@ -204,8 +205,9 @@ def cmd_explain(args: argparse.Namespace) -> int:
     print(f"  state        {job.commitment_state.value}   deferred {job.deferral_count}x")
     for window in job.windows:
         print(
-            f"  window       {window.start.astimezone(tz):%a %d %b %H:%M}"
-            f"-{window.end.astimezone(tz):%H:%M}  ({window.hardness.value})"
+            f"  window       {window.start.astimezone(tz):%a %d %b} "
+            + clock_range(window.start.astimezone(tz), window.end.astimezone(tz))
+            + f"  ({window.hardness.value})"
         )
     for material in job.materials:
         ready = material.available_from(job.requested_at.date())
@@ -225,8 +227,9 @@ def cmd_explain(args: argparse.Namespace) -> int:
                 f"  SCHEDULED    {on_date.isoformat()} on {route.crew_id} ({names}, {route.van_id})"
             )
             print(
-                f"               {stop.arrival.astimezone(tz):%H:%M}"
-                f"-{stop.departure.astimezone(tz):%H:%M}, "
+                "               "
+                + clock_range(stop.arrival.astimezone(tz), stop.departure.astimezone(tz))
+                + ", "
                 f"{stop.travel_minutes_from_prev} min drive to reach"
             )
             return 0

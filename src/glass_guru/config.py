@@ -92,6 +92,19 @@ class TravelParams(Section):
     traffic_multipliers: dict[str, Param]
 
 
+class PricingParams(Section):
+    """What the customer is charged. Separate from every cost parameter above it,
+    because what a job costs to serve and what it sells for are different questions
+    and conflating them is how a trade loses money on small work."""
+
+    labour_rate_per_hour: Param
+    call_out_fee: Param
+    materials_markup: Param
+    minimum_charge: Param
+    emergency_uplift: Param
+    tax_rate: Param
+
+
 class ServiceAreaParams(Section):
     radius_miles: Param
 
@@ -128,6 +141,7 @@ class BusinessParams(Section):
     autonomy: AutonomyParams
     penalties: PenaltyParams
     travel: TravelParams
+    pricing: PricingParams
     service_area: ServiceAreaParams
     horizon: HorizonParams
     solver: SolverParams

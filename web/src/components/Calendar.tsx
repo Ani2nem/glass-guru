@@ -47,11 +47,11 @@ function isoDate(value: Date): string {
 }
 
 /** Every date in the horizon, not only the ones with work on them. */
-function horizonDates(plan: Plan): string[] {
+function horizonDates(from: string, to: string): string[] {
   const dates: string[] = [];
-  const end = new Date(`${plan.horizon_end}T12:00:00`);
+  const end = new Date(`${to}T12:00:00`);
   for (
-    let cursor = new Date(`${plan.horizon_start}T12:00:00`);
+    let cursor = new Date(`${from}T12:00:00`);
     cursor <= end;
     cursor.setDate(cursor.getDate() + 1)
   ) {
@@ -67,8 +67,8 @@ function horizonDates(plan: Plan): string[] {
  * or clips a crew who started at 05:30 for a pre-opening storefront job. Rounded out
  * to whole hours so the lines land somewhere sensible.
  */
-function timeWindow(plan: Plan): [number, number] {
-  const stops = plan.routes.flatMap((r) => r.stops);
+function timeWindow(routes: Route[]): [number, number] {
+  const stops = routes.flatMap((r) => r.stops);
   if (stops.length === 0) return [7 * 60, 17 * 60];
   const first = Math.min(...stops.map((s) => s.start_minute));
   const last = Math.max(...stops.map((s) => s.end_minute));
@@ -184,20 +184,25 @@ function Block({
 
 export function Calendar({
   plan,
+  week,
   selected,
   onSelect,
 }: {
-  plan: Plan;
+  /** Null before anything is committed. An empty diary still has a week in it, and a
+   * blank panel is the least useful thing to show somebody whose diary is empty. */
+  plan: Plan | null;
+  week: { start: string; end: string };
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
-  const dates = horizonDates(plan);
-  const [start, end] = timeWindow(plan);
+  const routes = plan?.routes ?? [];
+  const dates = horizonDates(plan?.horizon_start ?? week.start, plan?.horizon_end ?? week.end);
+  const [start, end] = timeWindow(routes);
   const hours: number[] = [];
   for (let h = Math.ceil(start / 60) * 60; h <= end; h += 60) hours.push(h);
 
   const byDate = new Map<string, Route[]>();
-  for (const route of plan.routes) {
+  for (const route of routes) {
     byDate.set(route.date, [...(byDate.get(route.date) ?? []), route]);
   }
 
@@ -250,7 +255,11 @@ export function Calendar({
         ))}
       </div>
 
-      {plan.routes.length === 0 && <p className="muted">Nothing scheduled.</p>}
+      {routes.length === 0 && (
+        <p className="cal__empty">
+          Nothing booked this week. Take a call on the left, or press “Plan the week”.
+        </p>
+      )}
     </div>
   );
 }

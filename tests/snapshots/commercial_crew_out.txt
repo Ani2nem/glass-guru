@@ -1,22 +1,22 @@
 SCENARIO  commercial_crew_out
 Both commercial-certified workers are out. The storefront job becomes unstaffable, and the dispatcher should be told that precisely rather than being told the day was full.
 
-!  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  41 of 41 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (d013e2ea935536ea)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      08:19-09:04  Nakamura Screens           screen_repair                   19min drive  
-      09:32-11:32  Chen Residence             residential_window_replacement  28min drive  
+      8:19 AM-9:04 AM  Nakamura Screens           screen_repair                   19min drive  
+      9:32 AM-11:32 AM  Chen Residence             residential_window_replacement  28min drive  
                    travel 64min / 27.5mi  (64 person-min)   idle 0min   on-site 72%
 
   crew-van-3   Alex   [van-3]
-      10:00-12:30  Patel Shower Door          shower_door_install             40min drive  
+      10:00 AM-12:30 PM  Patel Shower Door          shower_door_install             40min drive  
                    travel 70min / 40.0mi  (70 person-min)   idle 0min   on-site 68%
 
   crew-van-4   Sofia   [van-4]
-      08:34-10:04  Okonkwo Auto Glass         auto_glass                      34min drive  
+      8:34 AM-10:04 AM  Okonkwo Auto Glass         auto_glass                      34min drive  
                    travel 60min / 24.6mi  (60 person-min)   idle 0min   on-site 60%
 
   UNSERVED - could not fit

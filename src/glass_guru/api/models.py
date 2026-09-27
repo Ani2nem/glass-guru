@@ -186,6 +186,14 @@ class SlotView(Api):
     crew_reason: str
     reason: str
 
+    #: What the customer pays, and what this placement leaves us. Two different
+    #: questions, both on screen, because a price with no cost beside it cannot be
+    #: judged and a cost with no price is what the board used to show.
+    quote_total: float = 0.0
+    quote_lines: list[str] = Field(default_factory=list)
+    margin: float = 0.0
+    margin_pct: float = 0.0
+
 
 class BookRequest(Api):
     """A draft plus the slot a customer accepted. Nothing is stored before this."""

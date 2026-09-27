@@ -54,6 +54,7 @@ from glass_guru.domain.models import (
 )
 from glass_guru.domain.state import Unavailability, WorldState
 from glass_guru.domain.travel import TravelOracle
+from glass_guru.formatting import clock_range
 from glass_guru.scheduler.routing import materialize_route
 from glass_guru.scheduler.travel.base import TimeBucket
 
@@ -535,8 +536,12 @@ def _diagnose(
                     reason=UnservedReason.HARD_WINDOW_UNREACHABLE,
                     detail=(
                         "nobody certified is free for long enough inside the promised "
-                        f"window {promised.start.astimezone(params.business_tz):%H:%M}"
-                        f"-{promised.end.astimezone(params.business_tz):%H:%M}; "
+                        "window "
+                        + clock_range(
+                            promised.start.astimezone(params.business_tz),
+                            promised.end.astimezone(params.business_tz),
+                        )
+                        + "; "
                         "keeping it would need the customer telephoned"
                     ),
                 )

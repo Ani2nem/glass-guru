@@ -440,3 +440,32 @@ def test_a_real_email_survives():
     from glass_guru.agents.intake import CallExtraction
 
     assert CallExtraction(email="maria@nguyenglass.com").email == "maria@nguyenglass.com"
+
+
+def test_the_twelve_hour_form_the_brief_uses_is_grounded():
+    """Caught by the eval gate, which is what it is for.
+
+    Converting the board to twelve-hour time also changed the brief the comms agent
+    reads. The model duly echoed "9:00", the allowed set held only "09:00" and
+    "9:00am", and tier 4 fell from 97.9% to 72.9% - a grounded message reported as a
+    fabrication because the checker and the brief had drifted apart.
+    """
+    from glass_guru.agents.comms import verify_grounding
+
+    draft = DraftMessage(
+        job_id="j-402", channel="sms", body="We can be with you at 9:00 on Monday."
+    )
+    allowed = {"09:00", "9:00am", "9:00", "monday"}
+    assert verify_grounding(draft, allowed) == ()
+
+
+def test_a_bare_hour_is_still_refused_for_a_time_that_is_not_on_the_hour():
+    """The looser twelve-hour form must not reopen the rounding hole: "3pm" for a
+    15:10 slot would also have passed for 15:55."""
+    from glass_guru.agents.comms import (
+        _facts_for,  # noqa: F401  (import guard)
+        verify_grounding,
+    )
+
+    draft = DraftMessage(job_id="j-402", channel="sms", body="See you at 3pm.")
+    assert verify_grounding(draft, {"15:10", "3:10pm", "3:10"}) != ()

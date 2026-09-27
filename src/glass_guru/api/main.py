@@ -55,6 +55,7 @@ from glass_guru.obs.correlation import dispatch, new_dispatch_id
 from glass_guru.obs.tracing import configure, span
 from glass_guru.persistence.log import Workspace
 from glass_guru.scheduler.booking import SlotSuggestion
+from glass_guru.scheduler.pricing import quote_for
 from glass_guru.scheduler.travel.cache import CacheMiss
 from glass_guru.scheduler.travel.factory import TravelMode, build_travel
 from glass_guru.service import DispatchService, ServiceError
@@ -326,6 +327,24 @@ def get_world() -> WorldView:
         raise _fail(exc, 409, "run `glass-guru init` to create a workspace") from exc
 
 
+@app.get("/api/week")
+def get_week() -> dict[str, str]:
+    """The days the board should draw, whether or not anything is planned yet.
+
+    An empty diary is not the same thing as no calendar. The board used to render
+    nothing at all until a plan existed, so a business with no bookings saw a blank
+    panel instead of an open week - which is exactly when you most want to see which
+    days are free.
+    """
+    svc = service()
+    try:
+        start = _default_start(svc)
+    except ServiceError:
+        start = next_working_day_from_today()
+    days = int(svc.business.horizon.days.value)
+    return {"start": start.isoformat(), "end": (start + timedelta(days=days - 1)).isoformat()}
+
+
 @app.get("/api/plan", response_model=PlanView | None)
 def get_plan() -> PlanView | None:
     """The committed plan, or null when nothing is committed yet."""
@@ -588,6 +607,24 @@ def accept_triage(request: AcceptRequest) -> dict[str, int]:
         return {"recorded": len(events)}
 
 
+def _pricing(draft: Job | None, business: BusinessParams, driving: float) -> dict[str, Any]:
+    """What to charge for this job in this slot, itemised.
+
+    The driving figure differs per slot - that is the whole point of ranking them - so
+    the margin does too, and a dispatcher can see that Tuesday is not just cheaper to
+    serve but worth more.
+    """
+    if draft is None:
+        return {}
+    quote = quote_for(draft, business, driving_cost=driving)
+    return {
+        "quote_total": quote.total,
+        "quote_lines": quote.explain(),
+        "margin": round(quote.margin, 2),
+        "margin_pct": round(quote.margin_pct, 1),
+    }
+
+
 def _crew_reason(draft: Job | None, slot: SlotSuggestion) -> str:
     """Why these people, in one line.
 
@@ -660,6 +697,7 @@ def run_intake(request: TextRequest) -> IntakeView:
                     crew=" + ".join(s.worker_names),
                     crew_reason=_crew_reason(result.draft, s),
                     reason=s.reason,
+                    **_pricing(result.draft, svc.business, s.marginal_cost),
                 )
                 for s in options.slots
             ]
@@ -710,11 +748,17 @@ def book_slot(request: BookRequest) -> dict[str, str]:
         world = svc.world()
         job_id = f"j-{len(world.jobs) + 501}"
         arrival = datetime.fromisoformat(f"{request.date}T{request.arrival}").replace(tzinfo=svc.tz)
-        # The same window the customer was read, built the same way: opening at the
-        # estimate and running forward. Recording a different one would mean promising
-        # one thing on the phone and holding the planner to another.
+        # The customer is promised an *arrival* window; the stored window has to hold
+        # the work as well, because the solver bounds completion by it and the checker
+        # binds a confirmed job to it either way.
+        #
+        # Getting this wrong booked a three-hour storefront job into a two-hour window
+        # and produced a plan with no routes in it at all: the job was impossible, so
+        # nothing could be scheduled, and the board said "committed" and showed an
+        # empty week.
         opens = arrival.replace(minute=arrival.minute // 15 * 15, second=0, microsecond=0)
-        quoted = timedelta(minutes=svc.business.scheduling.quoted_window_minutes.value)
+        arrival_window = timedelta(minutes=svc.business.scheduling.quoted_window_minutes.value)
+        quoted = arrival_window + timedelta(minutes=draft.duration_minutes)
 
         job = Job(
             id=job_id,
@@ -874,6 +918,17 @@ def next_working_day(world: WorldState, on_or_after: date) -> date:
         if candidate.weekday() in rostered:
             return candidate
     return on_or_after
+
+
+def next_working_day_from_today() -> date:
+    """Fallback for a workspace that does not exist yet: assume a Monday-to-Friday
+    week, which is what the roster would have said anyway."""
+    today = datetime.now(UTC).date()
+    for offset in range(7):
+        candidate = today + timedelta(days=offset)
+        if candidate.weekday() < 5:
+            return candidate
+    return today
 
 
 def _default_start(svc: DispatchService) -> date:

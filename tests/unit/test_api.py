@@ -247,7 +247,7 @@ def test_readiness_reports_each_thing_the_image_could_have_failed_to_ship(client
     """The three checks stand for three things the image copies selectively."""
     body = client.get("/api/ready").json()
     assert set(body["checks"]) == {"params", "travel", "board", "auth"}
-    assert body["checks"]["params"] == "35 parameters"
+    assert body["checks"]["params"] == "41 parameters"
     assert body["checks"]["travel"].startswith("frozen:")
 
 
@@ -293,7 +293,7 @@ def test_readiness_fails_loudly_when_travel_cannot_answer(client: TestClient, mo
     body = response.json()
     assert body["status"] == "degraded"
     assert body["checks"]["travel"].startswith("FAILED")
-    assert body["checks"]["params"] == "35 parameters", "unrelated checks still report"
+    assert body["checks"]["params"] == "41 parameters", "unrelated checks still report"
 
 
 def test_the_readiness_probe_asks_for_a_leg_the_snapshot_holds():

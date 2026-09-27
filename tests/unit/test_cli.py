@@ -96,15 +96,28 @@ def test_commands_succeed(argv, capsys):
     assert capsys.readouterr().out.strip()
 
 
-def test_solve_reports_zero_violations(capsys):
-    main(["solve", "--date", "2026-09-21"])
+@pytest.fixture
+def sample(tmp_path):
+    """Point the CLI at a workspace that does not exist, so it falls back to the
+    fixture week.
+
+    These tests used to run against whatever was in the developer's own .glass-guru,
+    which passed for as long as that happened to hold the ten sample jobs and broke
+    the moment a fresh workspace started empty. A test that reads the machine it runs
+    on is not testing the thing it names.
+    """
+    return ["--workspace", str(tmp_path / "absent")]
+
+
+def test_solve_reports_zero_violations(capsys, sample):
+    main([*sample, "solve", "--date", "2026-09-21"])
     assert "invariants: 0 violations" in capsys.readouterr().out
 
 
-def test_explain_covers_scheduled_and_unserved(capsys):
-    main(["explain", "j-401"])
+def test_explain_covers_scheduled_and_unserved(capsys, sample):
+    main([*sample, "explain", "j-401"])
     assert "SCHEDULED" in capsys.readouterr().out
-    main(["explain", "j-406"])
+    main([*sample, "explain", "j-406"])
     assert "NOT SCHEDULED" in capsys.readouterr().out
 
 
