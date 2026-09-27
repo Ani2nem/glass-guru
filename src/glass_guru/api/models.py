@@ -149,14 +149,6 @@ class RepairView(Api):
     chosen_by: str = "engine"
 
 
-class SlotView(Api):
-    date: str
-    window: str
-    marginal_cost: float
-    crew: str
-    reason: str
-
-
 class DraftView(Api):
     """A job taking shape during a call, including what is still missing."""
 
@@ -174,6 +166,33 @@ class DraftView(Api):
     site_notes: str = ""
     lat: float | None = None
     lon: float | None = None
+
+
+class SlotView(Api):
+    """One bookable option, in the terms a dispatcher would say out loud.
+
+    ``window`` is what the customer is promised; ``arrival`` is when the crew expects
+    to be there. They differ because a two-hour promise around a 6:56 arrival reads as
+    "5:56 to 7:56", which looks arbitrary until you know which number is the estimate
+    and which is the commitment.
+    """
+
+    date: str
+    day: str
+    window: str
+    arrival: str
+    marginal_cost: float
+    crew: str
+    crew_reason: str
+    reason: str
+
+
+class BookRequest(Api):
+    """A draft plus the slot a customer accepted. Nothing is stored before this."""
+
+    draft: DraftView
+    date: str
+    arrival: str
 
 
 class IntakeView(Api):

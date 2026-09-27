@@ -4,6 +4,7 @@
 
 import type {
   Intake,
+  Draft,
   Message,
   Note,
   Plan,
@@ -62,6 +63,11 @@ export const api = {
   /** One box: the classifier picks the agent, `kind` overrides it. */
   note: (text: string, kind?: "booking" | "disruption") =>
     post<Note>(`/api/note${kind ? `?kind=${kind}` : ""}`, { text }),
+  /** Accept a quoted slot. The draft goes back with it: nothing an agent produced is
+   * stored until a person agrees to it, and a draft held server-side awaiting
+   * confirmation is stored. */
+  book: (draft: Draft, date: string, arrival: string) =>
+    post<{ job_id: string }>("/api/book", { draft, date, arrival }),
   comms: (strategy: string) =>
     post<Message[]>(`/api/comms?strategy=${encodeURIComponent(strategy)}`),
 };

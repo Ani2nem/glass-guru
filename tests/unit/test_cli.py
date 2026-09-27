@@ -174,7 +174,9 @@ def test_init_force_starts_over(tmp_path):
 
     assert main(["--workspace", ws, "init", "--force"]) == 0
     assert Workspace(ws).plans.head() is None, "the old history should be gone"
-    assert len(Workspace(ws).events) == 20, "and a fresh business seeded"
+    # Ten: six workers and four vans. A fresh workspace has no jobs, because a
+    # business has staff on day one and no work until somebody rings.
+    assert len(Workspace(ws).events) == 10, "and a fresh roster seeded"
 
 
 def test_an_s3_workspace_is_not_turned_into_a_directory():

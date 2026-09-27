@@ -27,8 +27,9 @@ from glass_guru.domain.autonomy import AutonomyDecision
 from glass_guru.domain.diff import PlanDiff
 from glass_guru.domain.enums import NOT_A_FAILURE
 from glass_guru.domain.invariants import Violation
-from glass_guru.domain.models import CostBreakdown, CrewRoute, PlanVersion
+from glass_guru.domain.models import CostBreakdown, CrewRoute, Job, PlanVersion
 from glass_guru.domain.state import WorldState
+from glass_guru.formatting import clock_range
 from glass_guru.scheduler.costing import RouteCost
 from glass_guru.scheduler.repair import RepairCandidate, RepairOptions
 
@@ -127,6 +128,13 @@ def plan_view(
     )
 
 
+def _window_text(job: Job, tz: tzinfo) -> str:
+    """The promised window as a person reads it: `Mon 9:00 - 11:30 AM hard`."""
+    window = job.windows[0]
+    start, end = window.start.astimezone(tz), window.end.astimezone(tz)
+    return f"{start:%a} {clock_range(start, end)} {window.hardness.value}"
+
+
 def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> WorldView:
     today = world.as_of
     end_of_day = today + timedelta(hours=12)
@@ -140,7 +148,7 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 id=w.id,
                 name=w.name,
                 certifications=sorted(c.value for c in w.certifications),
-                shift=(f"{h.start:%H:%M}-{h.end:%H:%M}" if (h := w.hours_for(weekday)) else "off"),
+                shift=(clock_range(h.start, h.end) if (h := w.hours_for(weekday)) else "off"),
                 available=world.is_worker_available(w.id, today, end_of_day),
                 overtime_eligible=w.overtime_eligible,
             )
@@ -165,13 +173,7 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 certifications=sorted(c.value for c in j.required_certifications),
                 commitment_state=j.commitment_state.value,
                 commitment_cost=j.commitment_cost,
-                window=(
-                    f"{j.windows[0].start.astimezone(tz):%a %H:%M}"
-                    f"-{j.windows[0].end.astimezone(tz):%H:%M}"
-                    f" {j.windows[0].hardness.value}"
-                    if j.windows
-                    else "any time"
-                ),
+                window=(_window_text(j, tz) if j.windows else "any time"),
                 lat=j.location.lat,
                 lon=j.location.lon,
             )

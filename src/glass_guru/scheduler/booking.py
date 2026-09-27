@@ -37,6 +37,7 @@ from glass_guru.domain.enums import UnservedReason
 from glass_guru.domain.models import Job, JobId, TimeWindow
 from glass_guru.domain.state import WorldState
 from glass_guru.domain.travel import TravelOracle
+from glass_guru.formatting import clock_range
 from glass_guru.scheduler.costing import RouteCost, cost_route
 from glass_guru.scheduler.day_planner import SolveParams, plan_day
 
@@ -59,7 +60,7 @@ class SlotSuggestion:
         start = self.quoted_window.start.astimezone(tz)
         end = self.quoted_window.end.astimezone(tz)
         return (
-            f"{start:%a %d %b} {start:%H:%M}-{end:%H:%M}  ${self.marginal_cost:,.2f}  {self.reason}"
+            f"{start:%a %d %b} {clock_range(start, end)}  ${self.marginal_cost:,.2f}  {self.reason}"
         )
 
 
@@ -271,8 +272,14 @@ def suggest_booking_slots(
 
         neighbours = len(route.stops) - 1
         dedicated = neighbours == 0
-        half = timedelta(minutes=quoted_minutes / 2)
-        window = TimeWindow(start=stop.arrival - half, end=stop.arrival + half)
+        # The window opens at the estimate and runs forward, rather than straddling
+        # it. Centred, a 6:27 arrival was quoted to the customer as "5:27 to 7:27",
+        # which is not a time anybody would read down a phone - and it promised a
+        # half-hour earlier than the crew could possibly manage, which is the wrong
+        # direction to be wrong in. Rounded back to the quarter hour because "we'll be
+        # there between 6:15 and 8:15" is what a person says.
+        opens = stop.arrival.replace(minute=stop.arrival.minute // 15 * 15, second=0, microsecond=0)
+        window = TimeWindow(start=opens, end=opens + timedelta(minutes=quoted_minutes))
 
         slots.append(
             SlotSuggestion(

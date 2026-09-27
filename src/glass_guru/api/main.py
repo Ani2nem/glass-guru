@@ -20,7 +20,7 @@ import os
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import suppress
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +32,7 @@ from fastapi.staticfiles import StaticFiles
 from glass_guru.api import views
 from glass_guru.api.models import (
     AcceptRequest,
+    BookRequest,
     EventRequest,
     IntakeView,
     MessageView,
@@ -46,10 +47,14 @@ from glass_guru.api.models import (
 )
 from glass_guru.cli.events import EventArgumentError, build_event
 from glass_guru.config import BusinessParams
+from glass_guru.domain.models import Job
+from glass_guru.domain.state import WorldState
+from glass_guru.formatting import clock, clock_range
 from glass_guru.geocoding import GeocodeError, OutsideServiceArea
 from glass_guru.obs.correlation import dispatch, new_dispatch_id
 from glass_guru.obs.tracing import configure, span
 from glass_guru.persistence.log import Workspace
+from glass_guru.scheduler.booking import SlotSuggestion
 from glass_guru.scheduler.travel.cache import CacheMiss
 from glass_guru.scheduler.travel.factory import TravelMode, build_travel
 from glass_guru.service import DispatchService, ServiceError
@@ -583,6 +588,21 @@ def accept_triage(request: AcceptRequest) -> dict[str, int]:
         return {"recorded": len(events)}
 
 
+def _crew_reason(draft: Job | None, slot: SlotSuggestion) -> str:
+    """Why these people, in one line.
+
+    Crew size and certifications come from the job catalogue, not from the model and
+    not from the solver - the solver only decides *which* qualified people, and the
+    answer to "why Marcus and Priya" is almost always "because two are needed and one
+    of them is the only person certified for it".
+    """
+    if draft is None:
+        return ""
+    needs = ", ".join(sorted(c.value.replace("_", " ") for c in draft.required_certifications))
+    people = "one fitter" if draft.crew_size == 1 else f"{draft.crew_size} fitters"
+    return f"{people} needed" + (f", certified for {needs}" if needs else "")
+
+
 @app.post("/api/intake", response_model=IntakeView)
 def run_intake(request: TextRequest) -> IntakeView:
     from glass_guru.agents.intake import intake
@@ -630,12 +650,15 @@ def run_intake(request: TextRequest) -> IntakeView:
             slots = [
                 SlotView(
                     date=s.on_date.isoformat(),
-                    window=(
-                        f"{s.quoted_window.start.astimezone(svc.tz):%a %H:%M}"
-                        f"-{s.quoted_window.end.astimezone(svc.tz):%H:%M}"
+                    day=f"{s.on_date:%a %d %b}",
+                    window=clock_range(
+                        s.quoted_window.start.astimezone(svc.tz),
+                        s.quoted_window.end.astimezone(svc.tz),
                     ),
+                    arrival=clock(s.arrival.astimezone(svc.tz)),
                     marginal_cost=round(s.marginal_cost, 2),
                     crew=" + ".join(s.worker_names),
+                    crew_reason=_crew_reason(result.draft, s),
                     reason=s.reason,
                 )
                 for s in options.slots
@@ -650,6 +673,90 @@ def run_intake(request: TextRequest) -> IntakeView:
             repairs=result.extraction.repairs,
             note=result.geocode_note,
         )
+
+
+@app.post("/api/book")
+def book_slot(request: BookRequest) -> dict[str, str]:
+    """Accept a quoted slot and put the job in the diary.
+
+    The list of options was priced and then had no button, so a dispatcher could see
+    that Tuesday was four times cheaper and had no way to act on it. This is that
+    button.
+
+    The draft comes back from the client rather than being held server-side between
+    the two calls. Nothing an agent produced is stored until a person agrees to it,
+    and a draft sitting in memory waiting to be confirmed is stored.
+
+    The job is recorded as CONFIRMED with the window the customer was read out, which
+    is what makes it expensive to move later - a promise, not a pencil mark.
+    """
+    from glass_guru.domain.enums import Certification, CommitmentState, ServiceType
+    from glass_guru.domain.events import JobConfirmed, JobRequested
+    from glass_guru.domain.models import GlassSpec, Location, TimeWindow
+
+    svc = service()
+    draft = request.draft
+    if draft.lat is None or draft.lon is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "NoLocation",
+                "detail": "this draft has no address we could place on the map",
+                "remedy": "add a street number and city, then read the slots again",
+            },
+        )
+
+    with dispatch(new_dispatch_id("web")), span("api.book"):
+        world = svc.world()
+        job_id = f"j-{len(world.jobs) + 501}"
+        arrival = datetime.fromisoformat(f"{request.date}T{request.arrival}").replace(tzinfo=svc.tz)
+        # The same window the customer was read, built the same way: opening at the
+        # estimate and running forward. Recording a different one would mean promising
+        # one thing on the phone and holding the planner to another.
+        opens = arrival.replace(minute=arrival.minute // 15 * 15, second=0, microsecond=0)
+        quoted = timedelta(minutes=svc.business.scheduling.quoted_window_minutes.value)
+
+        job = Job(
+            id=job_id,
+            customer_id=f"c-{job_id}",
+            customer_name=draft.customer_name or "Unnamed caller",
+            phone=draft.phone,
+            location=Location(lat=draft.lat, lon=draft.lon, address=draft.address),
+            service_type=ServiceType(draft.service_type),
+            glass_spec=GlassSpec(),
+            required_certifications=frozenset(Certification(c) for c in draft.certifications),
+            crew_size=draft.crew_size,
+            estimated_duration_min=draft.duration_minutes,
+            duration_confidence_min=draft.duration_confidence,
+            commitment_cost=draft.commitment_cost,
+            site_notes=draft.site_notes,
+            requested_at=world.as_of,
+            windows=(TimeWindow(start=opens, end=opens + quoted),),
+            commitment_state=CommitmentState.CONFIRMED,
+        )
+
+        recorded = svc.apply_events(
+            [
+                JobRequested(
+                    event_id=new_dispatch_id("job"),
+                    occurred_at=world.as_of,
+                    recorded_at=world.as_of,
+                    dispatch_id="web",
+                    job=job,
+                ),
+                JobConfirmed(
+                    event_id=new_dispatch_id("confirm"),
+                    occurred_at=world.as_of,
+                    recorded_at=world.as_of,
+                    dispatch_id="web",
+                    job_id=job_id,
+                    window=job.windows[0],
+                    commitment_cost=draft.commitment_cost,
+                ),
+            ]
+        )
+        broadcaster.publish("world", {"booked": job_id})
+        return {"job_id": job_id, "recorded": str(recorded)}
 
 
 @app.post("/api/comms", response_model=list[MessageView])
@@ -750,14 +857,40 @@ async def stream() -> StreamingResponse:
 # ------------------------------------------------------------------------- helpers
 
 
+def next_working_day(world: WorldState, on_or_after: date) -> date:
+    """The first day anyone is rostered on, starting from the given date.
+
+    Asked of the roster rather than assumed to be Monday to Friday, because the roster
+    is where working days are actually written down and a business that starts opening
+    Saturdays should not need a code change to be planned for.
+    """
+    rostered = {
+        hours.weekday for worker in world.workers.values() for hours in worker.working_hours
+    }
+    if not rostered:
+        return on_or_after
+    for offset in range(14):
+        candidate = on_or_after + timedelta(days=offset)
+        if candidate.weekday() in rostered:
+            return candidate
+    return on_or_after
+
+
 def _default_start(svc: DispatchService) -> date:
-    """The horizon start: whatever is committed, else the fixture's week."""
+    """Where the horizon begins.
+
+    A committed plan keeps its own start, so re-reading the board does not silently
+    slide the week out from under a dispatcher. Otherwise it is the next day anybody
+    is working - which on a Saturday afternoon means Monday, and which is the whole
+    point of a rolling horizon rather than a fixed one.
+
+    This used to return a date written into the fixture, so on any day other than the
+    week of 21 September 2026 the board showed a week that had already happened.
+    """
     head = svc.head()
     if head is not None:
         return head.horizon_start
-    from glass_guru.fixtures.sample_business import WEEK_START
-
-    return WEEK_START
+    return next_working_day(svc.world(), datetime.now(svc.tz).date())
 
 
 def _clock(
