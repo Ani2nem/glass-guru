@@ -75,11 +75,20 @@ CALL = {
 
 
 def run_intake(
-    payload: dict[str, Any], business: BusinessParams, geocoder: Geocoder
+    payload: dict[str, Any],
+    business: BusinessParams,
+    geocoder: Geocoder,
+    text: str = "call notes",
 ) -> IntakeResult:
+    """Drive intake with a scripted extraction.
+
+    ``text`` matters more than it looks: commitment quotes are now checked against the
+    transcript, so a test asserting a priced promise has to put the promise in the
+    caller's mouth, exactly as production would see it.
+    """
     provider = ScriptedLLMProvider.returning(payload)
     with dispatch("d-intake"):
-        return intake(provider, "call notes", business=business, now=NOW, geocoder=geocoder)
+        return intake(provider, text, business=business, now=NOW, geocoder=geocoder)
 
 
 # --------------------------------------------------------------------- catalogue
@@ -153,7 +162,12 @@ def test_the_schema_has_no_field_for_duration():
 def test_a_commitment_signal_becomes_a_priced_promise(business, geocoder):
     """ "I'd have to take the morning off" is the phrase that motivated the whole
     field. No dropdown captures it and the solver cannot infer it."""
-    result = run_intake(CALL, business, geocoder)
+    result = run_intake(
+        CALL,
+        business,
+        geocoder,
+        text="Hi, it's Sarah Chen. Two windows went in - I'd have to take the morning off work.",
+    )
     assert result.draft is not None
     assert result.draft.commitment_cost == business.commitment.time_off_work.value
     assert result.commitment_quotes == ("I'd have to take the morning off work",)
@@ -419,7 +433,7 @@ def test_a_phone_field_that_could_not_be_dialled_is_blank(written: str):
 
 @pytest.mark.parametrize(
     "written",
-    ["817-555-0142", "(206) 555 0142", "+44 20 7946 0958", "555-0142", "206 555 0142 ext 4"],
+    ["817-555-0142", "(206) 555 0142", "+44 20 7946 0958", "1-913-295-2960", "9132952960"],
 )
 def test_a_number_someone_could_actually_ring_survives(written: str):
     """The bar is "could this be dialled", not "does it match a format". A validator
@@ -427,6 +441,15 @@ def test_a_number_someone_could_actually_ring_survives(written: str):
     from glass_guru.agents.intake import CallExtraction
 
     assert CallExtraction(phone=written).phone == written
+
+
+@pytest.mark.parametrize("written", ["894892894", "555-0142", "123456789012345"])
+def test_a_number_nobody_could_dial_is_blank(written: str):
+    """Nine digits passed a seven-digit floor, was displayed, and would have been
+    dialled. A US number is ten digits; a floor that verifies less verifies nothing."""
+    from glass_guru.agents.intake import CallExtraction
+
+    assert CallExtraction(phone=written).phone == ""
 
 
 @pytest.mark.parametrize("written", ["maria", "maria@", "@glass.com", "maria@glass", "n/a"])

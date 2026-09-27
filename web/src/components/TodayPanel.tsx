@@ -21,6 +21,11 @@ export function TodayPanel({ world, plan }: { world: World; plan: Plan | null })
   return (
     <section className="panel panel--today">
       <h2>Crews</h2>
+      {world.depot_address && (
+        <p className="panel__hint">
+          Every route starts and ends at the shop: {world.depot_address}
+        </p>
+      )}
 
       <ul className="roster">
         {world.workers.map((worker) => (

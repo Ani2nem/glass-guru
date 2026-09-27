@@ -117,6 +117,7 @@ class WorldView(Api):
     committed_plan_id: str = ""
     #: Shown on screen. Every cost here rests on numbers nobody has validated.
     calibration_warning: str = ""
+    depot_address: str = ""
 
 
 class ChangeView(Api):

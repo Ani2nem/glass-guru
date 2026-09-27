@@ -210,6 +210,7 @@ class Geocoder:
             lon=float(entry["lon"]),  # type: ignore[arg-type]
             address=str(entry.get("display_name", "")),
             precision=str(entry.get("precision", "")),
+            matched_road=str(entry.get("road", "")),
         )
 
     def _fetch(self, address: str) -> dict[str, object]:
@@ -253,10 +254,12 @@ class Geocoder:
             precision = "road"
         else:
             precision = "house"
+        details = hit.get("address") or {}
         return {
             "lat": float(hit["lat"]),
             "lon": float(hit["lon"]),
             "display_name": hit["display_name"],
             "precision": precision,
+            "road": str(details.get("road", "")) if isinstance(details, dict) else "",
             "query": address,
         }

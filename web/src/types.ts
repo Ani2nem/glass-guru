@@ -93,6 +93,7 @@ export interface Job {
 }
 
 export interface World {
+  depot_address: string;
   as_of: string;
   workers: Worker[];
   vans: Van[];

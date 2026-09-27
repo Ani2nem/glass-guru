@@ -13,6 +13,14 @@ import type { Candidate, Message, Repair } from "../types";
  * the agent. Anything customer-visible needs a human however cheap it is, and the
  * override is explicit rather than a checkbox that quietly defaults on.
  */
+/** The solver's strategy keys, in the words a dispatcher would use. "least
+ * disruption" is engine vocabulary; "move as little as possible" is a sentence. */
+const STRATEGY_NAMES: Record<string, string> = {
+  least_disruption: "Move as little as possible",
+  most_jobs: "Get the most jobs done",
+  no_overtime: "Nobody works late",
+};
+
 function CandidateCard({
   candidate,
   onApply,
@@ -28,7 +36,7 @@ function CandidateCard({
   return (
     <article className={candidate.recommended ? "candidate candidate--rec" : "candidate"}>
       <header>
-        <h3>{candidate.strategy.replace(/_/g, " ")}</h3>
+        <h3>{STRATEGY_NAMES[candidate.strategy] ?? candidate.strategy.replace(/_/g, " ")}</h3>
         {candidate.recommended && <span className="tag">recommended</span>}
       </header>
       <p className="muted">{candidate.description}</p>
@@ -95,9 +103,11 @@ export function ProposalPanel({ onChanged }: { onChanged: () => void }) {
 
   return (
     <section className="panel panel--fix">
-      <h2>Fix the day</h2>
+      <h2>Something broke - replan</h2>
       <p className="panel__hint">
-        Prices the ways out of a disruption. Two or three options, never one answer.
+        After a van dies or someone calls in sick, press this. It rebuilds today around
+        the problem and shows two or three ways out, each priced, so you choose the
+        trade-off instead of being handed one.
       </p>
       <button
         className="primary"
