@@ -405,10 +405,14 @@ JOBS: tuple[Job, ...] = (
 )
 
 
-def seed_events(dispatch_id: str = "seed") -> list[Event]:
+def seed_events(dispatch_id: str = "seed", *, with_jobs: bool = True) -> list[Event]:
     """Registration and job-request events that build the sample world.
 
-    Ordered so ``fold`` produces a world with a full roster and ten provisional jobs.
+    ``with_jobs=False`` registers the roster, the vans and the depot and stops there,
+    which is how a real workspace starts: a business has staff and vehicles on day one
+    and no work until somebody rings. The ten sample jobs exist for tests and golden
+    scenarios, where a fixed, known week is the entire point; on a board somebody is
+    trying to use, pre-booked work nobody booked is just confusing.
     """
     t = _at(0, 6)
     events: list[Event] = []
@@ -432,7 +436,7 @@ def seed_events(dispatch_id: str = "seed") -> list[Event]:
                 van=van,
             )
         )
-    for i, job in enumerate(JOBS):
+    for i, job in enumerate(JOBS if with_jobs else ()):
         events.append(
             JobRequested(
                 event_id=f"seed-j-{i}",

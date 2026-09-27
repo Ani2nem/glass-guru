@@ -21,8 +21,21 @@ import type { Plan, Route, Stop } from "../types";
 //: shortest job has for its label. At 1.1 a forty-five minute job clears two lines.
 const SCALE = 1.1;
 
-const clock = (minute: number) =>
-  `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+/** 12-hour, because that is what this business says out loud. "Alex 8 to 17" makes a
+ * dispatcher translate before they can use it, and translating is what a display is
+ * supposed to have done already. */
+const clock = (minute: number) => {
+  const hour24 = Math.floor(minute / 60);
+  const hour = hour24 % 12 || 12;
+  return `${hour}:${String(minute % 60).padStart(2, "0")} ${hour24 < 12 ? "AM" : "PM"}`;
+};
+
+/** The same, without the meridiem - for the hour rail, where AM/PM on every line is
+ * noise and the column reads top to bottom anyway. */
+const hourLabel = (minute: number) => {
+  const hour24 = Math.floor(minute / 60);
+  return `${hour24 % 12 || 12} ${hour24 < 12 ? "am" : "pm"}`;
+};
 
 /** Local calendar date, not UTC - `toISOString` shifts the day east of UTC+12. */
 function isoDate(value: Date): string {
@@ -214,7 +227,7 @@ export function Calendar({
         <div className="cal__gutter">
           {hours.map((h) => (
             <span key={h} style={{ top: `${(h - start) * SCALE}px` }}>
-              {clock(h)}
+              {hourLabel(h)}
             </span>
           ))}
         </div>

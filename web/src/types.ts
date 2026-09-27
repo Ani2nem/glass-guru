@@ -131,6 +131,9 @@ export interface Repair {
 }
 
 export interface Slot {
+  day: string;
+  arrival: string;
+  crew_reason: string;
   date: string;
   window: string;
   marginal_cost: number;

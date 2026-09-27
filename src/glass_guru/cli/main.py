@@ -375,7 +375,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         removed = _discard(workspace)
         print(f"discarded {removed}")
 
-    count = workspace.seed(seed_events())
+    # An empty diary. A business has staff and vans on day one and no work until
+    # somebody rings; `--with-sample-jobs` puts the fixture's week back for demos.
+    count = workspace.seed(seed_events(with_jobs=args.with_sample_jobs))
     print(f"seeded {workspace.root} with {count} events")
     print(workspace.describe())
     return 0
@@ -743,6 +745,11 @@ def build_parser() -> argparse.ArgumentParser:
     params.set_defaults(func=cmd_params)
 
     init = sub.add_parser("init", help="create a workspace seeded with the sample business")
+    init.add_argument(
+        "--with-sample-jobs",
+        action="store_true",
+        help="also seed the ten fixture jobs, as the golden scenarios use",
+    )
     init.add_argument(
         "--force",
         action="store_true",

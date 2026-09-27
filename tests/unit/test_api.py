@@ -15,7 +15,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 
 from glass_guru.api.models import TriageView
-from glass_guru.fixtures.sample_business import seed_events
+from glass_guru.fixtures.sample_business import WEEK_START, seed_events
 from glass_guru.persistence.log import Workspace
 
 
@@ -31,6 +31,12 @@ def client(tmp_path, monkeypatch) -> TestClient:
     from glass_guru.api.main import app
 
     return TestClient(app)
+
+
+#: The fixture's jobs live in a fixed week, and the horizon now starts from whatever
+#: today is - correctly, since a board showing last week is the bug this fixed. Tests
+#: that want the fixture's work have to say which week they mean.
+COMMIT = f"/api/plan/commit?start_date={WEEK_START.isoformat()}"
 
 
 def scheduled(plan: dict[str, Any]) -> set[str]:
@@ -69,7 +75,7 @@ def test_params_carry_their_provenance(client: TestClient):
 
 
 def test_committing_returns_a_feasible_plan(client: TestClient):
-    plan = client.post("/api/plan/commit").json()
+    plan = client.post(COMMIT).json()
     assert plan["feasible"] and plan["violations"] == []
     assert len(scheduled(plan)) == 10
 
@@ -77,7 +83,7 @@ def test_committing_returns_a_feasible_plan(client: TestClient):
 def test_the_board_gets_what_it_needs_to_draw_a_bar(client: TestClient):
     """Minutes from midnight rather than timestamps, so the client positions bars
     without parsing dates or guessing a timezone."""
-    plan = client.post("/api/plan/commit").json()
+    plan = client.post(COMMIT).json()
     stop = plan["routes"][0]["stops"][0]
     assert 0 <= stop["start_minute"] < stop["end_minute"] <= 24 * 60
     assert stop["lat"] and stop["lon"]
@@ -87,14 +93,14 @@ def test_the_board_gets_what_it_needs_to_draw_a_bar(client: TestClient):
 def test_routes_carry_utilisation_and_slack(client: TestClient):
     """The two columns that make a technically valid but obviously wrong plan look
     wrong. Neither is something an invariant check can judge."""
-    plan = client.post("/api/plan/commit").json()
+    plan = client.post(COMMIT).json()
     route = plan["routes"][0]
     assert 0.0 <= route["utilization"] <= 1.0
     assert route["idle_minutes"] >= 0
 
 
 def test_unserved_separates_failures_from_routine(client: TestClient):
-    plan = client.post("/api/plan/commit").json()
+    plan = client.post(COMMIT).json()
     for item in plan["unserved"]:
         assert isinstance(item["is_failure"], bool)
         assert item["detail"]
@@ -134,7 +140,7 @@ def test_repairing_without_a_plan_says_what_to_do(client: TestClient):
 
 
 def test_repair_offers_priced_options_with_autonomy_verdicts(client: TestClient):
-    client.post("/api/plan/commit")
+    client.post(COMMIT)
     client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"})
 
     repair = client.post("/api/repair").json()
@@ -146,12 +152,12 @@ def test_repair_offers_priced_options_with_autonomy_verdicts(client: TestClient)
 
 
 def test_applying_an_unknown_strategy_is_a_404(client: TestClient):
-    client.post("/api/plan/commit")
+    client.post(COMMIT)
     assert client.post("/api/repair/apply", params={"strategy": "wing_it"}).status_code == 404
 
 
 def test_applying_a_repair_moves_the_head(client: TestClient):
-    first = client.post("/api/plan/commit").json()
+    first = client.post(COMMIT).json()
     client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"})
     repair = client.post("/api/repair").json()
     applied = client.post("/api/repair/apply", params={"strategy": repair["recommended"]}).json()
@@ -168,7 +174,7 @@ def test_a_customer_visible_repair_cannot_be_applied_without_approval(
     cannot be talked past, only overridden by a person who saw the diff."""
     from glass_guru.domain import autonomy as autonomy_module
 
-    client.post("/api/plan/commit")
+    client.post(COMMIT)
     client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"})
     repair = client.post("/api/repair").json()
 
@@ -196,12 +202,12 @@ def test_replanning_does_not_erase_work_already_in_flight(client: TestClient):
     have erased the crew that left at six. Repair already carried in-flight work
     forward; a plain re-plan did not.
     """
-    first = client.post("/api/plan/commit").json()
+    first = client.post(COMMIT).json()
     assert "j-401" in scheduled(first)
 
     client.post("/api/events", json={"kind": "job-dispatched", "target": "j-401", "at": "06:05"})
 
-    again = client.post("/api/plan/commit").json()
+    again = client.post(COMMIT).json()
     assert "j-401" in scheduled(again), "dispatched work vanished from the re-planned board"
     assert len(scheduled(again)) == 10
     assert again["feasible"]
@@ -210,7 +216,7 @@ def test_replanning_does_not_erase_work_already_in_flight(client: TestClient):
 def test_every_commitment_state_can_reach_the_board(client: TestClient):
     """Each state is a different colour on the Gantt, so a state that never arrives is
     a colour nobody has ever seen."""
-    client.post("/api/plan/commit")
+    client.post(COMMIT)
     client.post("/api/events", json={"kind": "job-dispatched", "target": "j-401", "at": "06:05"})
     client.post(
         "/api/events",
@@ -222,7 +228,7 @@ def test_every_commitment_state_can_reach_the_board(client: TestClient):
             "commitment_cost": 250,
         },
     )
-    plan = client.post("/api/plan/commit").json()
+    plan = client.post(COMMIT).json()
     states = {stop["commitment_state"] for r in plan["routes"] for stop in r["stops"]}
     assert {"provisional", "confirmed", "dispatched"} <= states
 
@@ -498,3 +504,81 @@ def test_readiness_says_whether_anything_is_guarding_the_door(client: TestClient
     assert "open" in client.get("/api/ready").json()["checks"]["auth"]
     monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
     assert client.get("/api/ready").json()["checks"]["auth"] == "api key required"
+
+
+# --------------------------------------------------------------- usable board
+
+
+def test_a_fresh_workspace_has_no_work_in_it():
+    """A business has staff and vans on day one and no jobs until somebody rings.
+    Pre-booked work nobody booked is confusing on a board somebody is trying to use."""
+    from glass_guru.domain.state import fold
+    from glass_guru.fixtures.sample_business import seed_events
+
+    empty = fold(seed_events(with_jobs=False))
+    assert empty.workers and empty.vans
+    assert empty.jobs == {}
+
+    assert fold(seed_events()).jobs, "the fixture week is still there for scenarios"
+
+
+def test_the_horizon_starts_from_the_next_working_day():
+    """It used to return a date written into the fixture, so on any day but the week
+    of 21 September 2026 the board showed a week that had already happened."""
+    from datetime import date
+
+    from glass_guru.api.main import next_working_day
+    from glass_guru.domain.state import fold
+    from glass_guru.fixtures.sample_business import seed_events
+
+    world = fold(seed_events(with_jobs=False))
+    saturday = date(2026, 9, 26)
+    assert next_working_day(world, saturday) == date(2026, 9, 28)
+    assert next_working_day(world, date(2026, 9, 28)) == date(2026, 9, 28)
+
+
+def test_working_days_come_from_the_roster_not_from_an_assumption():
+    """A business that starts opening Saturdays should not need a code change."""
+    from datetime import date, time
+
+    from glass_guru.api.main import next_working_day
+    from glass_guru.domain.models import DayHours
+    from glass_guru.domain.state import fold
+    from glass_guru.fixtures.sample_business import seed_events
+
+    world = fold(seed_events(with_jobs=False))
+    only = next(iter(world.workers.values()))
+    world.workers = {
+        only.id: only.model_copy(
+            update={"working_hours": (DayHours(weekday=5, start=time(9), end=time(13)),)}
+        )
+    }
+    assert next_working_day(world, date(2026, 9, 26)).weekday() == 5
+
+
+def test_a_quoted_window_opens_at_the_estimate_rather_than_straddling_it():
+    """Centred, a 6:27 arrival was quoted as "5:27 to 7:27" - not a time anyone reads
+    down a phone, and promising half an hour earlier than the crew could manage."""
+    from datetime import datetime, timedelta
+
+    from glass_guru.domain.models import TimeWindow
+
+    arrival = datetime.fromisoformat("2026-09-28T06:27:00-05:00")
+    opens = arrival.replace(minute=arrival.minute // 15 * 15, second=0, microsecond=0)
+    window = TimeWindow(start=opens, end=opens + timedelta(minutes=120))
+
+    assert window.start.hour == 6 and window.start.minute == 15
+    assert window.start <= arrival, "never promise earlier than the crew can arrive"
+
+
+def test_times_a_person_reads_are_twelve_hour():
+    from datetime import time
+
+    from glass_guru.formatting import clock, clock_range
+
+    assert clock(time(8, 0)) == "8:00 AM"
+    assert clock(time(17, 5)) == "5:05 PM"
+    assert clock(time(0, 30)) == "12:30 AM"
+    assert clock_range(time(8, 0), time(17, 0)) == "8:00 AM - 5:00 PM"
+    # One meridiem when both sides agree; repeating it inside a range is noise.
+    assert clock_range(time(9, 0), time(11, 30)) == "9:00 - 11:30 AM"

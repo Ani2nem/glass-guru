@@ -2,6 +2,17 @@ import { useState } from "react";
 import { ApiError, api } from "../api";
 import type { Note } from "../types";
 
+/** The board speaks 12-hour; the API speaks unambiguous. Converting here keeps the
+ * wire format machine-readable and the screen human-readable, rather than asking one
+ * of them to compromise. */
+function to24h(label: string): string {
+  const [, rawHour = "0", minute = "00", meridiem = ""] =
+    label.trim().match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])?$/) ?? [];
+  let hour = Number(rawHour) % 12;
+  if (meridiem.toLowerCase() === "pm") hour += 12;
+  return `${String(hour).padStart(2, "0")}:${minute}`;
+}
+
 /**
  * One box. Type what you just heard.
  *
@@ -30,6 +41,21 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
     } catch (exc) {
       setError(exc as ApiError);
       setNote(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function take(date: string, arrival: string) {
+    if (!draft) return;
+    setBusy(true);
+    try {
+      await api.book(draft, date, to24h(arrival));
+      setNote(null);
+      setText("");
+      onChanged();
+    } catch (exc) {
+      setError(exc as ApiError);
     } finally {
       setBusy(false);
     }
@@ -125,7 +151,16 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
 
           {draft.commitment_cost > 0 && (
             <div className="commitment">
-              <strong>${draft.commitment_cost.toFixed(0)}</strong> to move this slot
+              {/* "$400 to move this slot" said nothing about where $400 came from.
+                  It is a penalty the solver pays if it later moves this appointment,
+                  set from what the customer said they gave up to be there - so the
+                  quote underneath is the evidence for the number above it. */}
+              <strong>${draft.commitment_cost.toFixed(0)}</strong> penalty if we move
+              this appointment later
+              <p className="commitment__why muted">
+                They told us they arranged something around it, so the planner treats
+                moving them as expensive rather than free:
+              </p>
               {draft.commitment_quotes.map((quote) => (
                 <p key={quote} className="quote">“{quote}”</p>
               ))}
@@ -142,14 +177,39 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
           {booking.slots.length > 0 && (
             <div className="slots">
               <h3>Offer them</h3>
+              {/* The list used to show a date, a window and a number, and a dispatcher
+                  had to guess what the number meant and had no way to act on it. It
+                  says what the money is, separates the estimate from the promise, and
+                  books. */}
+              <p className="slots__how">
+                Cheapest first. The price is what this job <em>adds</em> to the week in
+                driving and wages - not what you charge for it.
+              </p>
               {booking.slots.map((slot, index) => (
                 <div
                   key={slot.date + slot.window}
                   className={index === 0 ? "slot slot--best" : "slot"}
                 >
-                  <div className="slot__when">{slot.window}</div>
-                  <div className="slot__cost">${slot.marginal_cost.toFixed(2)}</div>
-                  <div className="slot__why muted">{slot.reason} · {slot.crew}</div>
+                  <div className="slot__day">{slot.day}</div>
+                  <div className="slot__cost">
+                    {slot.marginal_cost === 0 ? "free" : `+$${slot.marginal_cost.toFixed(2)}`}
+                  </div>
+                  <div className="slot__arrival">
+                    arrive about <strong>{slot.arrival}</strong>
+                    <span className="muted"> · promise {slot.window}</span>
+                  </div>
+                  <div className="slot__why muted">
+                    {slot.reason}
+                    <br />
+                    {slot.crew} - {slot.crew_reason}
+                  </div>
+                  <button
+                    className="primary slot__book"
+                    disabled={busy}
+                    onClick={() => void take(slot.date, slot.arrival)}
+                  >
+                    Book it
+                  </button>
                 </div>
               ))}
               {booking.slots.length > 1 && (
