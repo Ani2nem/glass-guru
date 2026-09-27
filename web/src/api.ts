@@ -69,7 +69,10 @@ export const api = {
    * stored until a person agrees to it, and a draft held server-side awaiting
    * confirmation is stored. */
   book: (draft: Draft, date: string, arrival: string) =>
-    post<{ job_id: string }>("/api/book", { draft, date, arrival }),
+    post<{ job_id: string; customer: string; when: string; status: string }>(
+      "/api/book",
+      { draft, date, arrival },
+    ),
   comms: (strategy: string) =>
     post<Message[]>(`/api/comms?strategy=${encodeURIComponent(strategy)}`),
 };

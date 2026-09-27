@@ -101,6 +101,7 @@ class PricingParams(Section):
     call_out_fee: Param
     materials_markup: Param
     minimum_charge: Param
+    after_hours_rate_multiplier: Param
     emergency_uplift: Param
     tax_rate: Param
 

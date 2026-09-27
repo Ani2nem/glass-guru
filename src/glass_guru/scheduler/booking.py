@@ -30,10 +30,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timedelta, tzinfo
+from datetime import date, datetime, time, timedelta, tzinfo
 
 from glass_guru.config import BusinessParams
-from glass_guru.domain.enums import UnservedReason
+from glass_guru.domain.enums import UnservedReason, WindowHardness
 from glass_guru.domain.models import Job, JobId, TimeWindow
 from glass_guru.domain.state import WorldState
 from glass_guru.domain.travel import TravelOracle
@@ -55,6 +55,9 @@ class SlotSuggestion:
     added_travel_minutes: int
     added_travel_miles: float
     reason: str
+    #: Minutes this placement pushes a crew past its shift. Charged at the after-hours
+    #: rate, because it is paid at the overtime rate.
+    overtime_minutes: int = 0
 
     def describe(self, tz: tzinfo) -> str:
         start = self.quoted_window.start.astimezone(tz)
@@ -99,6 +102,7 @@ class BaselineDay:
     served: frozenset[JobId]
     travel_minutes: int
     travel_miles: float
+    overtime_minutes: int = 0
 
 
 @dataclass
@@ -164,6 +168,29 @@ def _reason_for(
     return f"+{added_minutes} min / {added_miles:.1f} mi added to the day"
 
 
+def _within_preferred_hours(
+    draft: Job,
+    on_date: date,
+    tz: tzinfo,
+    earliest_hour: int | None,
+    latest_hour: int | None,
+) -> Job:
+    """The draft with the caller's stated hours attached as a window for this day.
+
+    Soft, not hard: the planner may finish a few minutes past a stated preference and
+    price the lateness, which is the right trade when the alternative is refusing a
+    booking over four minutes. A genuinely unbreakable constraint - "before we open" -
+    arrives as a hard_constraint and is a separate thing.
+    """
+    if earliest_hour is None and latest_hour is None:
+        return draft
+    opens = datetime.combine(on_date, time(earliest_hour or 0), tzinfo=tz)
+    closes = datetime.combine(on_date, time(latest_hour or 23, 59), tzinfo=tz)
+    return draft.model_copy(
+        update={"windows": (TimeWindow(start=opens, end=closes, hardness=WindowHardness.SOFT),)}
+    )
+
+
 def suggest_booking_slots(
     *,
     world: WorldState,
@@ -174,11 +201,18 @@ def suggest_booking_slots(
     business: BusinessParams,
     limit: int = 5,
     cache: BaselineCache | None = None,
+    earliest_hour: int | None = None,
+    latest_hour: int | None = None,
 ) -> BookingOptions:
-    """Rank the days this job could be served on by what serving it actually costs."""
+    """Rank the days this job could be served on by what serving it actually costs.
+
+    ``earliest_hour`` and ``latest_hour`` are the customer's own words turned into
+    numbers - "free after four" is 16. They constrain the search rather than decorating
+    it: a caller who says four in the afternoon and is offered six in the morning on
+    every day of the week has been ignored, however good the price was.
+    """
     tz = params.business_tz
     quoted_minutes = int(business.scheduling.quoted_window_minutes.value)
-    candidate_world = _world_with(world, draft)
 
     # A quote is two solves per day with a caller waiting, so it gets its own ceiling.
     # Inheriting the batch budget made a twenty-five job day take twenty seconds to
@@ -194,6 +228,12 @@ def suggest_booking_slots(
     unavailable: list[UnavailableDay] = []
 
     for on_date in horizon:
+        # The customer's window, as a window on this particular day. Applied to the
+        # draft rather than to the search, so the solver enforces it the same way it
+        # enforces every other promised window - and so a day where it cannot be met
+        # reports that rather than quietly offering something else.
+        wanted = _within_preferred_hours(draft, on_date, tz, earliest_hour, latest_hour)
+
         existing = [
             job.id
             for job in world.schedulable_jobs()
@@ -213,20 +253,20 @@ def suggest_booking_slots(
                 candidate_job_ids=existing,
                 params=params,
             )
+            baseline_costs = [cost_route(route, world, business, tz) for route in baseline.routes]
             remembered = BaselineDay(
-                operating_cost=sum(
-                    _route_operating_cost(cost_route(route, world, business, tz))
-                    for route in baseline.routes
-                ),
+                operating_cost=sum(_route_operating_cost(c) for c in baseline_costs),
                 served=frozenset(j for route in baseline.routes for j in route.job_ids),
                 travel_minutes=sum(r.total_travel_minutes for r in baseline.routes),
                 travel_miles=sum(r.total_travel_miles for r in baseline.routes),
+                overtime_minutes=sum(c.overtime_minutes for c in baseline_costs),
             )
             if cache is not None:
                 cache.put(on_date, existing, params.max_solve_seconds, remembered)
 
         # Everything already placed stays placed. A quote must never look cheap
         # because it quietly displaced someone who was already promised a slot.
+        candidate_world = _world_with(world, wanted)
         trial = plan_day(
             world=candidate_world,
             travel=travel,
@@ -257,10 +297,9 @@ def suggest_booking_slots(
             continue
 
         route, stop = placement
-        trial_cost = sum(
-            _route_operating_cost(cost_route(r, candidate_world, business, tz))
-            for r in trial.routes
-        )
+        trial_costs = [cost_route(r, candidate_world, business, tz) for r in trial.routes]
+        trial_cost = sum(_route_operating_cost(c) for c in trial_costs)
+        trial_overtime = sum(c.overtime_minutes for c in trial_costs)
         # Travel deltas come from the trial alone: the baseline's route objects are
         # not kept, only its cost, which is all the marginal figure needs.
         added_minutes = max(
@@ -294,6 +333,9 @@ def suggest_booking_slots(
                 added_travel_minutes=added_minutes,
                 added_travel_miles=added_miles,
                 reason=_reason_for(added_minutes, added_miles, neighbours, dedicated),
+                # Only the overtime this job adds. A day already running late is not
+                # this customer's bill.
+                overtime_minutes=max(0, trial_overtime - remembered.overtime_minutes),
             )
         )
 

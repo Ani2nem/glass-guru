@@ -25,12 +25,13 @@ half-filled form discovered later.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from glass_guru.agents.llm.base import LLMProvider
 from glass_guru.agents.structured import Example, Extraction, extract
@@ -134,6 +135,23 @@ class CallExtraction(BaseModel):
     def _blank_out_non_answers(cls, value: object) -> object:
         return stated(value) if isinstance(value, str) else value
 
+    @model_validator(mode="after")
+    def _a_window_must_be_possible(self) -> CallExtraction:
+        """Drop an upper bound that contradicts the lower one.
+
+        "Free after 4pm" came back as earliest 16 *and* latest 16, which asks for work
+        that starts after four and finishes by four. A model reaching for both ends of
+        a range it was given one end of is a predictable slip, and it is checkable, so
+        it is checked rather than prompted away.
+        """
+        if (
+            self.earliest_hour is not None
+            and self.latest_hour is not None
+            and self.latest_hour <= self.earliest_hour
+        ):
+            object.__setattr__(self, "latest_hour", None)
+        return self
+
     @field_validator("phone", mode="after")
     @classmethod
     def _only_something_that_could_be_dialled(cls, value: str) -> str:
@@ -154,7 +172,14 @@ class CallExtraction(BaseModel):
         description="One service type from the catalogue. Empty if genuinely unclear.",
     )
     description: str = Field(default="", description="What they said is wrong, briefly.")
-    pane_count: int | None = Field(default=None, description="Only if actually stated.")
+    pane_count: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many panes of glass, only if the caller counted them. A measurement "
+            "is not a count: 'a 6 ft glass' is one pane, not six."
+        ),
+    )
     glass_type: str = Field(
         default="", description="annealed, tempered, laminated or insulated_unit, if known."
     )
@@ -166,6 +191,27 @@ class CallExtraction(BaseModel):
     )
     preferred_timing: str = Field(
         default="", description='In their words, e.g. "Tuesday afternoon", "any morning".'
+    )
+    # The same preference as a number, because prose cannot constrain a search.
+    # "Free anytime after 4pm" was extracted perfectly into preferred_timing and then
+    # ignored by everything downstream, so every slot came back at six in the morning.
+    earliest_hour: int | None = Field(
+        default=None,
+        ge=0,
+        le=23,
+        description=(
+            "Earliest hour they will accept, 24-hour. 16 for 'after 4pm', "
+            "12 for 'afternoons'. Null if they did not say."
+        ),
+    )
+    latest_hour: int | None = Field(
+        default=None,
+        ge=0,
+        le=23,
+        description=(
+            "Latest hour the work may still be going on, 24-hour. 12 for 'mornings "
+            "only', 9 for 'before we open at nine'. Null if they did not say."
+        ),
     )
     hard_constraint: str = Field(
         default="",
@@ -207,6 +253,16 @@ Rules:
 - Pick one service type from the catalogue below, or leave it empty if genuinely unclear.
 - Do not estimate how long the job will take. That is not your job and the system
   already knows.
+- pane_count is how many panes, not how big. "a 6ft glass", "a 3 by 4 pane" and "the
+  big window" are all one pane. Six panes means the caller said six. Getting this
+  wrong triples the duration and the crew, and the customer is quoted for a day's work
+  they did not ask for.
+- Put any time preference in numbers as well as words. "Free after 4pm" is
+  earliest_hour 16. "Mornings only" is latest_hour 12. "Before we open at nine" is
+  latest_hour 9. Set only the end the caller actually gave: "after 4pm" has an
+  earliest and no latest; "before nine" has a latest and no earliest. Leave them null
+  when the caller did not say - a guessed constraint is worse than none, because it
+  silently rules out slots they would have taken.
 - commitment_signals: only arrangements the caller actually mentioned making. Quote
   their words. Say nothing if they said nothing. The difference between these matters,
   because they are priced very differently:
@@ -225,6 +281,28 @@ Catalogue:
 
 
 EXAMPLES: tuple[Example, ...] = (
+    # A size, not a count. "6 ft" became six panes, which tripled the duration to five
+    # and three quarter hours and put two fitters on it - a day's work the caller never
+    # asked for, quoted at a day's price. A rule alone did not fix it; a worked example
+    # did, which is the documented lever for a small model.
+    Example(
+        text=(
+            "Ani here, 913-295-2960. Backyard door glass is broken at 300 W Byron "
+            "Nelson Blvd, Roanoke. About a 6 ft glass, ground floor. Free after 4pm."
+        ),
+        output=CallExtraction(
+            customer_name="Ani",
+            phone="913-295-2960",
+            address="300 W Byron Nelson Blvd, Roanoke",
+            service_type="residential_window_replacement",
+            description="backyard door glass broken, about 6 ft",
+            pane_count=1,
+            property_type="residential",
+            preferred_timing="after 4pm",
+            earliest_hour=16,
+            site_notes="ground floor",
+        ),
+    ),
     Example(
         text=(
             "Hi, it's Sarah Chen, 206-555-0142. Two windows went in the front room, "
@@ -239,6 +317,7 @@ EXAMPLES: tuple[Example, ...] = (
             pane_count=2,
             property_type="residential",
             preferred_timing="Tuesday morning",
+            latest_hour=12,
             commitment_signals=[CommitmentSignal.TIME_OFF_WORK],
             commitment_quotes=["I'd have to take the morning off work"],
             details_covered=["how many panes"],
@@ -280,6 +359,9 @@ class IntakeResult:
     #: Things a dispatcher should ask before hanging up.
     ask_next: tuple[str, ...]
     missing_required: tuple[str, ...]
+    #: The caller's stated hours, as numbers the search can use.
+    earliest_hour: int | None = None
+    latest_hour: int | None = None
     geocode_note: str = ""
 
     @property
@@ -310,6 +392,102 @@ def commitment_cost_for(signals: list[CommitmentSignal], business: BusinessParam
     return min(total, business.commitment.max_total.value)
 
 
+#: A measurement, however it is written: a pair like "3 by 4" or "3' x 4\"", or a
+#: single one like "6 ft". Both are sizes, and neither is a quantity of panes.
+_DIMENSIONS = re.compile(
+    r"\b\d+\s*(?:'|ft|foot|feet|\"|in|inch(?:es)?|cm|m|mm)?\s*(?:x|by|\*)\s*\d+"
+    r"|\b\d+\s*(?:'|ft|foot|feet|\"|inch(?:es)?|cm|mm)\b",
+    re.IGNORECASE,
+)
+#: An explicit count: "six panes", "2 windows", "three sheets".
+_COUNTED = re.compile(
+    r"\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+"
+    r"(?:pane|window|sheet|unit|glass)e?s\b",
+    re.IGNORECASE,
+)
+
+
+#: "after 4pm", "from 4", "not before 4" - a lower bound on when we may turn up.
+_AFTER = re.compile(
+    r"\b(?:after|from|not before|no earlier than|past)\s+(\d{1,2})\s*(?::\s*(\d{2}))?\s*"
+    r"(am|pm|o'?clock)?",
+    re.IGNORECASE,
+)
+#: "before 9", "by 9", "until 9" - an upper bound.
+_BEFORE = re.compile(
+    # "not before 8" is a lower bound wearing an upper bound's words, so the negated
+    # forms are excluded here and caught by _AFTER instead.
+    r"(?<!not )(?<!no )(?<!earlier than )"
+    r"\b(?:before|by|until|till|til|no later than)\s+(\d{1,2})\s*"
+    r"(?::\s*(\d{2}))?\s*(am|pm|o'?clock)?",
+    re.IGNORECASE,
+)
+
+
+def _hour_24(digits: str, meridiem: str | None) -> int | None:
+    hour = int(digits)
+    if hour > 23:
+        return None
+    marker = (meridiem or "").lower()
+    if marker.startswith("pm") and hour < 12:
+        hour += 12
+    elif marker.startswith("am") and hour == 12:
+        hour = 0
+    elif not marker and hour <= 7:
+        # "after 4" from a customer talking about their day means the afternoon. A
+        # glass fitter is not turning up at four in the morning, and the caller knows
+        # that, which is why they did not bother saying pm.
+        hour += 12
+    return hour
+
+
+def _fix_the_direction(call: CallExtraction, text: str) -> CallExtraction:
+    """Put a stated bound on the side the caller actually put it.
+
+    "Free anytime of the week after 4pm" came back as latest_hour 16 - finish by four -
+    and every slot offered was six in the morning, which is the exact opposite of what
+    was asked for and reads as the system ignoring the customer entirely.
+
+    Which side of a range a word puts you on is not a matter of interpretation, so it
+    is checked. The model still does the hard part: finding the time in the prose.
+    """
+    after = _AFTER.search(text)
+    before = _BEFORE.search(text)
+    update: dict[str, int | None] = {}
+
+    if after:
+        hour = _hour_24(after.group(1), after.group(3))
+        if hour is not None:
+            update["earliest_hour"] = hour
+            if call.latest_hour is not None and call.latest_hour <= hour and not before:
+                update["latest_hour"] = None
+    if before:
+        hour = _hour_24(before.group(1), before.group(3))
+        if hour is not None:
+            update["latest_hour"] = hour
+
+    return call.model_copy(update=update) if update else call
+
+
+def _distrust_a_size_read_as_a_count(call: CallExtraction, text: str) -> CallExtraction:
+    """A measurement is not a quantity.
+
+    "About a 6 ft glass" came back as six panes, which took a two-hour job to five and
+    three quarter hours and put two fitters on it - a day's work the caller never asked
+    for, at a day's price. A worked example fixed that phrasing; "a 3 by 4 pane" still
+    multiplied the dimensions.
+
+    So it is checked rather than prompted. If the caller wrote a measurement and never
+    wrote a count, the count is one. Both halves matter: "six panes, each 3 by 4" says
+    a number out loud and keeps it.
+    """
+    if call.pane_count is None or call.pane_count <= 1:
+        return call
+    if _DIMENSIONS.search(text) and not _COUNTED.search(text):
+        return call.model_copy(update={"pane_count": 1})
+    return call
+
+
 def intake(
     provider: LLMProvider,
     text: str,
@@ -333,6 +511,9 @@ def intake(
         )
 
         call = extraction.value
+        if call is not None:
+            call = _distrust_a_size_read_as_a_count(call, text)
+            call = _fix_the_direction(call, text)
         if call is None:
             record(escalated=True, provider_failed=extraction.provider_failed)
             active.set_attribute("outcome", "escalated")
@@ -414,6 +595,8 @@ def intake(
             commitment_quotes=tuple(call.commitment_quotes),
             ask_next=ask_next,
             missing_required=missing,
+            earliest_hour=call.earliest_hour,
+            latest_hour=call.latest_hour,
             geocode_note=geocode_note,
         )
 

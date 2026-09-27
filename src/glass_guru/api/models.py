@@ -203,12 +203,20 @@ class BookRequest(Api):
     arrival: str
 
 
+class UnavailableDayView(Api):
+    """A day we cannot offer, and why. An empty slot list explains nothing."""
+
+    day: str
+    reason: str
+
+
 class IntakeView(Api):
     draft: DraftView
     bookable: bool
     missing: list[str]
     ask_next: list[str]
     slots: list[SlotView] = Field(default_factory=list)
+    unavailable: list[UnavailableDayView] = Field(default_factory=list)
     repairs: int = 0
     note: str = ""
 

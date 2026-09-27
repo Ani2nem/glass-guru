@@ -288,7 +288,13 @@ class DispatchService:
 
     # ------------------------------------------------------------------ booking
 
-    def booking_slots(self, draft: Job, start: date) -> BookingOptions:
+    def booking_slots(
+        self,
+        draft: Job,
+        start: date,
+        earliest_hour: int | None = None,
+        latest_hour: int | None = None,
+    ) -> BookingOptions:
         with span("booking.slots", service=draft.service_type.value) as active:
             state = self.world()
             horizon_params = self.horizon_params()
@@ -304,6 +310,8 @@ class DispatchService:
                 params=self.solve_params(),
                 business=self.business,
                 cache=self._baseline_cache,
+                earliest_hour=earliest_hour,
+                latest_hour=latest_hour,
             )
             active.set_attribute("slots", len(options.slots))
             record(

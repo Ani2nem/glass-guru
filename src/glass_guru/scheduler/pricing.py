@@ -53,6 +53,9 @@ class Quote:
 
     #: How the labour line was reached, for saying out loud.
     person_hours: float = 0.0
+    #: Of those, how many fall outside the crew's shift and are billed at the
+    #: after-hours rate.
+    after_hours: float = 0.0
     crew_size: int = 1
     hit_minimum: bool = False
 
@@ -78,6 +81,8 @@ class Quote:
             f"{'call-out':<30}${self.call_out:>8,.2f}",
             f"{('labour ' + hours + 'h' + crew):<30}${self.labour:>8,.2f}",
         ]
+        if self.after_hours:
+            lines.append(f"  of which {self.after_hours:g}h after hours at time and a half")
         if self.materials:
             lines.append(f"{'glass and materials':<30}${self.materials:>8,.2f}")
         if self.uplift:
@@ -92,7 +97,12 @@ class Quote:
         return lines
 
 
-def quote_for(job: Job, business: BusinessParams, driving_cost: float = 0.0) -> Quote:
+def quote_for(
+    job: Job,
+    business: BusinessParams,
+    driving_cost: float = 0.0,
+    overtime_minutes: int = 0,
+) -> Quote:
     """Price one job from the rate card.
 
     Labour is billed per fitter, rounded up to the quarter hour - a crew of two on a
@@ -105,7 +115,15 @@ def quote_for(job: Job, business: BusinessParams, driving_cost: float = 0.0) -> 
 
     billable_hours = math.ceil(job.estimated_duration_min / 15) * 0.25
     person_hours = billable_hours * job.crew_size
-    labour = round(person_hours * rate, 2)
+
+    # Labour that runs past the crew's shift is charged at the after-hours rate,
+    # because it is paid at the overtime rate. A four-o'clock start on a two-hour job
+    # is a perfectly reasonable thing for a customer to want and a perfectly
+    # unreasonable thing to sell at the day rate.
+    after_hours = min(person_hours, math.ceil(overtime_minutes / 15) * 0.25 * job.crew_size)
+    normal_hours = person_hours - after_hours
+    after_rate = rate * float(card.after_hours_rate_multiplier.value)
+    labour = round(normal_hours * rate + after_hours * after_rate, 2)
 
     entry = CATALOG.get(job.service_type)
     panes = max(0, job.glass_spec.pane_count - 1) if job.glass_spec else 0
@@ -131,7 +149,9 @@ def quote_for(job: Job, business: BusinessParams, driving_cost: float = 0.0) -> 
 
     # What it really costs: the glass at our cost, the wages for the time on site, and
     # whatever driving this placement adds. Anything less makes the margin fiction.
-    wages = round(person_hours * 60 * float(business.labor.loaded_rate_per_minute.value), 2)
+    wage_per_hour = float(business.labor.loaded_rate_per_minute.value) * 60
+    overtime_premium = float(business.labor.overtime_multiplier.value)
+    wages = round(normal_hours * wage_per_hour + after_hours * wage_per_hour * overtime_premium, 2)
     total_cost = round(materials_cost + wages + driving_cost, 2)
 
     tax = round(subtotal * float(card.tax_rate.value), 2)
@@ -148,6 +168,7 @@ def quote_for(job: Job, business: BusinessParams, driving_cost: float = 0.0) -> 
         wages=wages,
         driving=round(driving_cost, 2),
         person_hours=person_hours,
+        after_hours=after_hours,
         crew_size=job.crew_size,
         hit_minimum=hit_minimum,
     )

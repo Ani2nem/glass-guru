@@ -162,12 +162,18 @@ export interface Draft {
   lon: number | null;
 }
 
+export interface UnavailableDay {
+  day: string;
+  reason: string;
+}
+
 export interface Intake {
   draft: Draft;
   bookable: boolean;
   missing: string[];
   ask_next: string[];
   slots: Slot[];
+  unavailable: UnavailableDay[];
   repairs: number;
   note: string;
 }

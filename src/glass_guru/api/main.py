@@ -43,6 +43,7 @@ from glass_guru.api.models import (
     SlotView,
     TextRequest,
     TriageView,
+    UnavailableDayView,
     WorldView,
 )
 from glass_guru.cli.events import EventArgumentError, build_event
@@ -53,7 +54,7 @@ from glass_guru.formatting import clock, clock_range
 from glass_guru.geocoding import GeocodeError, OutsideServiceArea
 from glass_guru.obs.correlation import dispatch, new_dispatch_id
 from glass_guru.obs.tracing import configure, span
-from glass_guru.persistence.log import Workspace
+from glass_guru.persistence.log import PlanConflict, Workspace
 from glass_guru.scheduler.booking import SlotSuggestion
 from glass_guru.scheduler.pricing import quote_for
 from glass_guru.scheduler.travel.cache import CacheMiss
@@ -607,7 +608,9 @@ def accept_triage(request: AcceptRequest) -> dict[str, int]:
         return {"recorded": len(events)}
 
 
-def _pricing(draft: Job | None, business: BusinessParams, driving: float) -> dict[str, Any]:
+def _pricing(
+    draft: Job | None, business: BusinessParams, driving: float, overtime: int = 0
+) -> dict[str, Any]:
     """What to charge for this job in this slot, itemised.
 
     The driving figure differs per slot - that is the whole point of ranking them - so
@@ -616,7 +619,7 @@ def _pricing(draft: Job | None, business: BusinessParams, driving: float) -> dic
     """
     if draft is None:
         return {}
-    quote = quote_for(draft, business, driving_cost=driving)
+    quote = quote_for(draft, business, driving_cost=driving, overtime_minutes=overtime)
     return {
         "quote_total": quote.total,
         "quote_lines": quote.explain(),
@@ -682,8 +685,14 @@ def run_intake(request: TextRequest) -> IntakeView:
         )
 
         slots: list[SlotView] = []
+        unavailable: list[UnavailableDayView] = []
         if result.bookable and result.draft is not None:
-            options = svc.booking_slots(result.draft, _default_start(svc))
+            options = svc.booking_slots(
+                result.draft,
+                _default_start(svc),
+                earliest_hour=result.earliest_hour,
+                latest_hour=result.latest_hour,
+            )
             slots = [
                 SlotView(
                     date=s.on_date.isoformat(),
@@ -697,9 +706,16 @@ def run_intake(request: TextRequest) -> IntakeView:
                     crew=" + ".join(s.worker_names),
                     crew_reason=_crew_reason(result.draft, s),
                     reason=s.reason,
-                    **_pricing(result.draft, svc.business, s.marginal_cost),
+                    **_pricing(result.draft, svc.business, s.marginal_cost, s.overtime_minutes),
                 )
                 for s in options.slots
+            ]
+            # An empty list explains nothing. If the caller said "after four" and no
+            # day can hold the work by then, that is the single most useful sentence
+            # on the screen - it is what the dispatcher says back down the phone.
+            unavailable = [
+                UnavailableDayView(day=f"{u.on_date:%a %d %b}", reason=u.detail)
+                for u in options.unavailable
             ]
 
         return IntakeView(
@@ -708,6 +724,7 @@ def run_intake(request: TextRequest) -> IntakeView:
             missing=list(result.missing_required),
             ask_next=list(result.ask_next),
             slots=slots,
+            unavailable=unavailable,
             repairs=result.extraction.repairs,
             note=result.geocode_note,
         )
@@ -779,7 +796,7 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             commitment_state=CommitmentState.CONFIRMED,
         )
 
-        recorded = svc.apply_events(
+        svc.apply_events(
             [
                 JobRequested(
                     event_id=new_dispatch_id("job"),
@@ -799,8 +816,35 @@ def book_slot(request: BookRequest) -> dict[str, str]:
                 ),
             ]
         )
-        broadcaster.publish("world", {"booked": job_id})
-        return {"job_id": job_id, "recorded": str(recorded)}
+        # Re-plan and commit, so the job is on the calendar the moment it is booked.
+        # Recording the events alone left it in the world and invisible on the board,
+        # which reads as the button having done nothing at all - the single worst
+        # outcome for a button, because the next thing a dispatcher does is press it
+        # again.
+        placed = "unplaced"
+        try:
+            plan = svc.plan_week(start=_default_start(svc))
+            head = svc.head()
+            committed = svc.commit(plan.plan, expected_parent=head.id if head else None)
+            placed = (
+                "scheduled"
+                if any(job_id in route.job_ids for route in committed.routes)
+                else "booked but not yet scheduled"
+            )
+            broadcaster.publish("plan", {"plan_id": committed.id})
+        except (ServiceError, PlanConflict):
+            # The booking is recorded either way. A failed re-plan is a scheduling
+            # problem to look at, not a reason to lose the customer's appointment.
+            broadcaster.publish("world", {"booked": job_id})
+
+        promised = job.windows[0].start.astimezone(svc.tz)
+        finishes = arrival + timedelta(minutes=draft.duration_minutes)
+        return {
+            "job_id": job_id,
+            "customer": job.customer_name,
+            "when": f"{promised:%a %d %b} {clock_range(promised, finishes)}",
+            "status": placed,
+        }
 
 
 @app.post("/api/comms", response_model=list[MessageView])

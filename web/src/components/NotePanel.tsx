@@ -30,12 +30,14 @@ function to24h(label: string): string {
 export function NotePanel({ onChanged }: { onChanged: () => void }) {
   const [text, setText] = useState("");
   const [note, setNote] = useState<Note | null>(null);
+  const [booked, setBooked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
   async function run(kind?: "booking" | "disruption") {
     setBusy(true);
     setError(null);
+    setBooked(null);
     try {
       setNote(await api.note(text, kind));
     } catch (exc) {
@@ -50,7 +52,10 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
     if (!draft) return;
     setBusy(true);
     try {
-      await api.book(draft, date, to24h(arrival));
+      const result = await api.book(draft, date, to24h(arrival));
+      // Say so. The button worked before this and looked like it had not, which is
+      // the worst thing a button can do: the next thing anybody does is press it again.
+      setBooked(`Booked ${result.customer} for ${result.when} - ${result.status}.`);
       setNote(null);
       setText("");
       onChanged();
@@ -97,6 +102,8 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
       <button className="primary" disabled={busy || !text.trim()} onClick={() => void run()}>
         {busy ? "Reading…" : "Read it"}
       </button>
+
+      {booked && <p className="booked">{booked}</p>}
 
       {error && (
         <p className="error">
@@ -171,6 +178,19 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
             <div className="ask">
               <h3>Still to ask</h3>
               <ul>{booking.ask_next.map((q) => <li key={q}>{q}</li>)}</ul>
+            </div>
+          )}
+
+          {booking.slots.length === 0 && booking.unavailable.length > 0 && (
+            <div className="ask">
+              <h3>Cannot offer any of these</h3>
+              <ul>
+                {booking.unavailable.map((u) => (
+                  <li key={u.day}>
+                    <strong>{u.day}</strong> - {u.reason}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

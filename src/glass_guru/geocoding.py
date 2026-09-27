@@ -32,6 +32,21 @@ class GeocodeError(RuntimeError):
     """The address could not be resolved."""
 
 
+class AddressTooVague(GeocodeError):
+    """Resolved, but to a town rather than to somewhere a van can park.
+
+    "Haslet" matches. It matches an administrative boundary covering the whole town,
+    and quoting against its centroid produces a real-looking price for a journey to
+    nowhere in particular. Refusing is the only honest answer, and the dispatcher still
+    has the customer on the phone and can simply ask.
+    """
+
+    def __init__(self, address: str, matched: str) -> None:
+        super().__init__(f"{address!r} matched {matched}, which is an area, not an address")
+        self.address = address
+        self.matched = matched
+
+
 class OutsideServiceArea(GeocodeError):
     """Resolved, but nowhere this business can send a van.
 
@@ -127,9 +142,35 @@ class Geocoder:
             )
         entry = self._fetch(address)
         location = self._to_location(entry)
+        self._refuse_an_area(address, entry)
         self._check_in_area(address, location)
         self._by_query[address.strip().lower()] = entry
         return location
+
+    #: Nominatim's own classification. Anything administrative is a region rather than
+    #: a place: a town, a county, a postcode district.
+    _AREA_TYPES = frozenset(
+        {
+            "city",
+            "town",
+            "village",
+            "hamlet",
+            "suburb",
+            "county",
+            "state",
+            "postcode",
+            "municipality",
+            "administrative",
+            "neighbourhood",
+            "quarter",
+            "borough",
+        }
+    )
+
+    @staticmethod
+    def _refuse_an_area(address: str, entry: dict[str, object]) -> None:
+        if str(entry.get("precision", "")) == "area":
+            raise AddressTooVague(address, str(entry.get("display_name", "an area")))
 
     def _check_in_area(self, address: str, location: Location) -> None:
         if self.near is None or self.radius_miles is None:
@@ -168,6 +209,7 @@ class Geocoder:
             lat=float(entry["lat"]),  # type: ignore[arg-type]
             lon=float(entry["lon"]),  # type: ignore[arg-type]
             address=str(entry.get("display_name", "")),
+            precision=str(entry.get("precision", "")),
         )
 
     def _fetch(self, address: str) -> dict[str, object]:
@@ -177,7 +219,14 @@ class Geocoder:
                 time.sleep(RATE_LIMIT_SECONDS - elapsed)
             self._last_request = time.monotonic()
 
-        params: dict[str, str | int] = {"q": address, "format": "json", "limit": 1}
+        params: dict[str, str | int] = {
+            "q": address,
+            "format": "json",
+            "limit": 1,
+            # Asked for so the answer can say whether it found a house, a street or a
+            # whole town. Without it every match looks equally good.
+            "addressdetails": 1,
+        }
         viewbox = self._viewbox()
         if viewbox:
             # bounded=1 makes this a hard restriction rather than a preference. A
@@ -197,9 +246,17 @@ class Geocoder:
             where = " in the service area" if self._viewbox() else ""
             raise GeocodeError(f"no match for {address!r}{where}")
         hit = payload[0]
+        kind = str(hit.get("addresstype", "")) or str(hit.get("type", ""))
+        if kind in Geocoder._AREA_TYPES or str(hit.get("class", "")) == "boundary":
+            precision = "area"
+        elif kind in {"road", "residential", "primary", "secondary", "tertiary", "street"}:
+            precision = "road"
+        else:
+            precision = "house"
         return {
             "lat": float(hit["lat"]),
             "lon": float(hit["lon"]),
             "display_name": hit["display_name"],
+            "precision": precision,
             "query": address,
         }

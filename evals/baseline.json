@@ -1,8 +1,8 @@
 {
-  "duration_seconds": 54.31,
+  "duration_seconds": 51.45,
   "model_id": "BedrockLLMProvider (us.amazon.nova-lite-v1:0)",
   "passed": true,
-  "started_at": "2026-09-27T20:39:59.703106+00:00",
+  "started_at": "2026-09-27T21:55:31.614748+00:00",
   "tiers": [
     {
       "cases": 15,
@@ -19,6 +19,10 @@
     {
       "cases": 22,
       "failures": [
+        {
+          "case_id": "intake-tempered",
+          "detail": "service_type: expected 'storefront_glass', got 'residential_window_replacement'; property_type: expected 'commercial', got 'residential'; glass_type: expected 'tempered', got 'toughened'"
+        },
         {
           "case_id": "triage-van-down",
           "detail": "asks_question: expected False, got True"
@@ -42,7 +46,7 @@
         "repairs": 0.0
       },
       "passed": true,
-      "score": 0.9477,
+      "score": 0.9297,
       "threshold": 0.85,
       "tier": 1
     },
