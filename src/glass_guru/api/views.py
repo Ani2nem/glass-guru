@@ -179,6 +179,9 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
             )
             for j in world.active_jobs()
         ],
+        depot_address=next(
+            (van.home_depot.address for van in world.vans.values() if van.home_depot.address), ""
+        ),
         committed_plan_id=head_id,
         calibration_warning=calibration_banner(business) or "",
     )

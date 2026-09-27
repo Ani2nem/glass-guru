@@ -60,6 +60,10 @@ class Location(Frozen):
     #: A van can be sent to a house. "Haslet" is a town, and sending a crew to its
     #: centroid is not a booking, it is a guess with a price on it.
     precision: str = ""
+    #: The street the geocoder matched, so a caller's words can be checked against
+    #: what the map actually found. "16 Haslet, Texas" resolves to 16 Avondale Haslet
+    #: Road - a real house the caller never named.
+    matched_road: str = ""
 
     @property
     def geohash7(self) -> str:

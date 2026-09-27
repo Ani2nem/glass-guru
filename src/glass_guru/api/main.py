@@ -687,10 +687,18 @@ def run_intake(request: TextRequest) -> IntakeView:
         slots: list[SlotView] = []
         unavailable: list[UnavailableDayView] = []
         if result.bookable and result.draft is not None:
+            # A caller who stated nothing gets civil hours, not the crack of dawn:
+            # Marcus starts at six, so an unconstrained solve offered every customer
+            # 6:00 AM. But only when *nothing* was stated - "before we open at nine"
+            # deliberately keeps early starts available, because arriving before the
+            # doors open is the crew's business, not the caller's.
+            earliest = result.earliest_hour
+            if earliest is None and result.latest_hour is None:
+                earliest = 8
             options = svc.booking_slots(
                 result.draft,
                 _default_start(svc),
-                earliest_hour=result.earliest_hour,
+                earliest_hour=earliest,
                 latest_hour=result.latest_hour,
             )
             slots = [

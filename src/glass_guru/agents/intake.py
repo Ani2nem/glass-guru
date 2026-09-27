@@ -96,27 +96,24 @@ def stated(value: str) -> str:
     return "" if value.strip().lower().strip(".") in _NOT_AN_ANSWER else value.strip()
 
 
-#: The fewest digits that could be a phone number. Seven is a local US number; ten
-#: with an area code. Low on purpose - the job is to reject "Nguyen Glass", not to
-#: adjudicate international dialling plans.
-_PHONE_DIGITS = 7
-
-
 def phone_or_blank(value: str) -> str:
-    """The value if it could be a phone number, otherwise nothing.
+    """The value if somebody could actually be rung on it, otherwise nothing.
 
-    Blanking "N/A" was not enough. Told to produce a phone and given no number, the
-    model does not give up - it reaches for the nearest string and writes the company
-    name in. The form then reads Phone: Nguyen Glass, which is worse than N/A, because
-    it looks like data.
+    Two lessons, in order. Told to produce a phone and given no number, the model
+    writes the company name in - so anything without enough digits is blanked. Then a
+    nine-digit number sailed through a seven-digit floor, was accepted, displayed, and
+    would have been dialled: a digit count that low verifies nothing.
 
-    A phone number is checkable, so it gets checked rather than trusted. That is the
-    same line the whole system is drawn on: the model reads the call, and anything
-    with a verifiable shape is verified.
+    A US number is ten digits, eleven with a leading 1, and this business is in Texas.
+    An international caller (+44...) keeps their number: the + is an explicit claim,
+    not a truncation.
     """
-    if sum(character.isdigit() for character in value) < _PHONE_DIGITS:
-        return ""
-    return value
+    digits = "".join(ch for ch in value if ch.isdigit())
+    if value.strip().startswith("+") and len(digits) >= 10:
+        return value
+    if len(digits) == 10 or (len(digits) == 11 and digits[0] == "1"):
+        return value
+    return ""
 
 
 def email_or_blank(value: str) -> str:
@@ -151,6 +148,17 @@ class CallExtraction(BaseModel):
         ):
             object.__setattr__(self, "latest_hour", None)
         return self
+
+    @field_validator("address", mode="after")
+    @classmethod
+    def _an_address_is_a_place_not_a_phrase(cls, value: str) -> str:
+        """ "Ani in haslet" produced the address "in haslet", which then failed to
+        geocode for the preposition rather than for the vagueness."""
+        lowered = value.lower()
+        for prefix in ("in ", "at ", "on ", "over in ", "out in "):
+            if lowered.startswith(prefix):
+                return value[len(prefix) :].strip()
+        return value
 
     @field_validator("phone", mode="after")
     @classmethod
@@ -374,6 +382,56 @@ class IntakeResult:
         return self.extraction.value
 
 
+def _said_on_the_call(quote: str, text: str) -> bool:
+    """Did these words, near enough, actually come out of the caller's mouth?
+
+    Normalised to letters so punctuation and case cannot hide a genuine quote, and
+    matched as a substring so trimming counts as quoting. "time off work" against a
+    call that never mentions work is what this exists to catch.
+    """
+
+    def letters(value: str) -> str:
+        kept = "".join(ch for ch in value.lower() if ch.isalnum() or ch == " ")
+        return " ".join(kept.split())
+
+    return bool(quote.strip()) and letters(quote) in letters(text)
+
+
+def _civil_floor(call: CallExtraction, text: str) -> CallExtraction:
+    """Nobody said six in the morning, so do not offer it.
+
+    "Morning" made the model guess earliest_hour 6, and the search dutifully offered
+    every customer the crack of Marcus's shift. A lower bound below eight stands only
+    when the caller typed the early hour themselves - "after 6am" is a request, "the
+    morning" is not. Upper bounds are untouched: "before we open at nine" legitimately
+    wants the crew there early, and that is the crew's business, not the caller's.
+    """
+    if call.earliest_hour is not None and call.earliest_hour < 8 and not _AFTER.search(text):
+        return call.model_copy(update={"earliest_hour": 8})
+    return call
+
+
+def grounded_commitments(call: CallExtraction, text: str) -> CallExtraction:
+    """Keep only the commitment evidence the transcript supports.
+
+    "James needs the window fixed on monday morning" came back with time_off_work and
+    the quote "time off work" - words James never said. The model was asked to price
+    goodwill and invented the receipt. Every quote must appear in the call, and a
+    signal with no surviving quote is not priced: an unpriced real commitment costs a
+    slightly-too-cheap move later, while a priced invented one is a $250 lie with the
+    customer's name on it.
+    """
+    quotes = [q for q in call.commitment_quotes if _said_on_the_call(q, text)]
+    if len(quotes) == len(call.commitment_quotes):
+        return call
+    return call.model_copy(
+        update={
+            "commitment_quotes": quotes,
+            "commitment_signals": [] if not quotes else call.commitment_signals,
+        }
+    )
+
+
 def commitment_cost_for(signals: list[CommitmentSignal], business: BusinessParams) -> float:
     """Turn recognised signals into a number, capped.
 
@@ -488,6 +546,85 @@ def _distrust_a_size_read_as_a_count(call: CallExtraction, text: str) -> CallExt
     return call
 
 
+#: What answers each catalogue question, when the model forgets to say so itself.
+#: Deterministic backstop for `details_covered`: the mechanism exists, the model uses
+#: it unreliably, and asking a caller for the size they just gave reads as not
+#: listening.
+_ANSWERED_BY: dict[str, re.Pattern[str]] = {
+    "how many panes": re.compile(
+        r"\b(?:\d+|one|two|three|four|five|six)\s+(?:big\s+)?pane|\bpane\b", re.I
+    ),
+    "rough size": _DIMENSIONS,
+    "ground floor or upstairs": re.compile(
+        r"\bground floor|\bupstairs|\bdownstairs|\bfirst floor|\bsecond floor", re.I
+    ),
+}
+
+
+def _still_unanswered(asks: tuple[str, ...], call: CallExtraction, text: str) -> tuple[str, ...]:
+    out = []
+    for ask in asks:
+        pattern = _ANSWERED_BY.get(ask)
+        if ask == "how many panes" and call.pane_count is not None:
+            continue
+        if pattern is not None and pattern.search(text):
+            continue
+        out.append(ask)
+    return tuple(out)
+
+
+#: Words in a road name that carry no identity. "Road" appears in every road.
+_ROAD_NOISE = frozenset(
+    {
+        "road",
+        "rd",
+        "street",
+        "st",
+        "avenue",
+        "ave",
+        "boulevard",
+        "blvd",
+        "lane",
+        "ln",
+        "drive",
+        "dr",
+        "highway",
+        "hwy",
+        "parkway",
+        "pkwy",
+        "court",
+        "ct",
+        "way",
+        "north",
+        "south",
+        "east",
+        "west",
+        "n",
+        "s",
+        "e",
+        "w",
+    }
+)
+
+
+def _the_map_guessed(spoken: str, location: Location) -> str:
+    """The street the map matched, when the caller never said it.
+
+    Nominatim is helpful to a fault: "16 Haslet, Texas" resolves cleanly to 16
+    Avondale Haslet Road - a real front door that nobody asked for a van at. If the
+    matched road has identifying words the caller did not say, this returns what to
+    confirm; booking against a guessed street is how a crew spends an hour at the
+    wrong house.
+    """
+    road = location.matched_road.lower()
+    if not road:
+        return ""
+    said = spoken.lower()
+    distinctive = [w for w in road.replace("-", " ").split() if w not in _ROAD_NOISE]
+    missing = [w for w in distinctive if w not in said]
+    return location.matched_road if missing else ""
+
+
 def intake(
     provider: LLMProvider,
     text: str,
@@ -514,6 +651,8 @@ def intake(
         if call is not None:
             call = _distrust_a_size_read_as_a_count(call, text)
             call = _fix_the_direction(call, text)
+            call = grounded_commitments(call, text)
+            call = _civil_floor(call, text)
         if call is None:
             record(escalated=True, provider_failed=extraction.provider_failed)
             active.set_attribute("outcome", "escalated")
@@ -558,6 +697,15 @@ def intake(
             except GeocodeError as exc:
                 geocode_note = str(exc)
                 missing = (*missing, "an address we can find on the map")
+            else:
+                guessed = _the_map_guessed(call.address, location)
+                if guessed:
+                    geocode_note = (
+                        f"the map matched {location.address.split(',')[0]}, "
+                        f"{guessed} - a street the caller did not say"
+                    )
+                    missing = (*missing, f"the street - the map guessed {guessed!r}")
+                    location = None
 
         draft = (
             _build_draft(
@@ -573,10 +721,13 @@ def intake(
             else None
         )
 
-        ask_next = tuple(
-            [f"Ask for {label}." for label in missing]
-            + list(estimate.missing_details if estimate else ())
-        )
+        follow_ups = _still_unanswered(estimate.missing_details if estimate else (), call, text)
+        # No stated time is a question, not a default. Every caller has one, and a
+        # dispatcher who books six in the morning without asking finds out about it
+        # from the doorbell.
+        if call.earliest_hour is None and call.latest_hour is None and not call.preferred_timing:
+            follow_ups = (*follow_ups, "when suits them - morning, afternoon, or a day")
+        ask_next = tuple([f"Ask for {label}." for label in missing] + list(follow_ups))
 
         record(
             repairs=extraction.repairs,

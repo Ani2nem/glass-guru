@@ -138,3 +138,64 @@ def test_work_past_the_shift_is_charged_at_the_rate_it_is_paid():
     assert late.wages > inside.wages, "and costs more"
     # The margin percentage holds: we charge the premium we pay, rather than eating it.
     assert late.margin_pct == pytest.approx(inside.margin_pct, abs=1.0)
+
+
+# ------------------------------------------------ words the caller never said
+
+
+def test_an_invented_commitment_is_not_priced():
+    """ "fixed on monday morning" came back with time_off_work and the quote "time off
+    work" - words James never said. The model was asked to price goodwill and invented
+    the receipt. Every quote must appear in the transcript."""
+    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+
+    call = CallExtraction(
+        commitment_signals=[CommitmentSignal.TIME_OFF_WORK],
+        commitment_quotes=["time off work"],
+    )
+    grounded = grounded_commitments(call, "james needs the window fixed on monday morning")
+    assert grounded.commitment_signals == []
+    assert grounded.commitment_quotes == []
+
+
+def test_a_commitment_the_caller_voiced_survives_punctuation():
+    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+
+    call = CallExtraction(
+        commitment_signals=[CommitmentSignal.TIME_OFF_WORK],
+        commitment_quotes=["I'd have to take the morning off work"],
+    )
+    text = "it's Sarah - I'd have to take the morning off work, sadly."
+    assert grounded_commitments(call, text).commitment_signals == [CommitmentSignal.TIME_OFF_WORK]
+
+
+def test_a_street_the_caller_never_said_is_challenged():
+    """ "16 Haslet, Texas" resolves cleanly to 16 Avondale Haslet Road - a real front
+    door nobody asked for a van at. Nominatim is helpful to a fault."""
+    from glass_guru.agents.intake import _the_map_guessed
+    from glass_guru.domain.models import Location
+
+    guessed = _the_map_guessed(
+        "16 Haslet, Texas", Location(lat=33.0, lon=-97.3, matched_road="Avondale Haslet Road")
+    )
+    assert guessed == "Avondale Haslet Road"
+
+
+def test_a_street_the_caller_did_say_is_not():
+    from glass_guru.agents.intake import _the_map_guessed
+    from glass_guru.domain.models import Location
+
+    spoken = "300 W Byron Nelson Blvd, Roanoke TX"
+    matched = Location(lat=33.0, lon=-97.2, matched_road="West Byron Nelson Boulevard")
+    assert _the_map_guessed(spoken, matched) == ""
+
+
+def test_nobody_is_offered_the_crack_of_dawn_they_did_not_ask_for():
+    """ "The morning" made the model guess earliest_hour 6, and the search offered
+    every customer the start of Marcus's shift. Below eight stands only when the
+    caller typed the early hour themselves."""
+    from glass_guru.agents.intake import _civil_floor
+
+    assert _civil_floor(CallExtraction(earliest_hour=6), "the morning please").earliest_hour == 8
+    assert _civil_floor(CallExtraction(earliest_hour=6), "after 6am works").earliest_hour == 6
+    assert _civil_floor(CallExtraction(earliest_hour=16), "after 4pm").earliest_hour == 16

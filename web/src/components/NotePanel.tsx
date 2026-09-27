@@ -158,19 +158,21 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
 
           {draft.commitment_cost > 0 && (
             <div className="commitment">
-              {/* "$400 to move this slot" said nothing about where $400 came from.
-                  It is a penalty the solver pays if it later moves this appointment,
-                  set from what the customer said they gave up to be there - so the
-                  quote underneath is the evidence for the number above it. */}
-              <strong>${draft.commitment_cost.toFixed(0)}</strong> penalty if we move
-              this appointment later
-              <p className="commitment__why muted">
-                They told us they arranged something around it, so the planner treats
-                moving them as expensive rather than free:
-              </p>
+              {/* This is not a fee, a collision, or anything the customer pays. It is
+                  how the planner remembers a promise has a person attached: when some
+                  future disruption forces a choice about who to move, this appointment
+                  looks $N more expensive to touch than one where nobody arranged
+                  anything. Only shown when the caller actually said so - the quote is
+                  the evidence, checked against the transcript. */}
+              <strong>Worth protecting.</strong> They said:
               {draft.commitment_quotes.map((quote) => (
                 <p key={quote} className="quote">“{quote}”</p>
               ))}
+              <p className="commitment__why muted">
+                So if a breakdown later forces us to move someone, the planner will move
+                this appointment last - it treats rescheduling them as costing $
+                {draft.commitment_cost.toFixed(0)} of goodwill, not as free.
+              </p>
             </div>
           )}
 
