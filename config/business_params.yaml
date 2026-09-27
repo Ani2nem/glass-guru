@@ -227,6 +227,16 @@ pricing:
       No visit is billed below this. A screen repair priced honestly by the hour
       comes to less than the fuel, and quoting that number teaches customers to
       call for things that lose money.
+  after_hours_rate_multiplier:
+    value: 1.5
+    source: estimated
+    note: >-
+      Charged on labour that runs past a crew's shift. Matched to what we pay:
+      overtime_multiplier is also 1.5, so a job that keeps a fitter an hour late
+      costs us half again and bills half again. Without this the planner happily
+      quotes a four-o'clock start on a two-hour job and the extra hour comes out
+      of the margin rather than the invoice.
+
   emergency_uplift:
     value: 1.4
     source: estimated

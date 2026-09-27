@@ -403,6 +403,16 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   overflow-x: auto;
   color: var(--muted);
 }
+.booked {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #04321f;
+  border: 1px solid #0a5c3a;
+  color: var(--ok);
+  font-size: 13px;
+}
+
 .cal__empty { color: var(--cal-muted); padding: 14px 4px 2px; font-size: 13px; }
 .commitment__why { margin: 6px 0 0; font-size: 12px; }
 .slot--best { border-color: var(--ok); background: #041a10; }

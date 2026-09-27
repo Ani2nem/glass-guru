@@ -56,6 +56,10 @@ class Location(Frozen):
     lon: float = Field(ge=-180, le=180)
     address: str = ""
     geocode_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    #: How precisely this was resolved: "house", "road", "area", or "" when unknown.
+    #: A van can be sent to a house. "Haslet" is a town, and sending a crew to its
+    #: centroid is not a booking, it is a guess with a price on it.
+    precision: str = ""
 
     @property
     def geohash7(self) -> str:
