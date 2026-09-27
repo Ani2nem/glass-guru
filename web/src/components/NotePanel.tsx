@@ -182,8 +182,9 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
                   says what the money is, separates the estimate from the promise, and
                   books. */}
               <p className="slots__how">
-                Cheapest first. The price is what this job <em>adds</em> to the week in
-                driving and wages - not what you charge for it.
+                Best first. The big number is <em>what the customer pays</em>. Underneath
+                is what we keep once the glass, the wages and the driving are paid for -
+                which differs by day, because the driving does.
               </p>
               {booking.slots.map((slot, index) => (
                 <div
@@ -191,13 +192,21 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
                   className={index === 0 ? "slot slot--best" : "slot"}
                 >
                   <div className="slot__day">{slot.day}</div>
-                  <div className="slot__cost">
-                    {slot.marginal_cost === 0 ? "free" : `+$${slot.marginal_cost.toFixed(2)}`}
+                  <div className="slot__cost" title="what the customer pays, tax included">
+                    ${slot.quote_total.toFixed(2)}
                   </div>
                   <div className="slot__arrival">
                     arrive about <strong>{slot.arrival}</strong>
                     <span className="muted"> · promise {slot.window}</span>
                   </div>
+                  <div className="slot__margin">
+                    keeps <strong>${slot.margin.toFixed(2)}</strong>
+                    <span className="muted"> ({slot.margin_pct.toFixed(0)}%) after glass, wages and driving</span>
+                  </div>
+                  <details className="slot__breakdown">
+                    <summary>how that price is built</summary>
+                    <pre>{slot.quote_lines.join("\n")}</pre>
+                  </details>
                   <div className="slot__why muted">
                     {slot.reason}
                     <br />

@@ -192,6 +192,52 @@ travel:
       source: estimated
       note: "After 18:30."
 
+pricing:
+  # What the customer is charged, which is a different question from what the job
+  # costs us to serve. The solver only ever computes cost; nothing in the objective
+  # has ever known a price. These turn a plan into a quote.
+  #
+  # Every number here is invented, like every other number in this file. They are
+  # arranged so that the arithmetic is arguable even when the inputs are not: a
+  # dispatcher can say "two hours at $95 plus the glass plus the call-out" out loud.
+  labour_rate_per_hour:
+    value: 95.0
+    source: estimated
+    note: >-
+      Charged per fitter per hour on site, rounded up to the next quarter hour.
+      This is the sell rate, not the wage: loaded cost is about $57/hour, and the
+      gap is what pays for the van, the workshop and the quiet weeks.
+  call_out_fee:
+    value: 65.0
+    source: estimated
+    note: >-
+      Once per visit, whatever the job. Getting a van and two people to an address
+      costs the same whether the work takes twenty minutes or two hours, and a
+      trade that does not charge for it loses money on small jobs.
+  materials_markup:
+    value: 1.35
+    source: estimated
+    note: >-
+      Applied to the catalogue's material cost. Covers breakage, offcuts, holding
+      stock and the trip to the supplier.
+  minimum_charge:
+    value: 180.0
+    source: estimated
+    note: >-
+      No visit is billed below this. A screen repair priced honestly by the hour
+      comes to less than the fuel, and quoting that number teaches customers to
+      call for things that lose money.
+  emergency_uplift:
+    value: 1.4
+    source: estimated
+    note: >-
+      Applied when the job is marked emergency. Board-ups happen at night and at
+      weekends, and the crew is being pulled off planned work to do them.
+  tax_rate:
+    value: 0.0825
+    source: estimated
+    note: "Texas state plus typical local rate. Shown separately on a quote."
+
 service_area:
   radius_miles:
     value: 30.0

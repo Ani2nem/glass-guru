@@ -10,6 +10,7 @@ import type {
   Plan,
   Repair,
   Triage,
+  Week,
   World,
 } from "./types";
 
@@ -49,6 +50,7 @@ const post = <T>(path: string, body?: unknown) =>
 
 export const api = {
   world: () => request<World>("/api/world"),
+  week: () => request<Week>("/api/week"),
   plan: () => request<Plan | null>("/api/plan"),
   commit: () => post<Plan>("/api/plan/commit"),
   repair: () => post<Repair>("/api/repair"),

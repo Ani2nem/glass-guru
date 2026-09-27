@@ -1,23 +1,23 @@
 SCENARIO  traffic_spike
 A corridor-wide slowdown makes every leg 80% longer all morning.
 
-!  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  41 of 41 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (2845a068e4592700)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      08:34-09:19  Nakamura Screens           screen_repair                   34min drive  
+      8:34 AM-9:19 AM  Nakamura Screens           screen_repair                   34min drive  
                    travel 70min / 15.6mi  (70 person-min)   idle 0min   on-site 39%
 
   crew-van-3   Marcus + Priya   [van-3]
-      06:23-08:53  Rodriguez Storefront       storefront_glass                23min drive  needs 2
-      09:22-11:22  Chen Residence             residential_window_replacement  29min drive  
-      11:54-14:24  Patel Shower Door          shower_door_install             32min drive  
+      6:23 AM-8:53 AM  Rodriguez Storefront       storefront_glass                23min drive  needs 2
+      9:22 AM-11:22 AM  Chen Residence             residential_window_replacement  29min drive  
+      11:54 AM-2:24 PM  Patel Shower Door          shower_door_install             32min drive  
                    travel 114min / 48.4mi  (228 person-min)   idle 0min   on-site 79%
 
   crew-van-4   Alex   [van-4]
-      09:01-10:31  Okonkwo Auto Glass         auto_glass                      61min drive  
+      9:01 AM-10:31 AM  Okonkwo Auto Glass         auto_glass                      61min drive  
                    travel 108min / 24.6mi  (108 person-min)   idle 0min   on-site 45%
 
   not in scope for this plan

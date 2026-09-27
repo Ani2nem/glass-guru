@@ -38,6 +38,7 @@ from glass_guru.domain.enums import Certification, ServiceType
 from glass_guru.domain.models import Job, Location, TimeWindow, UnservedJob
 from glass_guru.domain.state import WorldState
 from glass_guru.fixtures.sample_business import WEEK_START
+from glass_guru.formatting import clock, clock_range
 from glass_guru.geocoding import GeocodeError, for_service_area
 from glass_guru.mcp_server.models import (
     BookingSummary,
@@ -91,10 +92,8 @@ def _window_text(job: Job, tz: tzinfo) -> str:
     if not job.windows:
         return "any time"
     window = job.windows[0]
-    return (
-        f"{window.start.astimezone(tz):%a %H:%M}-{window.end.astimezone(tz):%H:%M}"
-        f" ({window.hardness.value})"
-    )
+    opens, closes = window.start.astimezone(tz), window.end.astimezone(tz)
+    return f"{opens:%a} {clock_range(opens, closes)} ({window.hardness.value})"
 
 
 def _changes(diff: PlanDiff) -> list[ChangeSummary]:
@@ -183,7 +182,7 @@ def get_world_state() -> WorldSummary | ToolError:
                     commitment_state=j.commitment_state.value,
                     window=_window_text(j, tz),
                     scheduled=(
-                        f"{found[0].date.isoformat()} {found[1].arrival.astimezone(tz):%H:%M}"
+                        f"{found[0].date.isoformat()} {clock(found[1].arrival.astimezone(tz))}"
                         if head and (found := head.stop_for(j.id))
                         else ""
                     ),

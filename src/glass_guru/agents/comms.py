@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from glass_guru.agents.llm.base import LLMProvider
 from glass_guru.agents.structured import Example, Extraction, extract
 from glass_guru.domain.diff import ChangeKind, JobChange, PlanDiff
+from glass_guru.formatting import clock, clock_range
 from glass_guru.obs.tracing import record, span
 
 #: Anything that looks like a promise about when. Deliberately greedy: a false
@@ -167,6 +168,15 @@ def _facts_for(change: JobChange, tz: tzinfo, now: datetime | None = None) -> tu
         allowed.add(f"{local:%H:%M}")
         allowed.add(f"{local:%A}".lower())
         allowed.add(f"{local:%-I:%M}{local:%p}".lower())
+        # The twelve-hour form without a meridiem. The brief is written this way, so
+        # the model echoes it, and "9:00" for a nine o'clock slot is an exact statement
+        # rather than a rounded one - unlike the bare hour below, which is why that one
+        # is still gated on being on the hour.
+        #
+        # It does conflate 09:00 with 21:00. Harmless here because the set is built
+        # from times that are actually in the plan and this business does not work at
+        # nine at night; a business that did would need the meridiem required.
+        allowed.add(f"{local:%-I:%M}")
         if local.minute == 0:
             # A bare hour is only an exact statement on the hour. Adding it for 15:10
             # would wave through "3pm", and for 15:55 a message nearly an hour wrong.
@@ -178,7 +188,10 @@ def _facts_for(change: JobChange, tz: tzinfo, now: datetime | None = None) -> tu
                 allowed.add("today")
             elif days == 1:
                 allowed.add("tomorrow")
-        return f"{local:%A} {local:%H:%M}"
+        # The brief is what the model echoes into a customer message, so it is written
+        # the way the message should read. Both forms are in `allowed` above and the
+        # checker strips spaces before comparing, so grounding is unaffected.
+        return f"{local:%A} {clock(local)}"
 
     name = change.customer_name or change.job_id
     if change.kind is ChangeKind.DROPPED and change.before:
@@ -202,7 +215,7 @@ def _facts_for(change: JobChange, tz: tzinfo, now: datetime | None = None) -> tu
         note(change.promised_window.start)
         note(change.promised_window.end)
         line += (
-            f" They were promised {opens:%H:%M}-{closes:%H:%M} and may have arranged"
+            f" They were promised {clock_range(opens, closes)} and may have arranged"
             " their day around it."
         )
     return line, allowed

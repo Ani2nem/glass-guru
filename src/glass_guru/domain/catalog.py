@@ -42,6 +42,13 @@ class CatalogEntry:
     ask_about: tuple[str, ...] = ()
     notes: str = ""
 
+    #: What the glass and consumables cost us for a typical job of this kind, and per
+    #: extra pane. Separate from labour because materials are a pass-through with a
+    #: markup and labour is sold by the hour - mixing them makes a quote impossible to
+    #: explain to a customer who asks why.
+    materials_cost: float = 0.0
+    materials_cost_per_extra_pane: float = 0.0
+
 
 #: Tempered and laminated glass is usually made to measure rather than stocked, which
 #: is what turns a routing problem into a lead-time problem.
@@ -52,6 +59,8 @@ DEFAULT_LEAD_TIME_DAYS = 3
 CATALOG: dict[ServiceType, CatalogEntry] = {
     ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT: CatalogEntry(
         service_type=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
+        materials_cost=180.0,
+        materials_cost_per_extra_pane=120.0,
         typical_duration_min=120,
         duration_range=(75, 210),
         required_certifications=frozenset({Certification.RESIDENTIAL_GLAZING}),
@@ -63,6 +72,8 @@ CATALOG: dict[ServiceType, CatalogEntry] = {
     ),
     ServiceType.STOREFRONT_GLASS: CatalogEntry(
         service_type=ServiceType.STOREFRONT_GLASS,
+        materials_cost=620.0,
+        materials_cost_per_extra_pane=480.0,
         typical_duration_min=180,
         duration_range=(120, 300),
         required_certifications=frozenset({Certification.COMMERCIAL_STOREFRONT}),
@@ -74,6 +85,8 @@ CATALOG: dict[ServiceType, CatalogEntry] = {
     ),
     ServiceType.AUTO_GLASS: CatalogEntry(
         service_type=ServiceType.AUTO_GLASS,
+        materials_cost=240.0,
+        materials_cost_per_extra_pane=0.0,
         typical_duration_min=90,
         duration_range=(60, 150),
         required_certifications=frozenset({Certification.AUTO_GLASS}),
@@ -83,6 +96,8 @@ CATALOG: dict[ServiceType, CatalogEntry] = {
     ),
     ServiceType.EMERGENCY_BOARD_UP: CatalogEntry(
         service_type=ServiceType.EMERGENCY_BOARD_UP,
+        materials_cost=45.0,
+        materials_cost_per_extra_pane=25.0,
         typical_duration_min=45,
         duration_range=(30, 90),
         typical_parts=("board_up_kit",),
@@ -91,6 +106,8 @@ CATALOG: dict[ServiceType, CatalogEntry] = {
     ),
     ServiceType.SCREEN_REPAIR: CatalogEntry(
         service_type=ServiceType.SCREEN_REPAIR,
+        materials_cost=28.0,
+        materials_cost_per_extra_pane=18.0,
         typical_duration_min=45,
         duration_range=(25, 90),
         required_certifications=frozenset({Certification.SCREEN_REPAIR}),
@@ -100,6 +117,8 @@ CATALOG: dict[ServiceType, CatalogEntry] = {
     ),
     ServiceType.SHOWER_DOOR_INSTALL: CatalogEntry(
         service_type=ServiceType.SHOWER_DOOR_INSTALL,
+        materials_cost=390.0,
+        materials_cost_per_extra_pane=0.0,
         typical_duration_min=150,
         duration_range=(105, 240),
         required_certifications=frozenset({Certification.SHOWER_DOOR}),
@@ -110,6 +129,8 @@ CATALOG: dict[ServiceType, CatalogEntry] = {
     ),
     ServiceType.MEASURE_QUOTE: CatalogEntry(
         service_type=ServiceType.MEASURE_QUOTE,
+        materials_cost=0.0,
+        materials_cost_per_extra_pane=0.0,
         typical_duration_min=30,
         duration_range=(20, 60),
         requires_customer_present=True,

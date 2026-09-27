@@ -1,26 +1,26 @@
 SCENARIO  job_overruns
 The shower-door install runs two hours over while the crew is on site.
 
-!  35 of 35 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
+!  41 of 41 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
 PLAN 2026-09-21  (add351ceef014c89)
 ------------------------------------------------------------------------------
 
   crew-van-1   Marcus + Priya   [van-1]
-      06:23-08:53  Rodriguez Storefront       storefront_glass                23min drive  needs 2
-      09:09-11:09  Chen Residence             residential_window_replacement  16min drive  
+      6:23 AM-8:53 AM  Rodriguez Storefront       storefront_glass                23min drive  needs 2
+      9:09 AM-11:09 AM  Chen Residence             residential_window_replacement  16min drive  
                    travel 56min / 24.9mi  (112 person-min)   idle 0min   on-site 83%
 
   crew-van-2   Ken   [van-2]
-      08:19-09:04  Nakamura Screens           screen_repair                   19min drive  
+      8:19 AM-9:04 AM  Nakamura Screens           screen_repair                   19min drive  
                    travel 39min / 15.6mi  (39 person-min)   idle 0min   on-site 54%
 
   crew-van-3   Alex   [van-3]
-      10:00-14:30  Patel Shower Door          shower_door_install             40min drive  
+      10:00 AM-2:30 PM  Patel Shower Door          shower_door_install             40min drive  
                    travel 70min / 40.0mi  (70 person-min)   idle 0min   on-site 79%
 
   crew-van-4   Sofia   [van-4]
-      08:34-10:04  Okonkwo Auto Glass         auto_glass                      34min drive  
+      8:34 AM-10:04 AM  Okonkwo Auto Glass         auto_glass                      34min drive  
                    travel 60min / 24.6mi  (60 person-min)   idle 0min   on-site 60%
 
   not in scope for this plan

@@ -131,6 +131,10 @@ export interface Repair {
 }
 
 export interface Slot {
+  quote_total: number;
+  quote_lines: string[];
+  margin: number;
+  margin_pct: number;
   day: string;
   arrival: string;
   crew_reason: string;
@@ -192,4 +196,10 @@ export interface Note {
   why: string;
   booking: Intake | null;
   disruption: Triage | null;
+}
+
+/** The days the board draws, whether or not anything is planned yet. */
+export interface Week {
+  start: string;
+  end: string;
 }
