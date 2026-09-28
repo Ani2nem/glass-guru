@@ -195,6 +195,11 @@ class SlotView(Api):
     margin: float = 0.0
     margin_pct: float = 0.0
 
+    #: True for a slot outside the caller's stated hours, offered because it is
+    #: cheaper for them - usually by the after-hours premium. The dispatcher decides
+    #: whether to float it; the system's job is to make the saving visible.
+    outside_preference: bool = False
+
 
 class BookRequest(Api):
     """A draft plus the slot a customer accepted. Nothing is stored before this."""
@@ -218,6 +223,8 @@ class IntakeView(Api):
     ask_next: list[str]
     slots: list[SlotView] = Field(default_factory=list)
     unavailable: list[UnavailableDayView] = Field(default_factory=list)
+    #: The caller's stated hours, as words for the fixed intake form.
+    when_text: str = ""
     repairs: int = 0
     note: str = ""
 

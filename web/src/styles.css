@@ -269,13 +269,29 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .cal__date { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 .cal__count { font-size: 11px; color: var(--cal-muted); }
 
+/* The frame the 18-hour grid scrolls inside. Day headers stay put above it, so
+   scrolling to 7 PM does not lose track of which column is Wednesday. */
+.cal__scroll {
+  max-height: 58vh;
+  overflow-y: auto;
+  border-radius: 10px;
+}
+
 .cal__grid {
   position: relative;
   display: grid;
   grid-template-columns: 60px repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
-@media (max-width: 900px) { .cal__grid { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
+@media (max-width: 900px) { /* The frame the 18-hour grid scrolls inside. Day headers stay put above it, so
+   scrolling to 7 PM does not lose track of which column is Wednesday. */
+.cal__scroll {
+  max-height: 58vh;
+  overflow-y: auto;
+  border-radius: 10px;
+}
+
+.cal__grid { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
 
 .cal__gutter { position: relative; }
 .cal__gutter span {
@@ -411,6 +427,14 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   border: 1px solid #0a5c3a;
   color: var(--ok);
   font-size: 13px;
+}
+
+.slot--flex { border-style: dashed; border-color: var(--accent); }
+.slot__flex {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .cal__empty { color: var(--cal-muted); padding: 14px 4px 2px; font-size: 13px; }

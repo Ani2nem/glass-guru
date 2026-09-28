@@ -132,6 +132,7 @@ export interface Repair {
 }
 
 export interface Slot {
+  outside_preference: boolean;
   quote_total: number;
   quote_lines: string[];
   margin: number;
@@ -175,6 +176,7 @@ export interface Intake {
   ask_next: string[];
   slots: Slot[];
   unavailable: UnavailableDay[];
+  when_text: string;
   repairs: number;
   note: string;
 }

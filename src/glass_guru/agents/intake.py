@@ -397,6 +397,22 @@ def _said_on_the_call(quote: str, text: str) -> bool:
     return bool(quote.strip()) and letters(quote) in letters(text)
 
 
+#: Digit runs that look like somebody tried to give a number: groups of digits with
+#: optional separators, seven or more digits in total.
+_PHONEISH = re.compile(r"(?:\d[\s().-]?){7,}")
+
+
+def _a_number_was_attempted(text: str) -> bool:
+    """Did the caller try to give a phone number that we then refused?
+
+    "His number is 894892894" and silence are different situations, and "Ask for a
+    callback number" answers only the second. For the first, the dispatcher needs to
+    know a number was given and did not survive checking, or they will ask for
+    something they believe they already have.
+    """
+    return bool(_PHONEISH.search(text))
+
+
 def _civil_floor(call: CallExtraction, text: str) -> CallExtraction:
     """Nobody said six in the morning, so do not offer it.
 
@@ -411,6 +427,27 @@ def _civil_floor(call: CallExtraction, text: str) -> CallExtraction:
     return call
 
 
+#: Phrases that express urgency, not arrangement. "As soon as possible" was priced as
+#: $90 of waiting-in goodwill: the quote was genuinely in the transcript, so grounding
+#: passed, but wanting it soon is not the same as having arranged your day around it.
+#: "Whenever" is deliberately absent - "I'm around Friday whenever" IS waiting in.
+_URGENCY_NOT_ARRANGEMENT = re.compile(
+    r"as soon as possible|\basap\b|right away|immediately|urgent", re.IGNORECASE
+)
+
+#: Words that mark a genuine arrangement - something given up or organised. A quote
+#: with none of these is availability, urgency, or politeness: "I'm free after 4pm
+#: weekdays" states a constraint we already captured as hours, and pricing it as $90
+#: of goodwill charges the planner for a fact. Every worked example of a real signal
+#: contains one of these, which is what makes the list a contract rather than a vibe.
+_ARRANGEMENT = re.compile(
+    r"\b(?:off work|off\b|leave|holiday|vacation|childcare|sitter|nanny|closed|closing"
+    r"|reschedul\w*|moved|be in\b|be home|be around|around\b|waiting|stay(?:ing)? home"
+    r"|took|taking|booked)",
+    re.IGNORECASE,
+)
+
+
 def grounded_commitments(call: CallExtraction, text: str) -> CallExtraction:
     """Keep only the commitment evidence the transcript supports.
 
@@ -421,7 +458,13 @@ def grounded_commitments(call: CallExtraction, text: str) -> CallExtraction:
     slightly-too-cheap move later, while a priced invented one is a $250 lie with the
     customer's name on it.
     """
-    quotes = [q for q in call.commitment_quotes if _said_on_the_call(q, text)]
+    quotes = [
+        q
+        for q in call.commitment_quotes
+        if _said_on_the_call(q, text)
+        and not _URGENCY_NOT_ARRANGEMENT.search(q)
+        and _ARRANGEMENT.search(q)
+    ]
     if len(quotes) == len(call.commitment_quotes):
         return call
     return call.model_copy(
@@ -554,7 +597,12 @@ _ANSWERED_BY: dict[str, re.Pattern[str]] = {
     "how many panes": re.compile(
         r"\b(?:\d+|one|two|three|four|five|six)\s+(?:big\s+)?pane|\bpane\b", re.I
     ),
-    "rough size": _DIMENSIONS,
+    # A measurement, or a comparison to a thing with a known size. "About the size of
+    # a door" tells a glazier more than most numbers would.
+    "rough size": re.compile(
+        _DIMENSIONS.pattern + r"|size of (?:a |the )?\w+|door[- ]sized?|full[- ]length",
+        re.IGNORECASE,
+    ),
     "ground floor or upstairs": re.compile(
         r"\bground floor|\bupstairs|\bdownstairs|\bfirst floor|\bsecond floor", re.I
     ),
@@ -669,6 +717,16 @@ def intake(
         missing = tuple(
             label for field_name, label in REQUIRED_FIELDS if not getattr(call, field_name)
         )
+        # A number that was given and refused is a different conversation from a number
+        # that was never given. Asking for something the caller believes they already
+        # provided reads as not listening.
+        if not call.phone and _a_number_was_attempted(text):
+            missing = tuple(
+                "the callback number again - what was given does not look dialable"
+                if label == "a callback number"
+                else label
+                for label in missing
+            )
 
         estimate: Estimate | None = None
         if call.service_type:
