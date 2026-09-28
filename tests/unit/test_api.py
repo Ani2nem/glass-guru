@@ -645,3 +645,30 @@ def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient):
     assert booked["job_id"] not in {j["id"] for j in world["jobs"]}, (
         "the confirmation must not fold after the cancellation and resurrect it"
     )
+
+
+def test_the_transcript_survives_from_call_to_reschedule(client: TestClient):
+    """A reschedule starts from what the caller originally said, not from a
+    dispatcher's memory of it. The words ride on the job's provenance."""
+    said = "Maria needs glass fixed at 4pm monday, took time off, 9132934243, 14400 Artisan Dr"
+    draft = {
+        "customer_name": "Maria",
+        "phone": "9132934243",
+        "address": "14400 Artisan Dr",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 120,
+        "duration_confidence": 60,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 250,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    booked = client.post(
+        "/api/book",
+        json={"draft": draft, "date": "2026-09-21", "arrival": "16:00", "transcript": said},
+    ).json()
+
+    world = client.get("/api/world").json()
+    stored = next(j for j in world["jobs"] if j["id"] == booked["job_id"])
+    assert stored["transcript"] == said

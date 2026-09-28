@@ -176,6 +176,7 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 window=(_window_text(j, tz) if j.windows else "any time"),
                 lat=j.location.lat,
                 lon=j.location.lon,
+                transcript=j.provenance.transcript,
             )
             for j in world.active_jobs()
         ],

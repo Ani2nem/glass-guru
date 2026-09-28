@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError, api } from "../api";
 import type { Note } from "../types";
 
@@ -36,10 +36,28 @@ function Field({ label, value, hint }: { label: string; value: string; hint?: st
   );
 }
 
-export function NotePanel({ onChanged }: { onChanged: () => void }) {
+export function NotePanel({
+  onChanged,
+  prefill,
+}: {
+  onChanged: () => void;
+  /** A reschedule hands back the original transcript, so nobody retypes a call they
+   * already took. The nonce distinguishes "reschedule the same job again" from
+   * "nothing new". */
+  prefill: { text: string; nonce: number } | null;
+}) {
   const [text, setText] = useState("");
   const [note, setNote] = useState<Note | null>(null);
   const [booked, setBooked] = useState<string | null>(null);
+  const [showFlexible, setShowFlexible] = useState(false);
+
+  useEffect(() => {
+    if (prefill) {
+      setText(prefill.text);
+      setNote(null);
+      setBooked("Rescheduling - their original call is below. Add what changed, then Read it.");
+    }
+  }, [prefill]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -61,7 +79,7 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
     if (!draft) return;
     setBusy(true);
     try {
-      const result = await api.book(draft, date, to24h(arrival));
+      const result = await api.book(draft, date, to24h(arrival), text);
       // Say so. The button worked before this and looked like it had not, which is
       // the worst thing a button can do: the next thing anybody does is press it again.
       setBooked(`Booked ${result.customer} for ${result.when} - ${result.status}.`);
@@ -213,34 +231,43 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
           {booking.slots.length > 0 && (
             <div className="slots">
               <h3>Offer them</h3>
-              {/* The list used to show a date, a window and a number, and a dispatcher
-                  had to guess what the number meant and had no way to act on it. It
-                  says what the money is, separates the estimate from the promise, and
-                  books. */}
               <p className="slots__how">
-                Best first. The big number is <em>what the customer pays</em>. Underneath
-                is what we keep once the glass, the wages and the driving are paid for -
-                which differs by day, because the driving does.
+                What they asked for, priced. The big number is the quote, tax included;
+                underneath is what we keep once the glass, wages and driving are paid.
               </p>
-              {booking.slots.map((slot, index) => (
+              {booking.flexible_slots.length > 0 && (
+                <div className="slots__tabs">
+                  <button
+                    className={showFlexible ? "" : "on"}
+                    onClick={() => setShowFlexible(false)}
+                  >
+                    As requested
+                  </button>
+                  <button
+                    className={showFlexible ? "on" : ""}
+                    onClick={() => setShowFlexible(true)}
+                  >
+                    Cheaper if flexible ({booking.flexible_slots.length})
+                  </button>
+                </div>
+              )}
+              {(showFlexible ? booking.flexible_slots : booking.slots).map((slot, index) => (
                 <div
                   key={slot.date + slot.window + slot.arrival}
                   className={`slot${index === 0 ? " slot--best" : ""}${slot.outside_preference ? " slot--flex" : ""}`}
                 >
                   {slot.outside_preference && (
                     <div className="slot__flex">
-                      outside their stated hours - worth floating: saves them $
+                      outside their stated hours - saves them $
                       {(
-                        Math.min(
-                          ...booking.slots
-                            .filter((other) => !other.outside_preference)
-                            .map((other) => other.quote_total),
-                        ) - slot.quote_total
+                        Math.min(...booking.slots.map((other) => other.quote_total)) -
+                        slot.quote_total
                       ).toFixed(2)}
                     </div>
                   )}
                   <div className="slot__day">{slot.day}</div>
-                  <div className="slot__cost" title="what the customer pays, tax included">
+                  <div className="slot__cost" title="the quote: what the customer pays, tax included">
+                    <span className="slot__cost-label">customer pays</span>
                     ${slot.quote_total.toFixed(2)}
                   </div>
                   <div className="slot__arrival">
@@ -248,7 +275,7 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
                     <span className="muted"> · promise {slot.window}</span>
                   </div>
                   <div className="slot__margin">
-                    keeps <strong>${slot.margin.toFixed(2)}</strong>
+                    we keep <strong>${slot.margin.toFixed(2)}</strong>
                     <span className="muted"> ({slot.margin_pct.toFixed(0)}%) after glass, wages and driving</span>
                   </div>
                   <details className="slot__breakdown">
@@ -269,14 +296,9 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
                   </button>
                 </div>
               ))}
-              {/* The old footer diffed the first slot against the last - and the last
-                  is now the flexible alternative, so it proudly reported saving
-                  $-40.94. It also measured our driving cost and called it the
-                  customer's saving. Days differ in what WE keep, not what they pay,
-                  so that is the number - and only when it is worth a sentence. */}
               {(() => {
-                const theirs = booking.slots.filter((s) => !s.outside_preference);
-                if (theirs.length < 2) return null;
+                const theirs = booking.slots;
+                if (theirs.length < 2 || showFlexible) return null;
                 const spread =
                   Math.max(...theirs.map((s) => s.margin)) -
                   Math.min(...theirs.map((s) => s.margin));

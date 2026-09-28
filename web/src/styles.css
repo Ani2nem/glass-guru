@@ -434,6 +434,17 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   font-size: 13px;
 }
 
+.slots__tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.slots__tabs button { padding: 5px 10px; font-size: 12px; }
+.slot__cost-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
 .slot--flex { border-style: dashed; border-color: var(--accent); }
 .slot__flex {
   grid-column: 1 / -1;

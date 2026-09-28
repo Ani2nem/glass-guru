@@ -37,6 +37,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [week, setWeek] = useState<Week | null>(null);
+  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
   const refresh = useCallback(async () => {
@@ -139,7 +140,7 @@ export default function App() {
       <div className="layout">
         <section className="workbench">
           <div className="stack">
-            <NotePanel onChanged={() => void refresh()} />
+            <NotePanel onChanged={() => void refresh()} prefill={prefill} />
             {/* Directly under the note, because that is what produces it: something
                 goes wrong, and these are the ways out of it. */}
             <ProposalPanel onChanged={() => void refresh()} />
@@ -176,6 +177,31 @@ export default function App() {
                     </span>
                     <button
                       style={{ marginLeft: "auto" }}
+                      disabled={busy}
+                      onClick={async () => {
+                        // A reschedule is a cancel that keeps the conversation. The
+                        // original transcript goes back into the box, the dispatcher
+                        // adds what changed, and the whole intake path - pricing,
+                        // grounding, the lot - runs again rather than being edited
+                        // around.
+                        const transcript =
+                          world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ?? "";
+                        setBusy(true);
+                        try {
+                          await api.cancel(selectedStop.job_id);
+                          setPrefill({ text: transcript, nonce: Date.now() });
+                          setSelected(null);
+                          await refresh();
+                        } catch (exc) {
+                          setError(exc as ApiError);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Reschedule
+                    </button>
+                    <button
                       className="danger"
                       disabled={busy}
                       onClick={async () => {
