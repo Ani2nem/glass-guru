@@ -628,6 +628,19 @@ def _pricing(
     }
 
 
+def _when_text(earliest: int | None, latest: int | None) -> str:
+    """The caller's stated hours as a phrase for the intake form."""
+    from datetime import time as _time
+
+    if earliest is None and latest is None:
+        return ""
+    if earliest is not None and latest is not None:
+        return clock_range(_time(earliest), _time(latest))
+    if earliest is not None:
+        return f"after {clock(_time(earliest))}"
+    return f"before {clock(_time(latest or 0))}"
+
+
 def _crew_reason(draft: Job | None, slot: SlotSuggestion) -> str:
     """Why these people, in one line.
 
@@ -718,6 +731,47 @@ def run_intake(request: TextRequest) -> IntakeView:
                 )
                 for s in options.slots
             ]
+
+            # The stated hours cost real money when they run past a shift, and the
+            # caller may not know that. If an in-hours slot is cheaper for them, show
+            # one, flagged as outside what they asked - the dispatcher can float it
+            # ("if you could do mornings it's $77 less") or not. Withholding it makes
+            # the decision for both of them.
+            if slots and result.earliest_hour is not None and result.earliest_hour >= 12:
+                relaxed = svc.booking_slots(result.draft, _default_start(svc), earliest_hour=8)
+                cheaper = [
+                    r
+                    for r in relaxed.slots
+                    if _pricing(result.draft, svc.business, r.marginal_cost, r.overtime_minutes)[
+                        "quote_total"
+                    ]
+                    < min(s.quote_total for s in slots)
+                ]
+                if cheaper:
+                    best = min(cheaper, key=lambda r: r.marginal_cost)
+                    slots.append(
+                        SlotView(
+                            date=best.on_date.isoformat(),
+                            day=f"{best.on_date:%a %d %b}",
+                            window=clock_range(
+                                best.quoted_window.start.astimezone(svc.tz),
+                                best.quoted_window.end.astimezone(svc.tz),
+                            ),
+                            arrival=clock(best.arrival.astimezone(svc.tz)),
+                            marginal_cost=round(best.marginal_cost, 2),
+                            crew=" + ".join(best.worker_names),
+                            crew_reason=_crew_reason(result.draft, best),
+                            reason=best.reason,
+                            outside_preference=True,
+                            **_pricing(
+                                result.draft,
+                                svc.business,
+                                best.marginal_cost,
+                                best.overtime_minutes,
+                            ),
+                        )
+                    )
+
             # An empty list explains nothing. If the caller said "after four" and no
             # day can hold the work by then, that is the single most useful sentence
             # on the screen - it is what the dispatcher says back down the phone.
@@ -735,6 +789,7 @@ def run_intake(request: TextRequest) -> IntakeView:
             unavailable=unavailable,
             repairs=result.extraction.repairs,
             note=result.geocode_note,
+            when_text=_when_text(result.earliest_hour, result.latest_hour),
         )
 
 

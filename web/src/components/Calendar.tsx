@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import type { Plan, Route, Stop } from "../types";
 
 /**
@@ -61,19 +63,15 @@ function horizonDates(from: string, to: string): string[] {
 }
 
 /**
- * The window the grid draws, taken from the work rather than fixed.
+ * The grid always spans 5 AM to 11 PM and scrolls inside its own frame.
  *
- * A hardcoded 06:00-19:00 either wastes a third of the screen on hours nobody works
- * or clips a crew who started at 05:30 for a pre-opening storefront job. Rounded out
- * to whole hours so the lines land somewhere sensible.
+ * It used to size itself to the booked work, which meant a day with one 4 PM job
+ * showed four hours of grid and nowhere to look for the rest - "is the morning free?"
+ * had no place on the screen to be answered. The full day exists whether or not
+ * anything is booked in it; scrolling is how you look at the parts you are not on.
  */
-function timeWindow(routes: Route[]): [number, number] {
-  const stops = routes.flatMap((r) => r.stops);
-  if (stops.length === 0) return [7 * 60, 17 * 60];
-  const first = Math.min(...stops.map((s) => s.start_minute));
-  const last = Math.max(...stops.map((s) => s.end_minute));
-  return [Math.floor(first / 60) * 60 - 30, Math.ceil(last / 60) * 60 + 30];
-}
+const GRID_START = 5 * 60;
+const GRID_END = 23 * 60;
 
 interface Placed {
   stop: Stop;
@@ -196,8 +194,16 @@ export function Calendar({
   onSelect: (id: string) => void;
 }) {
   const routes = plan?.routes ?? [];
+  // Open on the working day rather than at 5 AM: the early hours exist to scroll to,
+  // not to stare at. First stop if there is one, else eight o'clock.
+  const scrollFrame = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const first = Math.min(8 * 60, ...routes.map((r) => Math.min(...r.stops.map((x) => x.start_minute))));
+    scrollFrame.current?.scrollTo({ top: Math.max(0, (first - GRID_START - 30) * SCALE) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan?.plan_id]);
   const dates = horizonDates(plan?.horizon_start ?? week.start, plan?.horizon_end ?? week.end);
-  const [start, end] = timeWindow(routes);
+  const [start, end] = [GRID_START, GRID_END];
   const hours: number[] = [];
   for (let h = Math.ceil(start / 60) * 60; h <= end; h += 60) hours.push(h);
 
@@ -228,6 +234,7 @@ export function Calendar({
         })}
       </div>
 
+      <div className="cal__scroll" ref={scrollFrame}>
       <div className="cal__grid" style={{ height: `${(end - start) * SCALE}px` }}>
         <div className="cal__gutter">
           {hours.map((h) => (
@@ -253,6 +260,7 @@ export function Calendar({
             ))}
           </div>
         ))}
+      </div>
       </div>
 
       {routes.length === 0 && (

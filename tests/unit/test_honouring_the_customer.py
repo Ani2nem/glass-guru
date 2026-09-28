@@ -199,3 +199,64 @@ def test_nobody_is_offered_the_crack_of_dawn_they_did_not_ask_for():
     assert _civil_floor(CallExtraction(earliest_hour=6), "the morning please").earliest_hour == 8
     assert _civil_floor(CallExtraction(earliest_hour=6), "after 6am works").earliest_hour == 6
     assert _civil_floor(CallExtraction(earliest_hour=16), "after 4pm").earliest_hour == 16
+
+
+# ------------------------------------------- availability is not a commitment
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "as soon as possible would be appreciated",
+        "I'm free after 4pm weekdays",
+        "urgent, please come right away",
+    ],
+)
+def test_urgency_and_availability_price_nothing(quote: str):
+    """ "As soon as possible" was priced as $90 of goodwill. The quote was genuinely in
+    the transcript, so grounding passed - but wanting it soon, or saying when you are
+    free, is not arranging your day around us. A priced quote must name something
+    given up or organised."""
+    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+
+    call = CallExtraction(
+        commitment_signals=[CommitmentSignal.WAITING_IN], commitment_quotes=[quote]
+    )
+    assert grounded_commitments(call, quote).commitment_quotes == []
+
+
+@pytest.mark.parametrize(
+    "quote",
+    [
+        "I'd have to take the morning off work",
+        "I'll be in all day",
+        "we are closed wednesdays anyway",
+        "I've already booked a sitter",
+    ],
+)
+def test_a_real_arrangement_is_still_priced(quote: str):
+    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+
+    call = CallExtraction(
+        commitment_signals=[CommitmentSignal.WAITING_IN], commitment_quotes=[quote]
+    )
+    assert grounded_commitments(call, f"hello, {quote}, thanks").commitment_quotes == [quote]
+
+
+def test_a_size_by_comparison_answers_the_size_question():
+    """ "About the size of a door" tells a glazier more than most numbers would."""
+    from glass_guru.agents.intake import _still_unanswered
+
+    asks = ("rough size", "ground floor or upstairs")
+    left = _still_unanswered(asks, CallExtraction(), "ground floor, about the size of a door")
+    assert left == ()
+
+
+def test_a_refused_number_is_asked_about_differently():
+    """ "His number is 894892894" and silence are different situations, and "Ask for a
+    callback number" answers only the second."""
+    from glass_guru.agents.intake import _a_number_was_attempted
+
+    assert _a_number_was_attempted("his number is 894892894")
+    assert _a_number_was_attempted("call 913 295 23 48")
+    assert not _a_number_was_attempted("call me back whenever")

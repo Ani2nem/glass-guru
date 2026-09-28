@@ -27,6 +27,15 @@ function to24h(label: string): string {
  * model safe here: the worst case costs a click rather than a wrong job on the
  * schedule.
  */
+function Field({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <>
+      <dt>{label}</dt>
+      <dd>{value || <em>{hint ?? "needed"}</em>}</dd>
+    </>
+  );
+}
+
 export function NotePanel({ onChanged }: { onChanged: () => void }) {
   const [text, setText] = useState("");
   const [note, setNote] = useState<Note | null>(null);
@@ -132,11 +141,16 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
 
       {draft && booking && (
         <>
+          {/* The non-negotiables, one fixed row each, whether heard or still needed.
+              The layout does not reflow as fields fill in, which is what makes it
+              readable at a glance mid-call - and the same slots hold when the source
+              is an email or a transcript instead of typing. */}
           <dl className="fields">
-            <dt>Name</dt><dd>{draft.customer_name || <em>missing</em>}</dd>
-            <dt>Phone</dt><dd>{draft.phone || <em>missing</em>}</dd>
-            <dt>Address</dt><dd>{draft.address || <em>missing</em>}</dd>
-            <dt>Work</dt><dd>{draft.service_type || <em>unclear</em>}</dd>
+            <Field label="Name" value={draft.customer_name} />
+            <Field label="Phone" value={draft.phone} />
+            <Field label="Address" value={draft.address} />
+            <Field label="Work" value={draft.service_type.replace(/_/g, " ")} />
+            <Field label="When" value={booking.when_text} hint="any time - worth asking" />
             {draft.duration_minutes > 0 && (
               <>
                 <dt>Duration</dt>
@@ -210,9 +224,21 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
               </p>
               {booking.slots.map((slot, index) => (
                 <div
-                  key={slot.date + slot.window}
-                  className={index === 0 ? "slot slot--best" : "slot"}
+                  key={slot.date + slot.window + slot.arrival}
+                  className={`slot${index === 0 ? " slot--best" : ""}${slot.outside_preference ? " slot--flex" : ""}`}
                 >
+                  {slot.outside_preference && (
+                    <div className="slot__flex">
+                      outside their stated hours - worth floating: saves them $
+                      {(
+                        Math.min(
+                          ...booking.slots
+                            .filter((other) => !other.outside_preference)
+                            .map((other) => other.quote_total),
+                        ) - slot.quote_total
+                      ).toFixed(2)}
+                    </div>
+                  )}
                   <div className="slot__day">{slot.day}</div>
                   <div className="slot__cost" title="what the customer pays, tax included">
                     ${slot.quote_total.toFixed(2)}
