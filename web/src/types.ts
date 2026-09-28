@@ -79,6 +79,7 @@ export interface Van {
 }
 
 export interface Job {
+  transcript: string;
   id: string;
   customer_name: string;
   service_type: string;
@@ -175,6 +176,7 @@ export interface Intake {
   missing: string[];
   ask_next: string[];
   slots: Slot[];
+  flexible_slots: Slot[];
   unavailable: UnavailableDay[];
   when_text: string;
   repairs: number;

@@ -107,6 +107,7 @@ class JobView(Api):
     window: str
     lat: float
     lon: float
+    transcript: str = ""
 
 
 class WorldView(Api):
@@ -207,6 +208,8 @@ class BookRequest(Api):
     draft: DraftView
     date: str
     arrival: str
+    #: What the caller said, kept on the job so a reschedule can start from it.
+    transcript: str = ""
 
 
 class UnavailableDayView(Api):
@@ -222,6 +225,8 @@ class IntakeView(Api):
     missing: list[str]
     ask_next: list[str]
     slots: list[SlotView] = Field(default_factory=list)
+    #: Cheaper options outside the stated hours, for the "if they're flexible" tab.
+    flexible_slots: list[SlotView] = Field(default_factory=list)
     unavailable: list[UnavailableDayView] = Field(default_factory=list)
     #: The caller's stated hours, as words for the fixed intake form.
     when_text: str = ""

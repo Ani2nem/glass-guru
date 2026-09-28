@@ -179,6 +179,10 @@ class Provenance(Frozen):
 
     source_channel: str = "manual"
     received_at: datetime | None = None
+    #: The words the booking came from, verbatim. A reschedule starts from what the
+    #: caller originally said rather than from a dispatcher's memory of it, and when
+    #: the source becomes an email or a recording, this is where it already lives.
+    transcript: str = ""
     field_confidence: dict[str, float] = Field(default_factory=dict)
     missing_required: tuple[str, ...] = ()
     extractor_retries: int = 0

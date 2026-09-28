@@ -698,6 +698,7 @@ def run_intake(request: TextRequest) -> IntakeView:
         )
 
         slots: list[SlotView] = []
+        flexible: list[SlotView] = []
         unavailable: list[UnavailableDayView] = []
         if result.bookable and result.draft is not None:
             # A caller who stated nothing gets civil hours, not the crack of dawn:
@@ -733,23 +734,20 @@ def run_intake(request: TextRequest) -> IntakeView:
             ]
 
             # The stated hours cost real money when they run past a shift, and the
-            # caller may not know that. If an in-hours slot is cheaper for them, show
-            # one, flagged as outside what they asked - the dispatcher can float it
-            # ("if you could do mornings it's $77 less") or not. Withholding it makes
-            # the decision for both of them.
+            # caller may not know that. When the stated hours start in the afternoon,
+            # compute the in-hours alternatives too and hand them over separately -
+            # the board shows them behind a tab, so the first thing on screen is what
+            # was asked for and the cheaper options are one click deep, not mixed in.
             if slots and result.earliest_hour is not None and result.earliest_hour >= 12:
                 relaxed = svc.booking_slots(result.draft, _default_start(svc), earliest_hour=8)
-                cheaper = [
-                    r
-                    for r in relaxed.slots
-                    if _pricing(result.draft, svc.business, r.marginal_cost, r.overtime_minutes)[
-                        "quote_total"
-                    ]
-                    < min(s.quote_total for s in slots)
-                ]
-                if cheaper:
-                    best = min(cheaper, key=lambda r: r.marginal_cost)
-                    slots.append(
+                ceiling = min(s.quote_total for s in slots)
+                for best in sorted(relaxed.slots, key=lambda r: r.marginal_cost)[:3]:
+                    priced = _pricing(
+                        result.draft, svc.business, best.marginal_cost, best.overtime_minutes
+                    )
+                    if priced["quote_total"] >= ceiling:
+                        continue
+                    flexible.append(
                         SlotView(
                             date=best.on_date.isoformat(),
                             day=f"{best.on_date:%a %d %b}",
@@ -763,12 +761,7 @@ def run_intake(request: TextRequest) -> IntakeView:
                             crew_reason=_crew_reason(result.draft, best),
                             reason=best.reason,
                             outside_preference=True,
-                            **_pricing(
-                                result.draft,
-                                svc.business,
-                                best.marginal_cost,
-                                best.overtime_minutes,
-                            ),
+                            **priced,
                         )
                     )
 
@@ -786,6 +779,7 @@ def run_intake(request: TextRequest) -> IntakeView:
             missing=list(result.missing_required),
             ask_next=list(result.ask_next),
             slots=slots,
+            flexible_slots=flexible,
             unavailable=unavailable,
             repairs=result.extraction.repairs,
             note=result.geocode_note,
@@ -810,7 +804,7 @@ def book_slot(request: BookRequest) -> dict[str, str]:
     """
     from glass_guru.domain.enums import Certification, CommitmentState, ServiceType
     from glass_guru.domain.events import JobConfirmed, JobRequested
-    from glass_guru.domain.models import GlassSpec, Location, TimeWindow
+    from glass_guru.domain.models import GlassSpec, Location, Provenance, TimeWindow
 
     svc = service()
     draft = request.draft
@@ -862,6 +856,9 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             requested_at=now,
             windows=(TimeWindow(start=opens, end=opens + quoted),),
             commitment_state=CommitmentState.CONFIRMED,
+            provenance=Provenance(
+                source_channel="board", received_at=now, transcript=request.transcript
+            ),
         )
 
         svc.apply_events(
