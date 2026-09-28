@@ -140,7 +140,17 @@ class Geocoder:
             raise GeocodeError(
                 f"{address!r} is not in the geocode cache and network lookup is disabled"
             )
-        entry = self._fetch(address)
+        try:
+            entry = self._fetch(address)
+        except GeocodeError:
+            # OSM knows roads and places; it does not know last year's subdivision.
+            # 14400 Artisan Dr, Haslet - a real house, on Zillow, with people in it -
+            # is simply absent, street and all. The US Census geocoder runs on TIGER
+            # data, which is how the post reaches those houses, so it is the fallback
+            # for exactly the addresses a growing suburb produces. It only ever
+            # matches full street addresses, which also means it cannot reintroduce
+            # the area problem OSM needed guarding against.
+            entry = self._fetch_census(address)
         location = self._to_location(entry)
         self._refuse_an_area(address, entry)
         self._check_in_area(address, location)
@@ -212,6 +222,42 @@ class Geocoder:
             precision=str(entry.get("precision", "")),
             matched_road=str(entry.get("road", "")),
         )
+
+    CENSUS_ENDPOINT = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
+
+    def _fetch_census(self, address: str) -> dict[str, object]:
+        """One address against the Census Bureau's geocoder. Free, keyless, official."""
+        query = urllib.parse.urlencode(
+            {"address": address, "benchmark": "Public_AR_Current", "format": "json"}
+        )
+        request = urllib.request.Request(
+            f"{self.CENSUS_ENDPOINT}?{query}", headers={"User-Agent": USER_AGENT}
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                payload = json.load(response)
+        except Exception as exc:
+            raise GeocodeError(f"could not reach the geocoder for {address!r}: {exc}") from exc
+
+        matches = payload.get("result", {}).get("addressMatches", [])
+        if not matches:
+            raise GeocodeError(f"no match for {address!r} in the service area")
+        hit = matches[0]
+        matched = str(hit.get("matchedAddress", ""))
+        # "14400 ARTISAN DR, HASLET, TX, 76052" - the street is everything between the
+        # house number and the first comma, which is what the guessed-street check
+        # compares against the caller's words.
+        street = matched.split(",")[0]
+        words = street.split()
+        road = " ".join(words[1:]) if words and words[0].isdigit() else street
+        return {
+            "lat": float(hit["coordinates"]["y"]),
+            "lon": float(hit["coordinates"]["x"]),
+            "display_name": matched.title(),
+            "precision": "house",
+            "road": road.title(),
+            "query": address,
+        }
 
     def _fetch(self, address: str) -> dict[str, object]:
         with self._lock:

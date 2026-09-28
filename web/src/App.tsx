@@ -174,9 +174,26 @@ export default function App() {
                     <span className={`blast blast--${selectedStop.commitment_state}`}>
                       {selectedStop.commitment_state}
                     </span>
-                    <button style={{ marginLeft: "auto" }} onClick={() => setSelected(null)}>
-                      Close
+                    <button
+                      style={{ marginLeft: "auto" }}
+                      className="danger"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await api.cancel(selectedStop.job_id);
+                          setSelected(null);
+                          await refresh();
+                        } catch (exc) {
+                          setError(exc as ApiError);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Cancel this booking
                     </button>
+                    <button onClick={() => setSelected(null)}>Close</button>
                   </header>
                   <dl>
                     <dt>Work</dt>

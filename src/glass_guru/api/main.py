@@ -826,6 +826,11 @@ def book_slot(request: BookRequest) -> dict[str, str]:
 
     with dispatch(new_dispatch_id("web")), span("api.book"):
         world = svc.world()
+        # Wall time, not world.as_of. A replayed world's clock is its last event, so
+        # stamping new events with it backdated every booking to the seed - and gave
+        # book and cancel identical timestamps, where ordering falls to the random
+        # event id and a cancellation can fold *before* the confirmation it undoes.
+        now = datetime.now(svc.tz)
         job_id = f"j-{len(world.jobs) + 501}"
         arrival = datetime.fromisoformat(f"{request.date}T{request.arrival}").replace(tzinfo=svc.tz)
         # The customer is promised an *arrival* window; the stored window has to hold
@@ -854,7 +859,7 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             duration_confidence_min=draft.duration_confidence,
             commitment_cost=draft.commitment_cost,
             site_notes=draft.site_notes,
-            requested_at=world.as_of,
+            requested_at=now,
             windows=(TimeWindow(start=opens, end=opens + quoted),),
             commitment_state=CommitmentState.CONFIRMED,
         )
@@ -863,15 +868,15 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             [
                 JobRequested(
                     event_id=new_dispatch_id("job"),
-                    occurred_at=world.as_of,
-                    recorded_at=world.as_of,
+                    occurred_at=now,
+                    recorded_at=now,
                     dispatch_id="web",
                     job=job,
                 ),
                 JobConfirmed(
                     event_id=new_dispatch_id("confirm"),
-                    occurred_at=world.as_of,
-                    recorded_at=world.as_of,
+                    occurred_at=now,
+                    recorded_at=now,
                     dispatch_id="web",
                     job_id=job_id,
                     window=job.windows[0],
@@ -908,6 +913,57 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             "when": f"{promised:%a %d %b} {clock_range(promised, finishes)}",
             "status": placed,
         }
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, reason: str = Query(default="customer cancelled")) -> dict[str, str]:
+    """Take a booking back out of the diary, fast.
+
+    Customers change their minds on the same call that booked them, and until now the
+    only route out was the CLI. The cancellation is an event like everything else - the
+    log keeps that the booking happened and then did not, which is the difference
+    between undoing and pretending.
+
+    The re-plan runs immediately, because a cancelled job still sitting on the board is
+    a slot a dispatcher will not offer to the next caller.
+    """
+    from glass_guru.domain.events import JobCancelled
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")), span("api.cancel", job_id=job_id):
+        world = svc.world()
+        job = world.jobs.get(job_id)
+        if job is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": "NoSuchJob",
+                    "detail": f"{job_id} is not in the diary",
+                    "remedy": "it may already be cancelled; reload the board",
+                },
+            )
+        now = datetime.now(svc.tz)
+        svc.apply_events(
+            [
+                JobCancelled(
+                    event_id=new_dispatch_id("cancel"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id="web",
+                    job_id=job_id,
+                    reason=reason,
+                )
+            ]
+        )
+        freed = "freed"
+        try:
+            plan = svc.plan_week(start=_default_start(svc))
+            head = svc.head()
+            svc.commit(plan.plan, expected_parent=head.id if head else None)
+        except (ServiceError, PlanConflict):
+            freed = "cancelled, but the re-plan needs attention"
+        broadcaster.publish("plan", {"cancelled": job_id})
+        return {"job_id": job_id, "customer": job.customer_name, "status": freed}
 
 
 @app.post("/api/comms", response_model=list[MessageView])

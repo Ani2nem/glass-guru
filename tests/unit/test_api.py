@@ -582,3 +582,66 @@ def test_times_a_person_reads_are_twelve_hour():
     assert clock_range(time(8, 0), time(17, 0)) == "8:00 AM - 5:00 PM"
     # One meridiem when both sides agree; repeating it inside a range is noise.
     assert clock_range(time(9, 0), time(11, 30)) == "9:00 - 11:30 AM"
+
+
+# ----------------------------------------------------------------- cancelling
+
+
+def test_a_booking_can_be_taken_back_out(client: TestClient):
+    """Customers change their minds on the same call that booked them. The event log
+    keeps that the booking happened and then did not - undoing, not pretending."""
+    client.post(COMMIT)
+    world = client.get("/api/world").json()
+    victim = world["jobs"][0]["id"]
+
+    response = client.post(f"/api/jobs/{victim}/cancel").json()
+    assert response["status"] == "freed"
+
+    after = client.get("/api/world").json()
+    assert victim not in {j["id"] for j in after["jobs"]}
+    plan = client.get("/api/plan").json()
+    assert victim not in {s["job_id"] for r in plan["routes"] for s in r["stops"]}, (
+        "a cancelled job still on the board is a slot nobody will offer"
+    )
+
+
+def test_cancelling_a_job_that_is_not_there_says_so(client: TestClient):
+    response = client.post("/api/jobs/j-nope/cancel")
+    assert response.status_code == 404
+    assert "reload" in response.json()["detail"]["remedy"]
+
+
+def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient):
+    """The order of same-second events was decided by random event ids.
+
+    New events were stamped with world.as_of - the fold clock, which is the *last
+    event's* time - so a booking and its cancellation carried identical timestamps a
+    week in the past, and the sort tiebreak (the random event id) decided whether the
+    confirmation folded after the cancellation and quietly resurrected it. Roughly a
+    coin flip, live. Wall-clock stamps make the order the order it happened in.
+    """
+    draft = {
+        "customer_name": "Maria",
+        "phone": "9132934243",
+        "address": "somewhere real",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 120,
+        "duration_confidence": 60,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    booked = client.post(
+        "/api/book", json={"draft": draft, "date": "2026-09-21", "arrival": "16:00"}
+    ).json()
+    assert booked["status"] in {"scheduled", "booked but not yet scheduled"}
+
+    cancelled = client.post(f"/api/jobs/{booked['job_id']}/cancel").json()
+    assert cancelled["status"] == "freed"
+
+    world = client.get("/api/world").json()
+    assert booked["job_id"] not in {j["id"] for j in world["jobs"]}, (
+        "the confirmation must not fold after the cancellation and resurrect it"
+    )
