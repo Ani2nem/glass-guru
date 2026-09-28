@@ -73,6 +73,11 @@ export const api = {
       "/api/book",
       { draft, date, arrival },
     ),
+  /** Take a booking back out of the diary. Same-call changes of mind are normal. */
+  cancel: (jobId: string) =>
+    post<{ job_id: string; customer: string; status: string }>(
+      `/api/jobs/${encodeURIComponent(jobId)}/cancel`,
+    ),
   comms: (strategy: string) =>
     post<Message[]>(`/api/comms?strategy=${encodeURIComponent(strategy)}`),
 };

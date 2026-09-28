@@ -269,16 +269,24 @@ export function NotePanel({ onChanged }: { onChanged: () => void }) {
                   </button>
                 </div>
               ))}
-              {booking.slots.length > 1 && (
-                <p className="muted">
-                  Booking the first rather than the last saves $
-                  {(
-                    booking.slots[booking.slots.length - 1]!.marginal_cost -
-                    booking.slots[0]!.marginal_cost
-                  ).toFixed(2)}
-                  .
-                </p>
-              )}
+              {/* The old footer diffed the first slot against the last - and the last
+                  is now the flexible alternative, so it proudly reported saving
+                  $-40.94. It also measured our driving cost and called it the
+                  customer's saving. Days differ in what WE keep, not what they pay,
+                  so that is the number - and only when it is worth a sentence. */}
+              {(() => {
+                const theirs = booking.slots.filter((s) => !s.outside_preference);
+                if (theirs.length < 2) return null;
+                const spread =
+                  Math.max(...theirs.map((s) => s.margin)) -
+                  Math.min(...theirs.map((s) => s.margin));
+                if (spread < 1) return null;
+                return (
+                  <p className="muted">
+                    The best of these days keeps ${spread.toFixed(2)} more than the worst.
+                  </p>
+                );
+              })()}
             </div>
           )}
 
