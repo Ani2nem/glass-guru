@@ -20,7 +20,7 @@ import os
 import secrets
 from collections.abc import AsyncIterator
 from contextlib import suppress
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from pathlib import Path
 from typing import Any
 
@@ -628,6 +628,59 @@ def _pricing(
     }
 
 
+_WEEKDAY = ("Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays", "Saturdays", "Sundays")
+
+#: How much warning a crew needs before a same-day job. Below this, today is not real.
+_SAME_DAY_LEAD = timedelta(minutes=45)
+
+
+def _booking_clock(
+    svc: DispatchService, world: WorldState, duration_min: int
+) -> tuple[date, datetime]:
+    """Where the booking window opens, given what time it actually is.
+
+    At 9:14 on a Wednesday evening the board offered "Wed, arrive 4:00 PM" - five
+    hours gone - because the search never knew the time of day. Today stays on the
+    table only while a job could still start, run, and finish inside somebody's
+    reachable hours; after that the window rolls to the next working day and the
+    caller still sees a full hand.
+    """
+    now = datetime.now(svc.tz)
+    latest_end = 0
+    overtime = int(svc.business.labor.overtime_max_minutes.value)
+    for worker in world.workers.values():
+        hours = worker.hours_for(now.weekday())
+        if hours is None:
+            continue
+        end = hours.end.hour * 60 + hours.end.minute
+        if worker.overtime_eligible:
+            end += overtime
+        latest_end = max(latest_end, end)
+    start_minute = (now + _SAME_DAY_LEAD).hour * 60 + (now + _SAME_DAY_LEAD).minute
+    today_works = latest_end > 0 and start_minute + duration_min <= latest_end
+    start = next_working_day(world, now.date() if today_works else now.date() + timedelta(days=1))
+    return start, now + _SAME_DAY_LEAD
+
+
+def _capable_then(
+    world: WorldState, draft: Job, weekday: int, start_hour: int, duration_min: int, overtime: int
+) -> list[str]:
+    """Who holds the certifications AND can be on site for the whole window."""
+    names = []
+    for worker in world.workers.values():
+        if not draft.required_certifications <= worker.certifications:
+            continue
+        hours = worker.hours_for(weekday)
+        if hours is None:
+            continue
+        end = hours.end.hour * 60 + hours.end.minute
+        if worker.overtime_eligible:
+            end += overtime
+        if start_hour * 60 + duration_min <= end:
+            names.append(worker.name)
+    return sorted(names)
+
+
 def _when_text(earliest: int | None, latest: int | None) -> str:
     """The caller's stated hours as a phrase for the intake form."""
     from datetime import time as _time
@@ -639,6 +692,52 @@ def _when_text(earliest: int | None, latest: int | None) -> str:
     if earliest is not None:
         return f"after {clock(_time(earliest))}"
     return f"before {clock(_time(latest or 0))}"
+
+
+def _cover_note(capable: list[str], slot: SlotSuggestion) -> str:
+    """Whether anyone else could take this slot. One name is a warning, not trivia."""
+    others = [n for n in capable if n not in slot.worker_names]
+    if not others:
+        return ". The ONLY fitter qualified who can work these hours - if they are out, this moves"
+    return f". Could also be covered by {', '.join(others)}"
+
+
+def _bottleneck_or(
+    detail: str,
+    world: WorldState,
+    draft: Job,
+    on_date: date,
+    start_hour: int,
+    overtime: int,
+    tz: tzinfo,
+) -> str:
+    """Replace "no room at an acceptable cost" with the fact underneath it.
+
+    Thursday was refused while three fitters and three vans sat free, and the message
+    said cost. The truth was narrower: the one person certified for the work who can
+    stay late enough was already booked then. A dispatcher can act on that - offer
+    another day, or ask Dan - but not on "no room".
+    """
+    capable = _capable_then(
+        world, draft, on_date.weekday(), start_hour, draft.estimated_duration_min, overtime
+    )
+    if not capable:
+        needs = ", ".join(sorted(c.value.replace("_", " ") for c in draft.required_certifications))
+        return f"nobody certified for {needs} can work these hours on a {on_date:%A}"
+    busy = []
+    for job in world.jobs.values():
+        if job.commitment_state.value not in {"confirmed", "dispatched"} or not job.windows:
+            continue
+        window = job.windows[0]
+        if window.start.astimezone(tz).date() == on_date:
+            opens, closes = window.start.astimezone(tz), window.end.astimezone(tz)
+            busy.append(f"{job.customer_name} {clock_range(opens, closes)}")
+    if len(capable) == 1 and busy:
+        return (
+            f"{capable[0]} is the only fitter qualified who can work these hours, "
+            f"and is already booked: {'; '.join(busy[:2])}"
+        )
+    return detail
 
 
 def _crew_reason(draft: Job | None, slot: SlotSuggestion) -> str:
@@ -709,11 +808,27 @@ def run_intake(request: TextRequest) -> IntakeView:
             earliest = result.earliest_hour
             if earliest is None and result.latest_hour is None:
                 earliest = 8
+            start, not_before = _booking_clock(svc, world, result.draft.estimated_duration_min)
+            days = frozenset(result.preferred_weekdays) or None
             options = svc.booking_slots(
                 result.draft,
-                _default_start(svc),
+                start,
                 earliest_hour=earliest,
                 latest_hour=result.latest_hour,
+                not_before=not_before,
+                allowed_weekdays=days,
+            )
+
+            # Who could actually take this work at these hours. One name is a single
+            # point of failure the dispatcher should see before promising anything.
+            overtime = int(svc.business.labor.overtime_max_minutes.value)
+            capable = _capable_then(
+                world,
+                result.draft,
+                start.weekday(),
+                earliest or 8,
+                result.draft.estimated_duration_min,
+                overtime,
             )
             slots = [
                 SlotView(
@@ -726,7 +841,7 @@ def run_intake(request: TextRequest) -> IntakeView:
                     arrival=clock(s.arrival.astimezone(svc.tz)),
                     marginal_cost=round(s.marginal_cost, 2),
                     crew=" + ".join(s.worker_names),
-                    crew_reason=_crew_reason(result.draft, s),
+                    crew_reason=_crew_reason(result.draft, s) + _cover_note(capable, s),
                     reason=s.reason,
                     **_pricing(result.draft, svc.business, s.marginal_cost, s.overtime_minutes),
                 )
@@ -739,7 +854,13 @@ def run_intake(request: TextRequest) -> IntakeView:
             # the board shows them behind a tab, so the first thing on screen is what
             # was asked for and the cheaper options are one click deep, not mixed in.
             if slots and result.earliest_hour is not None and result.earliest_hour >= 12:
-                relaxed = svc.booking_slots(result.draft, _default_start(svc), earliest_hour=8)
+                relaxed = svc.booking_slots(
+                    result.draft,
+                    start,
+                    earliest_hour=8,
+                    not_before=not_before,
+                    allowed_weekdays=days,
+                )
                 ceiling = min(s.quote_total for s in slots)
                 for best in sorted(relaxed.slots, key=lambda r: r.marginal_cost)[:3]:
                     priced = _pricing(
@@ -769,7 +890,12 @@ def run_intake(request: TextRequest) -> IntakeView:
             # day can hold the work by then, that is the single most useful sentence
             # on the screen - it is what the dispatcher says back down the phone.
             unavailable = [
-                UnavailableDayView(day=f"{u.on_date:%a %d %b}", reason=u.detail)
+                UnavailableDayView(
+                    day=f"{u.on_date:%a %d %b}",
+                    reason=_bottleneck_or(
+                        u.detail, world, result.draft, u.on_date, earliest or 8, overtime, svc.tz
+                    ),
+                )
                 for u in options.unavailable
             ]
 

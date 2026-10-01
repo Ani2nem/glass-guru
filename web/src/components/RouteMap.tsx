@@ -1,6 +1,12 @@
 import { CircleMarker, MapContainer, Polyline, TileLayer, Tooltip } from "react-leaflet";
 import type { Plan } from "../types";
 
+function twelveHour(iso: string): string {
+  const hour24 = Number(iso.slice(11, 13));
+  const hour = hour24 % 12 || 12;
+  return `${hour}:${iso.slice(14, 16)} ${hour24 < 12 ? "AM" : "PM"}`;
+}
+
 // One colour per crew, reused across days. A dispatcher tracks "the blue van" rather
 // than a crew id, so consistency matters more than the particular palette.
 const COLOURS = ["#2563eb", "#059669", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
@@ -44,7 +50,7 @@ export function RouteMap({ plan, day }: { plan: Plan; day: string | null }) {
                 <Tooltip>
                   <strong>{order + 1}. {stop.customer_name}</strong>
                   <br />
-                  {route.worker_names.join(" + ")} · {stop.arrival.slice(11, 16)}
+                  {route.worker_names.join(" + ")} · {twelveHour(stop.arrival)}
                 </Tooltip>
               </CircleMarker>
             ))}

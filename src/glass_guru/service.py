@@ -294,14 +294,33 @@ class DispatchService:
         start: date,
         earliest_hour: int | None = None,
         latest_hour: int | None = None,
+        not_before: datetime | None = None,
+        allowed_weekdays: frozenset[int] | None = None,
     ) -> BookingOptions:
+        """Priced options over the next working days.
+
+        The horizon is working days, not calendar days: a five-day window that
+        swallows a weekend offered three options and looked broken. ``not_before``
+        keeps today honest - at nine in the evening, today is not an option, and the
+        window rolls forward so the caller still sees a full hand. ``allowed_weekdays``
+        is "only on Thursdays", said out loud and meant.
+        """
         with span("booking.slots", service=draft.service_type.value) as active:
             state = self.world()
             horizon_params = self.horizon_params()
-            horizon = [
-                date.fromordinal(start.toordinal() + offset)
-                for offset in range(horizon_params.days)
-            ]
+            rostered = {
+                hours.weekday for worker in state.workers.values() for hours in worker.working_hours
+            }
+            wanted = allowed_weekdays if allowed_weekdays else rostered
+            horizon: list[date] = []
+            cursor = start
+            # Walk forward until the hand is full; three weeks bounds "only Thursdays".
+            for _ in range(21):
+                if len(horizon) >= horizon_params.days:
+                    break
+                if cursor.weekday() in rostered and cursor.weekday() in wanted:
+                    horizon.append(cursor)
+                cursor = date.fromordinal(cursor.toordinal() + 1)
             options = suggest_booking_slots(
                 world=state,
                 travel=self.travel(state),
@@ -312,6 +331,7 @@ class DispatchService:
                 cache=self._baseline_cache,
                 earliest_hour=earliest_hour,
                 latest_hour=latest_hour,
+                not_before=not_before,
             )
             active.set_attribute("slots", len(options.slots))
             record(

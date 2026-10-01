@@ -215,9 +215,9 @@ export function NotePanel({
             </div>
           )}
 
-          {booking.slots.length === 0 && booking.unavailable.length > 0 && (
+          {booking.unavailable.length > 0 && (
             <div className="ask">
-              <h3>Cannot offer any of these</h3>
+              <h3>Days we cannot offer, and why</h3>
               <ul>
                 {booking.unavailable.map((u) => (
                   <li key={u.day}>
