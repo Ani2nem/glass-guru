@@ -212,6 +212,13 @@ class CallExtraction(BaseModel):
             "12 for 'afternoons'. Null if they did not say."
         ),
     )
+    preferred_weekdays: list[int] = Field(
+        default_factory=list,
+        description=(
+            "Days they can do, 0=Monday..6=Sunday, ONLY when they restricted days. "
+            "'Only on Thursdays' is [3]. 'Weekdays' is no restriction - leave empty."
+        ),
+    )
     latest_hour: int | None = Field(
         default=None,
         ge=0,
@@ -370,6 +377,7 @@ class IntakeResult:
     #: The caller's stated hours, as numbers the search can use.
     earliest_hour: int | None = None
     latest_hour: int | None = None
+    preferred_weekdays: tuple[int, ...] = ()
     geocode_note: str = ""
 
     @property
@@ -411,6 +419,39 @@ def _a_number_was_attempted(text: str) -> bool:
     something they believe they already have.
     """
     return bool(_PHONEISH.search(text))
+
+
+_DAY_NAMES = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
+#: "only on Thursdays", "Thursdays only", "just Fridays" - a restriction, not a mention.
+_ONLY_DAYS = re.compile(
+    r"\bonly(?:\s+\w+){0,2}\s+(" + "|".join(_DAY_NAMES) + r")s?\b"
+    r"|\b(" + "|".join(_DAY_NAMES) + r")s?\s+only\b",
+    re.IGNORECASE,
+)
+
+
+def _restricted_days(call: CallExtraction, text: str) -> CallExtraction:
+    """Keep a day restriction the caller actually made, and only then.
+
+    "Free after 4pm weekdays" must not become Monday-to-Friday-as-a-constraint - that
+    is just the week. "Only on Thursdays" must survive, because offering Wednesday to
+    a man who said only Thursdays is the fastest way to sound like a machine.
+    """
+    said = {_DAY_NAMES[(m.group(1) or m.group(2)).lower()] for m in _ONLY_DAYS.finditer(text)}
+    if said:
+        return call.model_copy(update={"preferred_weekdays": sorted(said)})
+    if call.preferred_weekdays and len(call.preferred_weekdays) >= 5:
+        # The model restated the working week as a restriction. That is no restriction.
+        return call.model_copy(update={"preferred_weekdays": []})
+    return call
 
 
 def _civil_floor(call: CallExtraction, text: str) -> CallExtraction:
@@ -701,6 +742,7 @@ def intake(
             call = _fix_the_direction(call, text)
             call = grounded_commitments(call, text)
             call = _civil_floor(call, text)
+            call = _restricted_days(call, text)
         if call is None:
             record(escalated=True, provider_failed=extraction.provider_failed)
             active.set_attribute("outcome", "escalated")
@@ -806,6 +848,7 @@ def intake(
             missing_required=missing,
             earliest_hour=call.earliest_hour,
             latest_hour=call.latest_hour,
+            preferred_weekdays=tuple(call.preferred_weekdays),
             geocode_note=geocode_note,
         )
 

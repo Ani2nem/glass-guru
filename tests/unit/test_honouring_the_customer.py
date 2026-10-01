@@ -260,3 +260,141 @@ def test_a_refused_number_is_asked_about_differently():
     assert _a_number_was_attempted("his number is 894892894")
     assert _a_number_was_attempted("call 913 295 23 48")
     assert not _a_number_was_attempted("call me back whenever")
+
+
+# ----------------------------------------------- the clock, and the bottleneck
+
+
+def test_the_evening_rolls_the_window_to_tomorrow(monkeypatch):
+    """At 9:14 PM on a Wednesday the board offered "Wed, arrive 4:00 PM" - five hours
+    gone - because the search never knew the time of day."""
+    from datetime import date, datetime
+
+    import glass_guru.api.main as api_main
+    from glass_guru.api.main import _booking_clock
+    from glass_guru.domain.state import fold
+    from glass_guru.fixtures.sample_business import BUSINESS_TZ, seed_events
+    from glass_guru.service import DispatchService
+
+    world = fold(seed_events(with_jobs=False))
+
+    class FrozenDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 9, 30, 21, 14, tzinfo=tz or BUSINESS_TZ)
+
+    monkeypatch.setattr(api_main, "datetime", FrozenDatetime)
+
+    svc = DispatchService.__new__(DispatchService)
+    svc.tz = BUSINESS_TZ  # type: ignore[assignment]  # a fixed-offset tz is a tz
+    from glass_guru.config import BusinessParams
+
+    svc.business = BusinessParams.load()
+    start, _not_before = _booking_clock(svc, world, duration_min=120)
+    assert start == date(2026, 10, 1), "9 PM Wednesday means the window opens Thursday"
+
+    class Morning(FrozenDatetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 9, 30, 9, 0, tzinfo=tz or BUSINESS_TZ)
+
+    monkeypatch.setattr(api_main, "datetime", Morning)
+    start2, _ = _booking_clock(svc, world, duration_min=120)
+    assert start2 == date(2026, 9, 30), "9 AM Wednesday keeps today on the table"
+
+
+def test_the_horizon_is_working_days_not_calendar_days():
+    """Five calendar days from a Wednesday swallow the weekend and offer three."""
+    import pathlib
+    import tempfile
+    from datetime import date
+
+    from glass_guru.fixtures.sample_business import seed_events
+    from glass_guru.persistence.log import Workspace
+    from glass_guru.service import DispatchService
+
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    ws = Workspace(tmp / "ws")
+    ws.seed(seed_events(with_jobs=False))
+    svc = DispatchService(ws, travel_mode="synthetic")
+
+    from glass_guru.domain.enums import Certification, ServiceType
+    from glass_guru.domain.models import GlassSpec, Job, Location
+    from glass_guru.fixtures.sample_business import _at
+
+    draft = Job(
+        id="draft",
+        customer_id="c",
+        customer_name="T",
+        location=Location(lat=33.0, lon=-97.34, address="x"),
+        service_type=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
+        glass_spec=GlassSpec(),
+        required_certifications=frozenset({Certification.RESIDENTIAL_GLAZING}),
+        crew_size=1,
+        estimated_duration_min=60,
+        requested_at=_at(0, 8),
+    )
+    options = svc.booking_slots(draft, date(2026, 9, 30))  # a Wednesday
+    offered = {s.on_date for s in options.slots} | {u.on_date for u in options.unavailable}
+    assert all(d.weekday() < 5 for d in offered), "no Saturdays, no Sundays"
+    assert len(offered) == 5, "a full hand of five working days"
+
+
+def test_only_thursdays_means_thursdays():
+    import pathlib
+    import tempfile
+    from datetime import date
+
+    from glass_guru.domain.enums import Certification, ServiceType
+    from glass_guru.domain.models import GlassSpec, Job, Location
+    from glass_guru.fixtures.sample_business import _at, seed_events
+    from glass_guru.persistence.log import Workspace
+    from glass_guru.service import DispatchService
+
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    ws = Workspace(tmp / "ws")
+    ws.seed(seed_events(with_jobs=False))
+    svc = DispatchService(ws, travel_mode="synthetic")
+    draft = Job(
+        id="draft",
+        customer_id="c",
+        customer_name="T",
+        location=Location(lat=33.0, lon=-97.34, address="x"),
+        service_type=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
+        glass_spec=GlassSpec(),
+        required_certifications=frozenset({Certification.RESIDENTIAL_GLAZING}),
+        crew_size=1,
+        estimated_duration_min=60,
+        requested_at=_at(0, 8),
+    )
+    options = svc.booking_slots(draft, date(2026, 9, 30), allowed_weekdays=frozenset({3}))
+    offered = {s.on_date for s in options.slots} | {u.on_date for u in options.unavailable}
+    assert offered and all(d.weekday() == 3 for d in offered)
+
+
+def test_one_qualified_name_is_called_a_single_point_of_failure():
+    """Dan is literally the only person who can do after-four residential work.
+    The system knew and never said; now every slot says it."""
+    from glass_guru.api.main import _capable_then
+    from glass_guru.domain.enums import Certification, ServiceType
+    from glass_guru.domain.models import GlassSpec, Job, Location
+    from glass_guru.domain.state import fold
+    from glass_guru.fixtures.sample_business import _at, seed_events
+
+    world = fold(seed_events(with_jobs=False))
+    draft = Job(
+        id="d",
+        customer_id="c",
+        customer_name="T",
+        location=Location(lat=33.0, lon=-97.3, address="x"),
+        service_type=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
+        glass_spec=GlassSpec(),
+        required_certifications=frozenset({Certification.RESIDENTIAL_GLAZING}),
+        crew_size=1,
+        estimated_duration_min=120,
+        requested_at=_at(0, 8),
+    )
+    evening = _capable_then(world, draft, weekday=3, start_hour=16, duration_min=120, overtime=120)
+    assert evening == ["Dan"]
+    morning = _capable_then(world, draft, weekday=3, start_hour=8, duration_min=120, overtime=120)
+    assert len(morning) > 1, "mornings have cover; evenings have Dan"

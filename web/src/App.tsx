@@ -18,6 +18,13 @@ type View = "board" | "map";
  * a test and not on a phone call, and the parenthetical is the detail that actually
  * says which van.
  */
+/** "2026-10-01T16:00:00-05:00" -> "4:00 PM". Nobody here reads military time. */
+function twelveHour(iso: string): string {
+  const hour24 = Number(iso.slice(11, 13));
+  const hour = hour24 % 12 || 12;
+  return `${hour}:${iso.slice(14, 16)} ${hour24 < 12 ? "AM" : "PM"}`;
+}
+
 function readable(violation: string): string {
   const withoutCode = violation.replace(/^\[[a-z_]+\]\s*/, "");
   const [, body = withoutCode, detail = ""] = withoutCode.match(/^(.*?)\s*\((.*)\)$/) ?? [];
@@ -226,7 +233,7 @@ export default function App() {
                     <dd>{selectedStop.service_type.replace(/_/g, " ")}</dd>
                     <dt>On site</dt>
                     <dd>
-                      {selectedStop.arrival.slice(11, 16)} to {selectedStop.departure.slice(11, 16)}
+                      {twelveHour(selectedStop.arrival)} to {twelveHour(selectedStop.departure)}
                     </dd>
                     <dt>Drive there</dt>
                     <dd>

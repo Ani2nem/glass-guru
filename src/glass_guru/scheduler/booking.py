@@ -174,6 +174,7 @@ def _within_preferred_hours(
     tz: tzinfo,
     earliest_hour: int | None,
     latest_hour: int | None,
+    not_before: datetime | None = None,
 ) -> Job:
     """The draft with the caller's stated hours attached as a window for this day.
 
@@ -182,9 +183,15 @@ def _within_preferred_hours(
     booking over four minutes. A genuinely unbreakable constraint - "before we open" -
     arrives as a hard_constraint and is a separate thing.
     """
-    if earliest_hour is None and latest_hour is None:
+    # "Now" is a constraint like any other. At 9:14 on a Wednesday evening the board
+    # offered "Wed, arrive 4:00 PM" - five hours in the past - because nothing ever
+    # told the search what time it was. The floor applies only to the day it is on.
+    floor = not_before if (not_before and not_before.astimezone(tz).date() == on_date) else None
+    if earliest_hour is None and latest_hour is None and floor is None:
         return draft
     opens = datetime.combine(on_date, time(earliest_hour or 0), tzinfo=tz)
+    if floor is not None:
+        opens = max(opens, floor)
     closes = datetime.combine(on_date, time(latest_hour or 23, 59), tzinfo=tz)
     return draft.model_copy(
         update={"windows": (TimeWindow(start=opens, end=closes, hardness=WindowHardness.SOFT),)}
@@ -203,6 +210,7 @@ def suggest_booking_slots(
     cache: BaselineCache | None = None,
     earliest_hour: int | None = None,
     latest_hour: int | None = None,
+    not_before: datetime | None = None,
 ) -> BookingOptions:
     """Rank the days this job could be served on by what serving it actually costs.
 
@@ -232,7 +240,7 @@ def suggest_booking_slots(
         # draft rather than to the search, so the solver enforces it the same way it
         # enforces every other promised window - and so a day where it cannot be met
         # reports that rather than quietly offering something else.
-        wanted = _within_preferred_hours(draft, on_date, tz, earliest_hour, latest_hour)
+        wanted = _within_preferred_hours(draft, on_date, tz, earliest_hour, latest_hour, not_before)
 
         existing = [
             job.id
