@@ -4,16 +4,27 @@ import { api } from "../api";
 import type { Plan, World } from "../types";
 
 /**
- * Who is available, and what the week is doing to them.
+ * The crew, as a rota rather than a list.
  *
- * Two things that were in different places and answer the same question. The roster
- * says who could work; the day breakdown says how hard each crew is actually being
- * worked, and whether anyone is sitting in a van waiting. Reading one without the
- * other means scrolling to the bottom of the calendar and back.
- *
- * The breakdown used to live under the grid, which is the wrong end of the page: it
- * is context you want before you look at the week, not a footnote after it.
+ * The old panel said "Dan 8:00 AM - 5:00 PM" and nothing else, and the dispatcher had
+ * no way to see why every after-four job landed on Dan. The answer was always in the
+ * data - who holds which certification, and how late each person may legally be kept -
+ * it was just never on the screen. Days across, one row per fitter, the overtime
+ * reach in grey, and a symbol per skill: "why did the machine choose Dan" becomes a
+ * thing you can see, not a thing you have to ask.
  */
+
+/** One symbol per certification, readable at a squint. The legend underneath spells
+ * them out; the tooltip on each chip repeats it on hover. */
+const CERT_BADGES: Record<string, { icon: string; label: string }> = {
+  residential_glazing: { icon: "🏠", label: "residential glazing" },
+  commercial_storefront: { icon: "🏢", label: "commercial storefront" },
+  auto_glass: { icon: "🚗", label: "auto glass" },
+  tempered_safety: { icon: "🛡️", label: "tempered safety" },
+  screen_repair: { icon: "🪟", label: "screen repair" },
+  shower_door: { icon: "🚿", label: "shower door" },
+};
+
 export function TodayPanel({
   world,
   plan,
@@ -25,10 +36,9 @@ export function TodayPanel({
 }) {
   const [busy, setBusy] = useState(false);
 
-  /** Mark someone out from right now, or bring them back - sickness and breakdowns
-   * arrive by phone, and the roster is where a dispatcher is looking when they do.
-   * It is an event like any other, so the plan banner, the repair flow and the log
-   * all react to it without knowing a button exists. */
+  /** Out sick, van won't start - recorded as the same events everything else already
+   * understands, so the plan banner and the replan flow react without knowing a
+   * button exists. A quiet icon, because the loud version made the panel unreadable. */
   async function toggle(kind: string, target: string) {
     setBusy(true);
     try {
@@ -38,67 +48,130 @@ export function TodayPanel({
       setBusy(false);
     }
   }
+
+  const days = world.workers[0]?.days ?? [];
   const byDate = new Map<string, Plan["routes"]>();
   for (const route of plan?.routes ?? []) {
     byDate.set(route.date, [...(byDate.get(route.date) ?? []), route]);
   }
-  const dates = [...byDate.keys()].sort();
 
   return (
     <section className="panel panel--today">
-      <h2>Crews</h2>
+      <h2>Crew availability</h2>
       {world.depot_address && (
         <p className="panel__hint">
           Every route starts and ends at the shop: {world.depot_address}
         </p>
       )}
 
-      <ul className="roster">
-        {world.workers.map((worker) => (
-          <li key={worker.id} className={worker.available ? "" : "warn"}>
-            <strong>{worker.name}</strong> <span className="muted">{worker.shift}</span>
-            {!worker.available && " - out"}
-            <button
-              className="roster__toggle"
-              disabled={busy}
-              title={worker.available ? `mark ${worker.name} out from now` : `${worker.name} is back`}
-              onClick={() =>
-                void toggle(
-                  worker.available ? "worker-unavailable" : "worker-restored",
-                  worker.id,
-                )
-              }
-            >
-              {worker.available ? "mark out" : "back in"}
-            </button>
-          </li>
+      <div className="rota">
+        <table>
+          <thead>
+            <tr>
+              <th>fitter</th>
+              {days.map((d) => (
+                <th key={d.date}>{d.day}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {world.workers.map((worker) => (
+              <tr key={worker.id} className={worker.available ? "" : "rota__outrow"}>
+                <td className="rota__who">
+                  <strong>{worker.name}</strong>
+                  <span className="rota__certs">
+                    {worker.certifications.map((cert) => {
+                      const badge = CERT_BADGES[cert];
+                      return (
+                        <span key={cert} title={badge?.label ?? cert}>
+                          {badge?.icon ?? "•"}
+                        </span>
+                      );
+                    })}
+                  </span>
+                  <button
+                    className="rota__toggle"
+                    disabled={busy}
+                    title={
+                      worker.available
+                        ? `mark ${worker.name} out (sick, absent) from now`
+                        : `${worker.name} is back - restore`
+                    }
+                    onClick={() =>
+                      void toggle(
+                        worker.available ? "worker-unavailable" : "worker-restored",
+                        worker.id,
+                      )
+                    }
+                  >
+                    {worker.available ? "✕" : "↺"}
+                  </button>
+                </td>
+                {worker.days.map((d) => (
+                  <td
+                    key={d.date}
+                    className={
+                      d.shift === "off" || !d.available
+                        ? "rota__cell rota__cell--off"
+                        : "rota__cell"
+                    }
+                  >
+                    {!d.available ? (
+                      "out"
+                    ) : d.shift === "off" ? (
+                      "off"
+                    ) : (
+                      <>
+                        {d.shift}
+                        {d.reach && <span className="rota__reach">{d.reach}</span>}
+                      </>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="rota__legend">
+        {Object.entries(CERT_BADGES).map(([key, badge]) => (
+          <span key={key}>
+            {badge.icon} {badge.label}
+          </span>
         ))}
+      </p>
+
+      <div className="rota__vans">
         {world.vans.map((van) => (
-          <li key={van.id} className={van.available ? "muted" : "warn"}>
+          <span key={van.id} className={van.available ? "" : "warn"}>
             {van.id}
-            {!van.available && " - out of service"}
+            {!van.available && " out"}
             <button
-              className="roster__toggle"
+              className="rota__toggle"
               disabled={busy}
+              title={
+                van.available ? `mark ${van.id} off the road` : `${van.id} is fixed - restore`
+              }
               onClick={() =>
                 void toggle(van.available ? "van-unavailable" : "van-restored", van.id)
               }
             >
-              {van.available ? "mark out" : "back in"}
+              {van.available ? "✕" : "↺"}
             </button>
-          </li>
+          </span>
         ))}
-      </ul>
+      </div>
 
-      {dates.length > 0 && (
-        /* Its own ground inside the panel, because it answers a different question
-           from the list above it and the two ran together as one grey wall. */
+      {byDate.size > 0 && (
         <div className="workload">
           <h3>How the week loads them</h3>
-          {dates.map((date) => (
+          {[...byDate.keys()].sort().map((date) => (
             <div key={date} className="workload__day">
               <span className="workload__dow">
-                {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" })}
+                {new Date(`${date}T12:00:00`).toLocaleDateString(undefined, {
+                  weekday: "short",
+                })}
               </span>
               <ul>
                 {(byDate.get(date) ?? []).map((route) => (
@@ -110,8 +183,6 @@ export function TodayPanel({
                     <span className="workload__stats">
                       <strong>{Math.round(route.utilization * 100)}%</strong> on site
                       <span className="muted"> · {route.travel_minutes}m driving</span>
-                      {/* Idle is the number that makes a technically valid plan look
-                          obviously wrong, so it is the one allowed to shout. */}
                       {route.idle_minutes > 0 && (
                         <span className="warn"> · {route.idle_minutes}m idle</span>
                       )}

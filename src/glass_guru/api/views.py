@@ -19,6 +19,7 @@ from glass_guru.api.models import (
     StopView,
     UnservedView,
     VanView,
+    WorkerDayView,
     WorkerView,
     WorldView,
 )
@@ -27,9 +28,9 @@ from glass_guru.domain.autonomy import AutonomyDecision
 from glass_guru.domain.diff import PlanDiff
 from glass_guru.domain.enums import NOT_A_FAILURE
 from glass_guru.domain.invariants import Violation
-from glass_guru.domain.models import CostBreakdown, CrewRoute, Job, PlanVersion
+from glass_guru.domain.models import CostBreakdown, CrewRoute, Job, PlanVersion, Worker
 from glass_guru.domain.state import WorldState
-from glass_guru.formatting import clock_range
+from glass_guru.formatting import clock, clock_range
 from glass_guru.scheduler.costing import RouteCost
 from glass_guru.scheduler.repair import RepairCandidate, RepairOptions
 
@@ -135,6 +136,45 @@ def _window_text(job: Job, tz: tzinfo) -> str:
     return f"{start:%a} {clock_range(start, end)} {window.hardness.value}"
 
 
+def _worker_week(
+    worker: Worker, world: WorldState, business: BusinessParams, tz: tzinfo
+) -> list[WorkerDayView]:
+    """The week ahead for one fitter, as a dispatcher reads it.
+
+    This is the panel that answers "why does the machine keep choosing Dan": the shift
+    says when they work, the reach says how late overtime may keep them, and together
+    with the certification chips the after-four decision stops being a mystery and
+    becomes a rota anyone can read.
+    """
+    overtime = int(business.labor.overtime_max_minutes.value)
+    start = datetime.now(tz).date()
+    days: list[WorkerDayView] = []
+    rostered = {h.weekday for w in world.workers.values() for h in w.working_hours}
+    cursor = start
+    while len(days) < 5 and (cursor - start).days < 14:
+        if cursor.weekday() in rostered:
+            hours = worker.hours_for(cursor.weekday())
+            if hours is None:
+                days.append(WorkerDayView(date=cursor.isoformat(), day=f"{cursor:%a}", shift="off"))
+            else:
+                opens = datetime.combine(cursor, hours.start, tzinfo=tz)
+                closes = datetime.combine(cursor, hours.end, tzinfo=tz)
+                reach = ""
+                if worker.overtime_eligible and overtime:
+                    reach = f"can stay to {clock(closes + timedelta(minutes=overtime))}"
+                days.append(
+                    WorkerDayView(
+                        date=cursor.isoformat(),
+                        day=f"{cursor:%a}",
+                        shift=clock_range(hours.start, hours.end),
+                        reach=reach,
+                        available=world.is_worker_available(worker.id, opens, closes),
+                    )
+                )
+        cursor += timedelta(days=1)
+    return days
+
+
 def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> WorldView:
     today = world.as_of
     end_of_day = today + timedelta(hours=12)
@@ -151,6 +191,7 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 shift=(clock_range(h.start, h.end) if (h := w.hours_for(weekday)) else "off"),
                 available=world.is_worker_available(w.id, today, end_of_day),
                 overtime_eligible=w.overtime_eligible,
+                days=_worker_week(w, world, business, tz),
             )
             for w in sorted(world.workers.values(), key=lambda w: w.id)
         ],

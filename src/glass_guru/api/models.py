@@ -79,6 +79,19 @@ class PlanView(Api):
     depot: list[float] = Field(default_factory=list)
 
 
+class WorkerDayView(Api):
+    """One fitter's availability on one day, in words a dispatcher reads at a glance."""
+
+    date: str
+    day: str
+    #: "8:00 AM - 5:00 PM", or "off".
+    shift: str
+    #: How late they may legally be kept with overtime - "can stay to 7:00 PM". The
+    #: single fact that explains why an after-four job keeps landing on Dan.
+    reach: str = ""
+    available: bool = True
+
+
 class WorkerView(Api):
     id: str
     name: str
@@ -86,6 +99,8 @@ class WorkerView(Api):
     shift: str
     available: bool
     overtime_eligible: bool
+    #: The week ahead, one entry per working day the board shows.
+    days: list[WorkerDayView] = Field(default_factory=list)
 
 
 class VanView(Api):
