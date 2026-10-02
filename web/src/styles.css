@@ -495,24 +495,43 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .msg header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
 .msg p { margin: 0; font-size: 14px; }
 
-.roster {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: 14px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 2px 14px;
-}
-.roster li { padding: 3px 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.roster__toggle {
-  margin-left: auto;
-  padding: 1px 8px;
-  font-size: 11px;
-  border-radius: 999px;
+/* The rota: days across, one row per fitter. The grey "can stay to 7:00 PM" line is
+   the single fact that explains most of the planner's choices, so it lives in the
+   cell rather than in anyone's head. */
+.rota { overflow-x: auto; }
+.rota table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.rota th {
+  text-align: left;
+  font-weight: 600;
   color: var(--muted);
+  padding: 3px 8px 5px 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
-.roster__toggle:hover:not(:disabled) { color: var(--ink); }
+.rota td { padding: 4px 8px 4px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.rota__who { white-space: nowrap; }
+.rota__who strong { font-size: 13px; }
+.rota__certs { margin-left: 6px; letter-spacing: 2px; cursor: default; }
+.rota__cell { line-height: 1.3; }
+.rota__cell--off { color: var(--faint); }
+.rota__reach { display: block; color: var(--faint); font-size: 11px; }
+.rota__outrow td { color: var(--error); }
+
+/* Mark out / restore: one quiet glyph. The text-pill version made the panel unreadable. */
+.rota__toggle {
+  margin-left: 6px;
+  padding: 0 6px;
+  font-size: 11px;
+  border: none;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+.rota__toggle:hover:not(:disabled) { color: var(--error); }
+
+.rota__legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+.rota__vans { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin-top: 10px; color: var(--muted); }
 
 /* A different ground from the roster above it: same panel, different question. The
    two ran together as one grey wall, and this is the half you act on. */

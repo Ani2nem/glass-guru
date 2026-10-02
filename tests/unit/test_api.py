@@ -672,3 +672,36 @@ def test_the_transcript_survives_from_call_to_reschedule(client: TestClient):
     world = client.get("/api/world").json()
     stored = next(j for j in world["jobs"] if j["id"] == booked["job_id"])
     assert stored["transcript"] == said
+
+
+def test_the_rota_shows_each_fitter_week_with_overtime_reach(client: TestClient):
+    """ "Why does the machine keep choosing Dan" was unanswerable from the screen. The
+    rota carries the answer: shift per day, and how late overtime may keep them."""
+    world = client.get("/api/world").json()
+    dan = next(w for w in world["workers"] if w["name"] == "Dan")
+    ken = next(w for w in world["workers"] if w["name"] == "Ken")
+    marcus = next(w for w in world["workers"] if w["name"] == "Marcus")
+
+    assert len(dan["days"]) == 5, "a working week, not a single line"
+    assert all(d["day"] and d["date"] for d in dan["days"])
+
+    working = next(d for d in dan["days"] if d["shift"] != "off")
+    assert "5:00 PM" in working["shift"]
+    assert "7:00 PM" in working["reach"], "Dan's overtime reach is THE explanation"
+
+    ken_day = next(d for d in ken["days"] if d["shift"] != "off")
+    assert ken_day["reach"] == "", "Ken cannot do overtime, so no reach is shown"
+
+    marcus_day = next(d for d in marcus["days"] if d["shift"] != "off")
+    assert "5:00 PM" in marcus_day["reach"], "Marcus caps at five even on overtime"
+
+
+def test_marking_a_fitter_out_shows_in_their_week(client: TestClient):
+    client.post("/api/events", json={"kind": "worker-unavailable", "target": "w-dan"})
+    world = client.get("/api/world").json()
+    dan = next(w for w in world["workers"] if w["name"] == "Dan")
+    assert dan["available"] is False
+    client.post("/api/events", json={"kind": "worker-restored", "target": "w-dan"})
+    world = client.get("/api/world").json()
+    dan = next(w for w in world["workers"] if w["name"] == "Dan")
+    assert dan["available"] is True

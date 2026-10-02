@@ -62,7 +62,16 @@ export interface Plan {
   depot: number[];
 }
 
+export interface WorkerDay {
+  date: string;
+  day: string;
+  shift: string;
+  reach: string;
+  available: boolean;
+}
+
 export interface Worker {
+  days: WorkerDay[];
   id: string;
   name: string;
   certifications: string[];
