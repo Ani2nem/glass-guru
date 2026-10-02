@@ -152,7 +152,7 @@ export default function App() {
                 goes wrong, and these are the ways out of it. */}
             <ProposalPanel onChanged={() => void refresh()} />
           </div>
-          {world && <TodayPanel world={world} plan={plan} />}
+          {world && <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />}
         </section>
 
         <main className="main">

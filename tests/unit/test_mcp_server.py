@@ -149,8 +149,9 @@ async def test_booking_slots_are_priced_and_explained(mcp_workspace):
         },
     )
     assert booking["slots"]
-    costs = [s["marginal_cost"] for s in booking["slots"]]
-    assert costs == sorted(costs)
+    # Soonest first, for a caller who wants a date; cost picked which days made it.
+    dates = [s["date"] for s in booking["slots"]]
+    assert dates == sorted(dates)
     assert all(s["reason"] for s in booking["slots"])
 
 

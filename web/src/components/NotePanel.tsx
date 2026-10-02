@@ -283,6 +283,12 @@ export function NotePanel({
                 What they asked for, priced. The big number is the quote, tax included;
                 underneath is what we keep once the glass, wages and driving are paid.
               </p>
+              {booking.flexible_slots.length === 0 && booking.slots.length > 0 && (
+                <p className="muted">
+                  No cheaper alternative exists - these are already the best prices
+                  for this job.
+                </p>
+              )}
               {booking.flexible_slots.length > 0 && (
                 <div className="slots__tabs">
                   <button

@@ -88,10 +88,15 @@ class BookingOptions:
 
     @property
     def savings_vs_worst(self) -> float:
-        """What choosing well is worth. The number that makes this feature pay."""
+        """What choosing well is worth. The number that makes this feature pay.
+
+        Computed over costs, not positions - the list is ordered by date now, so
+        first-minus-last would measure the calendar.
+        """
         if len(self.slots) < 2:
             return 0.0
-        return self.slots[-1].marginal_cost - self.slots[0].marginal_cost
+        costs = [s.marginal_cost for s in self.slots]
+        return max(costs) - min(costs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -347,9 +352,15 @@ def suggest_booking_slots(
             )
         )
 
+    # Soonest first. The caller on the phone wants a date; cost ranks the *selection*
+    # (which five make the cut) but a list that opens with next Monday and buries this
+    # Friday at the bottom reads as broken, because for the customer it is. The
+    # cheaper-if-flexible tab is where cost ordering lives.
     slots.sort(key=lambda s: (s.marginal_cost, s.on_date))
+    kept = slots[:limit]
+    kept.sort(key=lambda s: (s.on_date, s.arrival))
     return BookingOptions(
-        slots=tuple(slots[:limit]),
+        slots=tuple(kept),
         unavailable=tuple(unavailable),
         evaluated_days=len(horizon),
     )

@@ -24,6 +24,9 @@ from glass_guru.domain.models import Location
 
 DEFAULT_CACHE = Path(__file__).resolve().parents[2] / "config" / "geocode_cache.json"
 ENDPOINT = "https://nominatim.openstreetmap.org/search"
+
+#: Words a spoken address carries that a matcher chokes on.
+_FILLER = frozenset({"the", "in", "at", "near", "here", "over", "by", "on"})
 USER_AGENT = "glass-guru/0.1 (field-service scheduling)"
 RATE_LIMIT_SECONDS = 1.1
 
@@ -143,6 +146,18 @@ class Geocoder:
         try:
             entry = self._fetch(address)
         except GeocodeError:
+            entry = None
+        if entry is None:
+            # "the Walmart in Haslet" finds nothing while "Walmart Haslet" finds the
+            # exact store: the filler words of speech defeat the matcher. One retry
+            # with them stripped, because dictated addresses arrive as sentences.
+            bare = " ".join(w for w in address.split() if w.lower().strip(",.") not in _FILLER)
+            if bare and bare.lower() != address.lower():
+                try:
+                    entry = self._fetch(bare)
+                except GeocodeError:
+                    entry = None
+        if entry is None:
             # OSM knows roads and places; it does not know last year's subdivision.
             # 14400 Artisan Dr, Haslet - a real house, on Zillow, with people in it -
             # is simply absent, street and all. The US Census geocoder runs on TIGER
@@ -221,6 +236,7 @@ class Geocoder:
             address=str(entry.get("display_name", "")),
             precision=str(entry.get("precision", "")),
             matched_road=str(entry.get("road", "")),
+            matched_name=str(entry.get("name", "")),
         )
 
     CENSUS_ENDPOINT = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress"
@@ -294,10 +310,16 @@ class Geocoder:
             raise GeocodeError(f"no match for {address!r}{where}")
         hit = payload[0]
         kind = str(hit.get("addresstype", "")) or str(hit.get("type", ""))
-        if kind in Geocoder._AREA_TYPES or str(hit.get("class", "")) == "boundary":
+        osm_class = str(hit.get("class", ""))
+        name = str(hit.get("name", "") or "")
+        if kind in Geocoder._AREA_TYPES or osm_class == "boundary":
             precision = "area"
         elif kind in {"road", "residential", "primary", "secondary", "tertiary", "street"}:
             precision = "road"
+        elif osm_class in {"shop", "amenity", "leisure", "tourism", "office", "craft"}:
+            # A named place of business. "The Walmart in Haslet" is how a manager
+            # gives an address, and OSM knows exactly which front door that is.
+            precision = "poi"
         else:
             precision = "house"
         details = hit.get("address") or {}
@@ -307,5 +329,6 @@ class Geocoder:
             "display_name": hit["display_name"],
             "precision": precision,
             "road": str(details.get("road", "")) if isinstance(details, dict) else "",
+            "name": name,
             "query": address,
         }

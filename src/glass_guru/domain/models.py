@@ -64,6 +64,10 @@ class Location(Frozen):
     #: what the map actually found. "16 Haslet, Texas" resolves to 16 Avondale Haslet
     #: Road - a real house the caller never named.
     matched_road: str = ""
+    #: The named place the geocoder matched, when it matched one. "The Walmart in
+    #: Haslet" is how a manager actually gives their address, and the name is what
+    #: proves the match is the place they meant.
+    matched_name: str = ""
 
     @property
     def geohash7(self) -> str:
