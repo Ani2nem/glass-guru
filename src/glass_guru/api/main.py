@@ -850,6 +850,7 @@ def run_intake(request: TextRequest) -> IntakeView:
                     crew=" + ".join(s.worker_names),
                     crew_reason=_crew_reason(result.draft, s) + _cover_note(capable, s),
                     reason=s.reason,
+                    needs_overtime=s.overtime_minutes > 0,
                     **_pricing(result.draft, svc.business, s.marginal_cost, s.overtime_minutes),
                 )
                 for s in options.slots
@@ -888,6 +889,7 @@ def run_intake(request: TextRequest) -> IntakeView:
                             crew=" + ".join(best.worker_names),
                             crew_reason=_crew_reason(result.draft, best),
                             reason=best.reason,
+                            needs_overtime=best.overtime_minutes > 0,
                             outside_preference=True,
                             **priced,
                         )
@@ -1259,7 +1261,16 @@ def _clock(
         if fallback is None:
             return None
         return datetime.combine(_default_start(svc), fallback, tzinfo=svc.tz)
-    parsed = datetime.strptime(str(value), "%H:%M").time()
+    # Two spellings. "17:30" is a time on the default day - what the CLI and the event
+    # forms have always sent. A full ISO datetime is for a fact with a date in it:
+    # "Marcus is out until Thursday" is not expressible as a clock reading, and forcing
+    # it through one is how a one-day absence became a one-week absence on the board.
+    text = str(value)
+    try:
+        parsed = datetime.strptime(text, "%H:%M").time()
+    except ValueError:
+        stamped = datetime.fromisoformat(text)
+        return stamped if stamped.tzinfo else stamped.replace(tzinfo=svc.tz)
     return datetime.combine(_default_start(svc), parsed, tzinfo=svc.tz)
 
 

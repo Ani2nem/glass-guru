@@ -252,7 +252,13 @@ def test_starting_before_the_shift_is_rejected(plan_builder: PlanBuilder, world,
 def test_overtime_for_an_ineligible_worker_is_rejected(
     plan_builder: PlanBuilder, world, travel, config
 ):
-    """Ken is not overtime eligible, so a route running past 17:00 is infeasible."""
+    """A worker with overtime_eligible=False cannot be routed past their shift.
+
+    The sample crew is all-eligible now, so the ineligible worker is constructed here:
+    the invariant belongs to the model, not to any particular roster.
+    """
+    ken = world.workers["w-ken"]
+    world.workers["w-ken"] = ken.model_copy(update={"overtime_eligible": False})
     plan_builder.route("A", ["w-ken"], "van-2", ["j-402"], day=0, start_hour=15, start_minute=30)
     violations = validate_plan(plan_builder.build(), world, travel, config)
     assert ViolationCode.OUTSIDE_WORKING_HOURS in codes(violations)

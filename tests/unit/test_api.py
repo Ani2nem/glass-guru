@@ -687,13 +687,15 @@ def test_the_rota_shows_each_fitter_week_with_overtime_reach(client: TestClient)
 
     working = next(d for d in dan["days"] if d["shift"] != "off")
     assert "5:00 PM" in working["shift"]
-    assert "7:00 PM" in working["reach"], "Dan's overtime reach is THE explanation"
+    assert "7:00 PM" in working["reach"], "overtime reach explains who can take evenings"
 
+    # Everyone is overtime-eligible now - the owner's call - so Ken reaches seven like
+    # Dan, and the evening residential work stops being a one-man bottleneck.
     ken_day = next(d for d in ken["days"] if d["shift"] != "off")
-    assert ken_day["reach"] == "", "Ken cannot do overtime, so no reach is shown"
+    assert "7:00 PM" in ken_day["reach"]
 
     marcus_day = next(d for d in marcus["days"] if d["shift"] != "off")
-    assert "5:00 PM" in marcus_day["reach"], "Marcus caps at five even on overtime"
+    assert "5:00 PM" in marcus_day["reach"], "an early shift caps at five even on overtime"
 
 
 def test_marking_a_fitter_out_shows_in_their_week(client: TestClient):

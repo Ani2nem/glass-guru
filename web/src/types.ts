@@ -142,6 +142,7 @@ export interface Repair {
 }
 
 export interface Slot {
+  needs_overtime: boolean;
   outside_preference: boolean;
   quote_total: number;
   quote_lines: string[];

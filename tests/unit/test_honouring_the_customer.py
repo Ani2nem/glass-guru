@@ -395,6 +395,8 @@ def test_one_qualified_name_is_called_a_single_point_of_failure():
         requested_at=_at(0, 8),
     )
     evening = _capable_then(world, draft, weekday=3, start_hour=16, duration_min=120, overtime=120)
-    assert evening == ["Dan"]
+    # Dan used to be alone here - the single point of failure the cover notes exist to
+    # name. Making everyone overtime-eligible is what gave the evening a second name.
+    assert evening == ["Dan", "Ken"]
     morning = _capable_then(world, draft, weekday=3, start_hour=8, duration_min=120, overtime=120)
-    assert len(morning) > 1, "mornings have cover; evenings have Dan"
+    assert len(morning) > len(evening), "mornings still have more cover than evenings"

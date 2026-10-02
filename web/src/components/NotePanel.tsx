@@ -319,7 +319,17 @@ export function NotePanel({
                       ).toFixed(2)}
                     </div>
                   )}
-                  <div className="slot__day">{slot.day}</div>
+                  <div className="slot__day">
+                    {slot.day}
+                    {slot.needs_overtime && (
+                      <span
+                        className="slot__ot"
+                        title="runs past a shift - the price covers it; ask the crew who wants the overtime"
+                      >
+                        overtime
+                      </span>
+                    )}
+                  </div>
                   <div className="slot__cost" title="the quote: what the customer pays, tax included">
                     <span className="slot__cost-label">customer pays</span>
                     ${slot.quote_total.toFixed(2)}

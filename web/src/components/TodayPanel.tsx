@@ -25,6 +25,41 @@ const CERT_BADGES: Record<string, { icon: string; label: string }> = {
   shower_door: { icon: "🚿", label: "shower door" },
 };
 
+/** Local date, because toISOString shifts the day east of UTC. */
+function isoDate(d: Date): string {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/** The end of a day `plus` days from now, as an ISO stamp the API reads in the
+ * business's own timezone. 23:59, because "out today" means the whole of today. */
+function endOfDay(plus: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + plus);
+  return `${isoDate(d)}T23:59`;
+}
+
+/** Days from now to the coming Sunday - "rest of the week" as a person means it. */
+function daysToSunday(): number {
+  return (7 - new Date().getDay()) % 7;
+}
+
+/**
+ * Marking somebody out used to mean out *indefinitely*: one click emptied their whole
+ * visible week, when the fact being recorded was "Marcus is sick today". The event
+ * always supported an `until`; the button just never asked. So the cross asks - four
+ * answers, one tap each - and "back sooner than expected" is still the restore arrow.
+ */
+const OUT_FOR: { label: string; until: () => string | undefined }[] = [
+  { label: "rest of today", until: () => endOfDay(0) },
+  { label: "today + tomorrow", until: () => endOfDay(1) },
+  { label: "rest of this week", until: () => endOfDay(daysToSunday()) },
+  { label: "until further notice", until: () => undefined },
+];
+
 export function TodayPanel({
   world,
   plan,
@@ -35,18 +70,65 @@ export function TodayPanel({
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
 
   /** Out sick, van won't start - recorded as the same events everything else already
    * understands, so the plan banner and the replan flow react without knowing a
    * button exists. A quiet icon, because the loud version made the panel unreadable. */
-  async function toggle(kind: string, target: string) {
+  async function record(kind: string, target: string, until?: string) {
     setBusy(true);
+    setAsking(null);
     try {
-      await api.recordEvent({ kind, target });
+      await api.recordEvent(until ? { kind, target, until } : { kind, target });
       onChanged();
     } finally {
       setBusy(false);
     }
+  }
+
+  /** The ✕ / ↺ pair plus the "for how long?" menu, shared by fitters and vans. */
+  function OutControl({ id, name, kind }: { id: string; name: string; kind: string }) {
+    const available = kind === "worker"
+      ? world.workers.find((w) => w.id === id)?.available ?? true
+      : world.vans.find((v) => v.id === id)?.available ?? true;
+    if (!available) {
+      return (
+        <button
+          className="rota__toggle"
+          disabled={busy}
+          title={`${name} is back - restore`}
+          onClick={() => void record(`${kind}-restored`, id)}
+        >
+          ↺
+        </button>
+      );
+    }
+    return (
+      <span className="rota__out">
+        <button
+          className="rota__toggle"
+          disabled={busy}
+          title={`mark ${name} out (sick, absent, off the road)`}
+          onClick={() => setAsking(asking === id ? null : id)}
+        >
+          ✕
+        </button>
+        {asking === id && (
+          <span className="rota__menu">
+            <span className="rota__menu-title">out for</span>
+            {OUT_FOR.map((choice) => (
+              <button
+                key={choice.label}
+                disabled={busy}
+                onClick={() => void record(`${kind}-unavailable`, id, choice.until())}
+              >
+                {choice.label}
+              </button>
+            ))}
+          </span>
+        )}
+      </span>
+    );
   }
 
   const days = world.workers[0]?.days ?? [];
@@ -60,7 +142,8 @@ export function TodayPanel({
       <h2>Crew availability</h2>
       {world.depot_address && (
         <p className="panel__hint">
-          Every route starts and ends at the shop: {world.depot_address}
+          Every route starts and ends at the shop: {world.depot_address}. Anyone can be
+          kept up to two hours past shift on overtime.
         </p>
       )}
 
@@ -89,23 +172,7 @@ export function TodayPanel({
                       );
                     })}
                   </span>
-                  <button
-                    className="rota__toggle"
-                    disabled={busy}
-                    title={
-                      worker.available
-                        ? `mark ${worker.name} out (sick, absent) from now`
-                        : `${worker.name} is back - restore`
-                    }
-                    onClick={() =>
-                      void toggle(
-                        worker.available ? "worker-unavailable" : "worker-restored",
-                        worker.id,
-                      )
-                    }
-                  >
-                    {worker.available ? "✕" : "↺"}
-                  </button>
+                  <OutControl id={worker.id} name={worker.name} kind="worker" />
                 </td>
                 {worker.days.map((d) => (
                   <td
@@ -121,10 +188,7 @@ export function TodayPanel({
                     ) : d.shift === "off" ? (
                       "off"
                     ) : (
-                      <>
-                        {d.shift}
-                        {d.reach && <span className="rota__reach">{d.reach}</span>}
-                      </>
+                      d.shift
                     )}
                   </td>
                 ))}
@@ -147,18 +211,7 @@ export function TodayPanel({
           <span key={van.id} className={van.available ? "" : "warn"}>
             {van.id}
             {!van.available && " out"}
-            <button
-              className="rota__toggle"
-              disabled={busy}
-              title={
-                van.available ? `mark ${van.id} off the road` : `${van.id} is fixed - restore`
-              }
-              onClick={() =>
-                void toggle(van.available ? "van-unavailable" : "van-restored", van.id)
-              }
-            >
-              {van.available ? "✕" : "↺"}
-            </button>
+            <OutControl id={van.id} name={van.id} kind="van" />
           </span>
         ))}
       </div>
