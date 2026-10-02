@@ -1,3 +1,6 @@
+import { useState } from "react";
+
+import { api } from "../api";
 import type { Plan, World } from "../types";
 
 /**
@@ -11,7 +14,30 @@ import type { Plan, World } from "../types";
  * The breakdown used to live under the grid, which is the wrong end of the page: it
  * is context you want before you look at the week, not a footnote after it.
  */
-export function TodayPanel({ world, plan }: { world: World; plan: Plan | null }) {
+export function TodayPanel({
+  world,
+  plan,
+  onChanged,
+}: {
+  world: World;
+  plan: Plan | null;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  /** Mark someone out from right now, or bring them back - sickness and breakdowns
+   * arrive by phone, and the roster is where a dispatcher is looking when they do.
+   * It is an event like any other, so the plan banner, the repair flow and the log
+   * all react to it without knowing a button exists. */
+  async function toggle(kind: string, target: string) {
+    setBusy(true);
+    try {
+      await api.recordEvent({ kind, target });
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
   const byDate = new Map<string, Plan["routes"]>();
   for (const route of plan?.routes ?? []) {
     byDate.set(route.date, [...(byDate.get(route.date) ?? []), route]);
@@ -31,13 +57,35 @@ export function TodayPanel({ world, plan }: { world: World; plan: Plan | null })
         {world.workers.map((worker) => (
           <li key={worker.id} className={worker.available ? "" : "warn"}>
             <strong>{worker.name}</strong> <span className="muted">{worker.shift}</span>
-            {!worker.available && " - unavailable"}
+            {!worker.available && " - out"}
+            <button
+              className="roster__toggle"
+              disabled={busy}
+              title={worker.available ? `mark ${worker.name} out from now` : `${worker.name} is back`}
+              onClick={() =>
+                void toggle(
+                  worker.available ? "worker-unavailable" : "worker-restored",
+                  worker.id,
+                )
+              }
+            >
+              {worker.available ? "mark out" : "back in"}
+            </button>
           </li>
         ))}
         {world.vans.map((van) => (
           <li key={van.id} className={van.available ? "muted" : "warn"}>
             {van.id}
             {!van.available && " - out of service"}
+            <button
+              className="roster__toggle"
+              disabled={busy}
+              onClick={() =>
+                void toggle(van.available ? "van-unavailable" : "van-restored", van.id)
+              }
+            >
+              {van.available ? "mark out" : "back in"}
+            </button>
           </li>
         ))}
       </ul>

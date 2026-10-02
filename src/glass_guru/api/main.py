@@ -695,11 +695,18 @@ def _when_text(earliest: int | None, latest: int | None) -> str:
 
 
 def _cover_note(capable: list[str], slot: SlotSuggestion) -> str:
-    """Whether anyone else could take this slot. One name is a warning, not trivia."""
+    """Whether anyone else could take this slot. One name is a warning, not trivia.
+
+    Worded around the actual bottleneck. A two-person crew where only Marcus holds the
+    certification is not "the only fitter" - it is Marcus who cannot be replaced, and
+    saying so tells the owner exactly who to train a backup for.
+    """
     others = [n for n in capable if n not in slot.worker_names]
-    if not others:
-        return ". The ONLY fitter qualified who can work these hours - if they are out, this moves"
-    return f". Could also be covered by {', '.join(others)}"
+    if others:
+        return f". Could also be covered by {', '.join(others)}"
+    pinch = [n for n in slot.worker_names if n in capable]
+    who = " and ".join(pinch) if pinch else "this crew"
+    return f". No cover: {who} cannot be replaced for these hours - if they are out, this moves"
 
 
 def _bottleneck_or(
@@ -772,7 +779,7 @@ def run_intake(request: TextRequest) -> IntakeView:
             build_llm(),
             request.text,
             business=svc.business,
-            now=world.as_of,
+            now=datetime.now(svc.tz),
         )
         call = result.call
         draft = DraftView(
@@ -1245,7 +1252,10 @@ def _clock(
     """
     if not value:
         if default_now:
-            return svc.world().as_of
+            # Wall time. The fold clock is the LAST EVENT'S time, and stamping "now"
+            # with it is the same bug that let a cancellation sort before the booking
+            # it undid. "Dan is sick now" means now.
+            return datetime.now(svc.tz)
         if fallback is None:
             return None
         return datetime.combine(_default_start(svc), fallback, tzinfo=svc.tz)

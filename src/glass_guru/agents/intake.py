@@ -268,6 +268,9 @@ Rules:
 - Pick one service type from the catalogue below, or leave it empty if genuinely unclear.
 - Do not estimate how long the job will take. That is not your job and the system
   already knows.
+- A named place IS the address when that is what the caller gave. Managers say "the
+  Walmart here in Haslet", not a street number - put "Walmart Supercenter, Haslet, TX"
+  in address, never just the town.
 - pane_count is how many panes, not how big. "a 6ft glass", "a 3 by 4 pane" and "the
   big window" are all one pane. Six panes means the caller said six. Getting this
   wrong triples the duration and the crew, and the customer is quoted for a day's work
@@ -296,6 +299,22 @@ Catalogue:
 
 
 EXAMPLES: tuple[Example, ...] = (
+    # The address is a place name, because that is how a manager gives it. Extracting
+    # only the town threw away the one word that let the map find the right door.
+    Example(
+        text=(
+            "This is James, a manager at the Walmart Supercenter here in Haslet - "
+            "someone ran into our sliding doors, need it fixed asap, 913-777-2727."
+        ),
+        output=CallExtraction(
+            customer_name="James",
+            phone="913-777-2727",
+            address="Walmart Supercenter, Haslet, TX",
+            service_type="storefront_glass",
+            description="sliding door glass smashed by a vehicle",
+            property_type="commercial",
+        ),
+    ),
     # A size, not a count. "6 ft" became six panes, which tripled the duration to five
     # and three quarter hours and put two fitters on it - a day's work the caller never
     # asked for, quoted at a day's price. A rule alone did not fix it; a worked example
@@ -705,6 +724,13 @@ def _the_map_guessed(spoken: str, location: Location) -> str:
     confirm; booking against a guessed street is how a crew spends an hour at the
     wrong house.
     """
+    # A named place the caller themselves named needs no street check - "the Walmart
+    # in Haslet" matching Walmart Supercenter IS the confirmation, and challenging the
+    # road it happens to sit on ("you never said Avondale") would be the system
+    # arguing with a correct answer.
+    name_words = [w for w in location.matched_name.lower().split() if len(w) > 3]
+    if name_words and any(w in spoken.lower() for w in name_words):
+        return ""
     road = location.matched_road.lower()
     if not road:
         return ""

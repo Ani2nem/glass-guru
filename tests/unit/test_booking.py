@@ -77,10 +77,13 @@ def quote(world, travel, params, business, draft: Job) -> BookingOptions:
 # --------------------------------------------------------------------- ranking
 
 
-def test_slots_are_ranked_cheapest_first(world, travel, params, business):
+def test_slots_arrive_soonest_first(world, travel, params, business):
+    """The caller on the phone wants a date. A list that opened with next Monday and
+    buried this Friday at the bottom read as broken, because for the customer it was.
+    Cost still decides *which* days make the cut; the calendar decides the order."""
     options = quote(world, travel, params, business, draft_at(world, "j-402"))
-    costs = [s.marginal_cost for s in options.slots]
-    assert costs == sorted(costs)
+    dates = [s.on_date for s in options.slots]
+    assert dates == sorted(dates)
     assert options.best is options.slots[0]
 
 
@@ -89,15 +92,16 @@ def test_clustering_is_cheaper_than_an_isolated_trip(world, travel, params, busi
     costs a round trip, and the difference is what a dispatcher should be steering by."""
     near = quote(world, travel, params, business, draft_at(world, "j-402"))
     assert near.best is not None
-    cheapest, dearest = near.slots[0], near.slots[-1]
-    assert cheapest.marginal_cost < dearest.marginal_cost
-    assert near.savings_vs_worst > 0
+    costs = [s.marginal_cost for s in near.slots]
+    assert min(costs) < max(costs), "a shared day and a dedicated trip price apart"
+    assert near.savings_vs_worst == max(costs) - min(costs)
 
 
 def test_the_cheapest_slot_shares_a_day_with_nearby_work(world, travel, params, business):
     options = quote(world, travel, params, business, draft_at(world, "j-402"))
-    assert options.best is not None
-    assert options.best.added_travel_minutes < options.slots[-1].added_travel_minutes
+    cheapest = min(options.slots, key=lambda s: s.marginal_cost)
+    dearest = max(options.slots, key=lambda s: s.marginal_cost)
+    assert cheapest.added_travel_minutes < dearest.added_travel_minutes
 
 
 def test_a_dedicated_trip_is_explained_as_one(world, travel, params, business):
