@@ -83,7 +83,7 @@ SCENARIOS: dict[str, Scenario] = {
     ),
     "worker_sick": Scenario(
         name="worker_sick",
-        description="Ken calls in sick. He is the only worker who cannot do overtime.",
+        description="Ken calls in sick, taking a residential certification out of the week.",
         events=(_worker_out("w-ken", "sick"),),
     ),
     "commercial_crew_out": Scenario(

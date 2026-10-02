@@ -515,7 +515,6 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .rota__certs { margin-left: 6px; letter-spacing: 2px; cursor: default; }
 .rota__cell { line-height: 1.3; }
 .rota__cell--off { color: var(--faint); }
-.rota__reach { display: block; color: var(--faint); font-size: 11px; }
 .rota__outrow td { color: var(--error); }
 
 /* Mark out / restore: one quiet glyph. The text-pill version made the panel unreadable. */
@@ -569,3 +568,59 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 
 .unserved { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
 .unserved p { margin: 5px 0; font-size: 13px; }
+
+/* "Out for how long?" - the menu the cross opens. Anchored to the name cell so the
+   table never reflows; dark like every other floating surface. */
+.rota__out {
+  position: relative;
+  display: inline-flex;
+}
+.rota__menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 10.5rem;
+  padding: 0.3rem;
+  background: var(--surface-raised, #09091a);
+  border: 1px solid var(--border, #26263a);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+}
+.rota__menu-title {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim, #c0c0c8);
+}
+.rota__menu button {
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  font-size: 0.8rem;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text, #fff);
+  cursor: pointer;
+}
+.rota__menu button:hover {
+  background: var(--accent, #1fbad6);
+  color: #000;
+}
+
+/* A slot that keeps somebody past their shift. Not a warning - the price already
+   carries the premium - just the cue to have the "who wants the hours?" conversation
+   before the van rolls. */
+.slot__ot {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--warn, #f0a13a);
+  border-radius: 999px;
+  color: var(--warn, #f0a13a);
+}

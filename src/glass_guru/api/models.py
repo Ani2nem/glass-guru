@@ -211,6 +211,12 @@ class SlotView(Api):
     margin: float = 0.0
     margin_pct: float = 0.0
 
+    #: True when this slot keeps a fitter past their shift. The price already carries
+    #: the after-hours rate; this flag is for the *crew* conversation - the dispatcher
+    #: can promise the customer the slot and then ask who wants the time-and-a-half,
+    #: rather than needing to know before answering the phone.
+    needs_overtime: bool = False
+
     #: True for a slot outside the caller's stated hours, offered because it is
     #: cheaper for them - usually by the after-hours premium. The dispatcher decides
     #: whether to float it; the system's job is to make the saving visible.

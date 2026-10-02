@@ -1,5 +1,5 @@
 SCENARIO  worker_sick
-Ken calls in sick. He is the only worker who cannot do overtime.
+Ken calls in sick, taking a residential certification out of the week.
 
 !  42 of 42 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 

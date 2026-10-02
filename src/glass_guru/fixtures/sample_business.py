@@ -143,7 +143,10 @@ WORKERS: tuple[Worker, ...] = (
         working_hours=DAY_SHIFT,
         home_location=_geo("w-ken", 32.9678, -97.2902, "Alliance, Fort Worth, TX"),
         loaded_cost_per_hour=48.0,
-        overtime_eligible=False,
+        # Everyone may work overtime now - the owner's call, on the grounds that a
+        # fitter who wants the time-and-a-half should be able to take it. The flag
+        # stays in the model because a real roster will have someone it is false for.
+        overtime_eligible=True,
     ),
     Worker(
         id="w-alex",
