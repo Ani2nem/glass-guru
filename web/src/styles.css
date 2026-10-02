@@ -424,6 +424,14 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   overflow-x: auto;
   color: var(--muted);
 }
+.note__actions { display: flex; gap: 8px; align-items: center; }
+.mic { white-space: nowrap; }
+/* Listening is a state worth glancing at from across a desk. */
+.mic--live { border-color: var(--error); color: var(--error); animation: micpulse 1.4s ease-in-out infinite; }
+@keyframes micpulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .mic--live { animation: none; } }
+.dictation__interim { margin: -4px 0 8px; font-size: 13px; color: var(--muted); font-style: italic; }
+
 .booked {
   margin: 10px 0 0;
   padding: 10px 12px;

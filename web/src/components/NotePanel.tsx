@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { type Dictation, dictationSupported, startDictation } from "../dictation";
 import { ApiError, api } from "../api";
 import type { Note } from "../types";
 
@@ -50,6 +52,36 @@ export function NotePanel({
   const [note, setNote] = useState<Note | null>(null);
   const [booked, setBooked] = useState<string | null>(null);
   const [showFlexible, setShowFlexible] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState("");
+  const dictation = useRef<Dictation | null>(null);
+
+  function toggleDictation() {
+    if (dictation.current) {
+      dictation.current.stop();
+      dictation.current = null;
+      setListening(false);
+      setInterim("");
+      return;
+    }
+    const session = startDictation(
+      (final) => setText((t) => (t ? t + " " : "") + final.trim()),
+      setInterim,
+      (reason) => {
+        dictation.current = null;
+        setListening(false);
+        setInterim("");
+        if (reason) setError(new ApiError(reason, "allow the microphone and try again"));
+      },
+    );
+    if (session) {
+      dictation.current = session;
+      setListening(true);
+    }
+  }
+
+  // A dictation session must not outlive the panel.
+  useEffect(() => () => dictation.current?.stop(), []);
 
   useEffect(() => {
     if (prefill) {
@@ -126,9 +158,25 @@ export function NotePanel({
         placeholder="Maria at Nguyen Glass, storefront pane smashed… / Dan called, van 3 won't start…"
         onChange={(e) => setText(e.target.value)}
       />
-      <button className="primary" disabled={busy || !text.trim()} onClick={() => void run()}>
-        {busy ? "Reading…" : "Read it"}
-      </button>
+      {interim && <p className="dictation__interim">{interim}…</p>}
+      <div className="note__actions">
+        <button className="primary" disabled={busy || !text.trim()} onClick={() => void run()}>
+          {busy ? "Reading…" : "Read it"}
+        </button>
+        {/* Dictation, because typing out a phone call defeats the point of simulating
+            one. Chrome ships recognition for free; where the browser has none, the
+            button simply is not there rather than there and broken. */}
+        {dictationSupported() && (
+          <button
+            className={listening ? "mic mic--live" : "mic"}
+            disabled={busy}
+            onClick={toggleDictation}
+            title={listening ? "stop dictating" : "dictate instead of typing"}
+          >
+            {listening ? "◼ Stop dictating" : "🎤 Dictate"}
+          </button>
+        )}
+      </div>
 
       {booked && <p className="booked">{booked}</p>}
 
