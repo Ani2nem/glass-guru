@@ -21,6 +21,7 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -50,10 +51,11 @@ from glass_guru.api.models import (
 from glass_guru.cli.events import EventArgumentError, build_event
 from glass_guru.config import BusinessParams
 from glass_guru.domain.invariants import ValidationConfig, validate_plan
-from glass_guru.domain.models import Job
+from glass_guru.domain.models import Job, Worker
 from glass_guru.domain.state import WorldState
 from glass_guru.formatting import clock, clock_range
 from glass_guru.geocoding import GeocodeError, OutsideServiceArea
+from glass_guru.notify import Notifier, build_notifier
 from glass_guru.obs.correlation import dispatch, new_dispatch_id
 from glass_guru.obs.tracing import configure, span
 from glass_guru.persistence.log import PlanConflict, Workspace
@@ -119,6 +121,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@lru_cache(maxsize=1)
+def notifier() -> Notifier:
+    """One SMS sink per process; log mode unless Twilio is configured."""
+    return build_notifier()
 
 
 def service() -> DispatchService:
@@ -1101,6 +1109,8 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             # problem to look at, not a reason to lose the customer's appointment.
             broadcaster.publish("world", {"booked": job_id})
 
+        offer_note = _float_overtime_offer(svc, job_id, now)
+
         promised = job.windows[0].start.astimezone(svc.tz)
         finishes = arrival + timedelta(minutes=draft.duration_minutes)
         return {
@@ -1108,6 +1118,209 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             "customer": job.customer_name,
             "when": f"{promised:%a %d %b} {clock_range(promised, finishes)}",
             "status": placed,
+            "overtime": offer_note,
+        }
+
+
+def _float_overtime_offer(svc: DispatchService, job_id: str, now: datetime) -> str:
+    """When a fresh booking keeps somebody past shift, put the hours up for grabs.
+
+    The owner's policy: overtime is volunteered, not assigned. The solver has already
+    proven the slot feasible and pencilled a fitter in, so the customer's promise is
+    safe whatever the crew decides - the offer only settles WHO stays late. Everyone
+    qualified, rostered and free that day gets the text; first yes wins; if nobody
+    answers by the deadline, the pencilled-in fitter stands and is told so.
+
+    Deterministic end to end - no agent decides anything here. The one judgement
+    (how late is too late to keep asking) is a parameterless rule: five o'clock the
+    evening before, or an hour from now if the booking itself arrived later than
+    that, never after the job starts.
+    """
+    from glass_guru.domain.events import OvertimeOffered
+
+    world = svc.world()
+    plan = svc.head()
+    job = world.jobs.get(job_id)
+    if plan is None or job is None:
+        return ""
+
+    placement = next(
+        ((route, stop) for route in plan.routes for stop in route.stops if stop.job_id == job_id),
+        None,
+    )
+    if placement is None:
+        return ""
+    route, stop = placement
+
+    # Does this stop actually run past the assigned crew's shift?
+    closes: list[datetime] = []
+    for worker_id in route.worker_ids:
+        worker = world.workers.get(worker_id)
+        hours = worker.hours_for(route.date.weekday()) if worker else None
+        if hours is not None:
+            closes.append(datetime.combine(route.date, hours.end, tzinfo=svc.tz))
+    if not closes:
+        return ""
+    shift_close = min(closes)
+    departure = stop.departure.astimezone(svc.tz)
+    overtime_minutes = int((departure - shift_close).total_seconds() // 60)
+    if overtime_minutes <= 0:
+        return ""
+
+    opens = datetime.combine(route.date, time(0, 0), tzinfo=svc.tz)
+    closes_day = opens + timedelta(days=1)
+    allowance = timedelta(minutes=int(svc.business.labor.overtime_max_minutes.value))
+    arrival_local = stop.arrival.astimezone(svc.tz)
+
+    def can_reach(worker: Worker) -> bool:
+        """On shift when the job starts, and overtime stretches far enough to finish.
+
+        Without this check the first live run offered the evening to two fitters
+        whose shifts end at three - people whose yes the solver could never honour,
+        which would have stranded the job the moment they claimed it.
+        """
+        hours = worker.hours_for(route.date.weekday())
+        if hours is None:
+            return False
+        starts = datetime.combine(route.date, hours.start, tzinfo=svc.tz)
+        reach = datetime.combine(route.date, hours.end, tzinfo=svc.tz) + allowance
+        return starts <= arrival_local and reach >= departure
+
+    candidates = sorted(
+        (
+            w
+            for w in world.workers.values()
+            if w.overtime_eligible
+            and w.is_certified_for(job.required_certifications)
+            and can_reach(w)
+            and world.is_worker_available(w.id, opens, closes_day)
+        ),
+        key=lambda w: w.id,
+    )
+    if not candidates:
+        return ""
+    fallback = next((w for w in route.worker_ids if w in {c.id for c in candidates}), None)
+    if fallback is None:
+        fallback = candidates[0].id
+
+    start_local = stop.arrival.astimezone(svc.tz)
+    evening_before = datetime.combine(route.date - timedelta(days=1), time(17, 0), tzinfo=svc.tz)
+    deadline = max(evening_before, now + timedelta(hours=1))
+    deadline = min(deadline, start_local)
+
+    svc.apply_events(
+        [
+            OvertimeOffered(
+                event_id=new_dispatch_id("ot"),
+                occurred_at=now,
+                recorded_at=now,
+                dispatch_id="web",
+                job_id=job_id,
+                on_date=route.date,
+                offered_to=tuple(c.id for c in candidates),
+                fallback=fallback,
+                overtime_minutes=overtime_minutes,
+                claim_deadline=deadline,
+            )
+        ]
+    )
+
+    rate = float(svc.business.labor.loaded_rate_per_minute.value) * 60
+    premium = float(svc.business.labor.overtime_multiplier.value)
+    pay = overtime_minutes / 60 * rate * premium
+    body = (
+        f"Glass Guru: {route.date:%a %d %b} {clock(start_local)} "
+        f"{job.service_type.value.replace('_', ' ')} runs ~{overtime_minutes} min past "
+        f"shift (about ${pay:,.0f} at time and a half). First YES takes it - reply by "
+        f"{clock(deadline)}. Otherwise it stays with the schedule."
+    )
+    sender = notifier()
+    reached = sum(1 for c in candidates if sender.send(c.phone, body).accepted)
+    names = ", ".join(c.name for c in candidates)
+    return (
+        f"runs {overtime_minutes} min past shift - offered to {names} "
+        f"({reached} texted), first yes takes it, deadline {clock(deadline)}"
+    )
+
+
+@app.post("/api/overtime/{job_id}/claim")
+def claim_overtime(job_id: str, worker_id: str = Query(...)) -> dict[str, str]:
+    """A fitter said yes to the extra hours - usually relayed by the dispatcher.
+
+    First reply wins: the fold ignores every later claim, so two taps in two browser
+    tabs cannot double-book the evening. The claim pins the fitter in the solver and
+    the week is re-planned immediately; the customer's window cannot move - it is a
+    confirmed promise, and the planner is not allowed to break those silently.
+    """
+    from glass_guru.domain.events import OvertimeClaimed
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.claim_ot", job=job_id):
+        world = svc.world()
+        offer = world.overtime_offers.get(job_id)
+        if offer is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "NoOffer", "detail": f"no overtime offer on {job_id}"},
+            )
+        if offer.claimed_by is not None:
+            claimant = world.workers.get(offer.claimed_by)
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "AlreadyClaimed",
+                    "detail": f"{claimant.name if claimant else offer.claimed_by} "
+                    "already took these hours",
+                },
+            )
+        if worker_id not in offer.offered_to:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "NotOffered",
+                    "detail": "these hours were not offered to that fitter",
+                    "remedy": "only qualified, rostered, overtime-eligible crew may claim",
+                },
+            )
+
+        now = datetime.now(svc.tz)
+        svc.apply_events(
+            [
+                OvertimeClaimed(
+                    event_id=new_dispatch_id("otc"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    job_id=job_id,
+                    worker_id=worker_id,
+                )
+            ]
+        )
+
+        # The claim changes who drives, never when the customer is seen. Re-plan and
+        # commit; the confirmed window binds the solver, so if the claim cannot be
+        # honoured without touching the promise the pin dissolves rather than the
+        # promise moving.
+        note = ""
+        try:
+            plan = svc.plan_week(start=_default_start(svc))
+            head = svc.head()
+            committed = svc.commit(plan.plan, expected_parent=head.id if head else None)
+            broadcaster.publish("plan", {"plan_id": committed.id})
+            crewed = next(
+                (r.worker_ids for r in committed.routes for st in r.stops if st.job_id == job_id),
+                (),
+            )
+            note = "on the route" if worker_id in crewed else "recorded; not on the route yet"
+        except (ServiceError, PlanConflict):
+            note = "claim recorded; re-plan it when ready"
+
+        worker = world.workers.get(worker_id)
+        broadcaster.publish("world", {"event": "overtime_claimed"})
+        return {
+            "job_id": job_id,
+            "worker": worker.name if worker else worker_id,
+            "status": note,
         }
 
 

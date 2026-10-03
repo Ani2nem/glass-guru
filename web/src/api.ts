@@ -52,6 +52,10 @@ export const api = {
   week: () => request<Week>("/api/week"),
   plan: () => request<Plan | null>("/api/plan"),
   commit: () => post<Plan>("/api/plan/commit"),
+  claimOvertime: (jobId: string, workerId: string) =>
+    post<{ job_id: string; worker: string; status: string }>(
+      `/api/overtime/${encodeURIComponent(jobId)}/claim?worker_id=${encodeURIComponent(workerId)}`,
+    ),
   recordEvent: (event: Record<string, unknown>) =>
     post<{ event_id: string; type: string; note?: string }>("/api/events", event),
   triage: (text: string) => post<Triage>("/api/triage", { text }),

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 
 from glass_guru.domain.enums import CommitmentState
 from glass_guru.domain.events import (
@@ -23,6 +23,8 @@ from glass_guru.domain.events import (
     JobOverran,
     JobRequested,
     JobStarted,
+    OvertimeClaimed,
+    OvertimeOffered,
     PlanCommitted,
     TrafficDelay,
     VanRegistered,
@@ -57,6 +59,29 @@ class Unavailability(Frozen):
         return self.until_time is None or start < self.until_time
 
 
+class OvertimeOffer(Frozen):
+    """Hours past shift, up for grabs.
+
+    ``claimed_by`` empty until somebody says yes; first reply wins and the fold
+    ignores the rest. The deadline is when the fallback - the fitter the solver
+    pencilled in - is told the hours are theirs; a claim after it but before the
+    job is still honoured, because a dispatcher would honour it too.
+    """
+
+    job_id: JobId
+    on_date: date
+    offered_to: tuple[WorkerId, ...]
+    fallback: WorkerId
+    overtime_minutes: int
+    claim_deadline: datetime
+    claimed_by: WorkerId | None = None
+
+    def status(self, now: datetime) -> str:
+        if self.claimed_by:
+            return "claimed"
+        return "expired" if now >= self.claim_deadline else "open"
+
+
 class TrafficOverride(Frozen):
     """A multiplier layered on the travel matrix for a corridor and period."""
 
@@ -84,6 +109,7 @@ class WorldState:
     jobs: dict[JobId, Job] = field(default_factory=dict)
     worker_outages: dict[WorkerId, list[Unavailability]] = field(default_factory=dict)
     van_outages: dict[VanId, list[Unavailability]] = field(default_factory=dict)
+    overtime_offers: dict[JobId, OvertimeOffer] = field(default_factory=dict)
     traffic_overrides: list[TrafficOverride] = field(default_factory=list)
     committed_plan_id: str | None = None
     applied_event_count: int = 0
@@ -206,6 +232,7 @@ def _apply(state: WorldState, event: Event) -> None:
                 state.jobs[existing.id] = existing.model_copy(
                     update={"commitment_state": CommitmentState.CANCELLED}
                 )
+            state.overtime_offers.pop(event.job_id, None)
 
         case CustomerRescheduled():
             # A confirmed window the customer themselves moved is no longer a promise
@@ -256,6 +283,24 @@ def _apply(state: WorldState, event: Event) -> None:
                 event.window_start or event.occurred_at,
                 event.window_end,
             )
+
+        case OvertimeOffered():
+            state.overtime_offers[event.job_id] = OvertimeOffer(
+                job_id=event.job_id,
+                on_date=event.on_date,
+                offered_to=event.offered_to,
+                fallback=event.fallback,
+                overtime_minutes=event.overtime_minutes,
+                claim_deadline=event.claim_deadline,
+            )
+
+        case OvertimeClaimed():
+            offer = state.overtime_offers.get(event.job_id)
+            # First reply wins; a claim from someone never offered is noise.
+            if offer and offer.claimed_by is None and event.worker_id in offer.offered_to:
+                state.overtime_offers[event.job_id] = offer.model_copy(
+                    update={"claimed_by": event.worker_id}
+                )
 
         case TrafficDelay():
             state.traffic_overrides.append(

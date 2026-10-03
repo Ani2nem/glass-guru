@@ -784,9 +784,25 @@ def plan_day(
             model.add(released[job.id] >= 1 - served[job.id])
 
     # ------------------------------------------------------- crew fitness per job
+    # A claimed overtime offer pins its claimant: the fitter who said yes to the
+    # extra hours serves the job, wherever cost would otherwise have put it. The pin
+    # dissolves if the claimant is not available that day (marked out after
+    # claiming) - the offer flow re-opens rather than the job becoming unservable.
+    available_ids = {w.id for w in workers}
+    claimed_by: dict[str, str] = {
+        offer.job_id: offer.claimed_by
+        for offer in world.overtime_offers.values()
+        if offer.claimed_by is not None
+        and offer.on_date == on_date
+        and offer.claimed_by in available_ids
+    }
+
     for job in jobs:
         for k in range(num_crews):
             model.add_implication(visit[job.id, k], crew_active[k])
+            claimant = claimed_by.get(job.id)
+            if claimant is not None:
+                model.add(assign[claimant, k] == 1).only_enforce_if(visit[job.id, k])
             # A crew must be at least as large as the job demands; a two-person crew
             # may do one-person work, never the reverse.
             model.add(sum(assign[w.id, k] for w in workers) >= job.crew_size).only_enforce_if(

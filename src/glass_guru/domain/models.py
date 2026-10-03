@@ -132,6 +132,9 @@ class Worker(Frozen):
     home_location: Location
     overtime_eligible: bool = True
     loaded_cost_per_hour: float = Field(default=55.0, gt=0)
+    #: Where the overtime offer lands. Empty means "no SMS for this person" - the
+    #: offer still shows on the board, it just cannot be texted.
+    phone: str = ""
 
     def hours_for(self, weekday: int) -> DayHours | None:
         return next((h for h in self.working_hours if h.weekday == weekday), None)

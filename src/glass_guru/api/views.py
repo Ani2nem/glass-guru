@@ -14,6 +14,7 @@ from glass_guru.api.models import (
     ChangeView,
     CostView,
     JobView,
+    OvertimeOfferView,
     PlanView,
     RouteView,
     StopView,
@@ -189,6 +190,14 @@ def _worker_week(
     return days
 
 
+def _offer_arrival(job_id: str, world: WorldState, tz: tzinfo) -> str:
+    """The promised start, for saying which evening the hours belong to."""
+    job = world.jobs.get(job_id)
+    if job is None or not job.windows:
+        return ""
+    return clock(job.windows[0].start.astimezone(tz))
+
+
 def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> WorldView:
     # The wall clock, not world.as_of. The fold clock is the LAST EVENT'S time, so a
     # board quiet since Tuesday would judge "available now" as of Tuesday - the same
@@ -237,6 +246,31 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 transcript=j.provenance.transcript,
             )
             for j in world.active_jobs()
+        ],
+        overtime_offers=[
+            OvertimeOfferView(
+                job_id=offer.job_id,
+                customer=(job.customer_name if (job := world.jobs.get(offer.job_id)) else ""),
+                day=f"{offer.on_date:%a %d %b}",
+                arrival=_offer_arrival(offer.job_id, world, tz),
+                overtime_minutes=offer.overtime_minutes,
+                status=offer.status(today),
+                offered_to=[world.workers[w].name for w in offer.offered_to if w in world.workers],
+                offered_ids=list(offer.offered_to),
+                claimed_by=(
+                    world.workers[offer.claimed_by].name
+                    if offer.claimed_by and offer.claimed_by in world.workers
+                    else ""
+                ),
+                fallback=(
+                    world.workers[offer.fallback].name
+                    if offer.fallback in world.workers
+                    else offer.fallback
+                ),
+                deadline=clock(offer.claim_deadline.astimezone(tz)),
+            )
+            for offer in sorted(world.overtime_offers.values(), key=lambda o: o.job_id)
+            if (job := world.jobs.get(offer.job_id)) is None or job.is_active
         ],
         depot_address=next(
             (van.home_depot.address for van in world.vans.values() if van.home_depot.address), ""
