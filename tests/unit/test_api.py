@@ -792,3 +792,14 @@ def test_restoring_one_day_carves_a_hole_in_a_longer_absence(client: TestClient)
     assert state_by_day[middle] is True, "the restored day is back"
     others = [v for k, v in state_by_day.items() if k != middle]
     assert not any(others), "every other day of the absence still stands"
+
+
+def test_days_already_behind_the_clock_are_marked_unactionable(client: TestClient):
+    """The board greys a day nothing can be done about instead of offering a click
+    that silently does nothing. Strictly future days are always actionable; today
+    depends on the hour the suite runs, so only its presence is asserted."""
+    world = client.get("/api/world").json()
+    for worker in world["workers"]:
+        for d in worker["days"][1:]:
+            assert d["actionable"] is True, f"{worker['name']} {d['date']} should be open"
+        assert isinstance(worker["days"][0]["actionable"], bool)

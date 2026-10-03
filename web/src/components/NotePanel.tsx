@@ -148,13 +148,14 @@ export function NotePanel({
 
   return (
     <section className={`panel panel--note${note ? ` panel--${note.kind}` : ""}`}>
-      <h2>What happened</h2>
+      <h2>Take a call</h2>
       <p className="panel__hint">
-        A customer calling, or something going wrong. Type it either way.
+        A customer calling, or something going wrong - type or dictate it either way.
+        This box stands in until the phone line feeds it directly.
       </p>
       <textarea
         value={text}
-        rows={4}
+        rows={3}
         placeholder="Maria at Nguyen Glass, storefront pane smashed… / Dan called, van 3 won't start…"
         onChange={(e) => setText(e.target.value)}
       />
