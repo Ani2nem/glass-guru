@@ -212,3 +212,33 @@ def test_every_day_in_the_horizon_is_considered(world, travel, params, business)
     options = quote(world, travel, params, business, draft_at(world, "j-402"))
     assert options.evaluated_days == len(HORIZON)
     assert len(options.slots) + len(options.unavailable) == len(HORIZON)
+
+
+def test_a_fitter_held_for_a_day_is_not_offered_that_day(world, travel, params, business):
+    """The rota promise: mark Dan out Monday and no Monday slot may contain Dan.
+
+    Reported from the board as "I held Dan and said he was busy but the system booked
+    him anyway" - the outage had been recorded against the wrong day, but the planner
+    honouring a correctly-scoped day outage is the half worth pinning here.
+    """
+    from glass_guru.domain.state import Unavailability
+
+    world.worker_outages["w-dan"] = [
+        Unavailability(from_time=_at(0, 0), until_time=_at(0, 23), reason="busy")
+    ]
+    # After four, residential: the slot that historically always landed on Dan.
+    options = suggest_booking_slots(
+        world=world,
+        travel=travel,
+        draft=draft_at(world, "j-402", duration=120),
+        horizon=HORIZON,
+        params=params,
+        business=business,
+        earliest_hour=16,
+    )
+    by_day = {s.on_date: s.worker_names for s in options.slots}
+    monday = HORIZON[0]
+    if monday in by_day:
+        assert "Dan" not in by_day[monday], "a held fitter must not be booked"
+    other_days = [names for day, names in by_day.items() if day != monday]
+    assert other_days, "the rest of the week is unaffected by a one-day hold"

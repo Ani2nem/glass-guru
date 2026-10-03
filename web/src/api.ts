@@ -8,7 +8,6 @@ import type {
   Message,
   Note,
   Plan,
-  Repair,
   Triage,
   Week,
   World,
@@ -53,9 +52,6 @@ export const api = {
   week: () => request<Week>("/api/week"),
   plan: () => request<Plan | null>("/api/plan"),
   commit: () => post<Plan>("/api/plan/commit"),
-  repair: () => post<Repair>("/api/repair"),
-  applyRepair: (strategy: string, force = false) =>
-    post<Plan>(`/api/repair/apply?strategy=${encodeURIComponent(strategy)}&force=${force}`),
   recordEvent: (event: Record<string, unknown>) =>
     post<{ event_id: string; type: string }>("/api/events", event),
   triage: (text: string) => post<Triage>("/api/triage", { text }),

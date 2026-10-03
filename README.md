@@ -43,7 +43,7 @@ make dev                   # the dispatch board at http://127.0.0.1:5173
 No credentials and no network are needed for any of that.
 Travel times come from a committed OSRM snapshot, so a fresh clone gets real road distances offline and for free.
 
-[docs/walkthrough.md](docs/walkthrough.md) is the by-hand tour: take a call, price it, break a van, repair the day.
+[docs/walkthrough.md](docs/walkthrough.md) is the by-hand tour: take a call, price it, break a van, re-plan around it.
 
 For the agents, see [docs/aws-setup.md](docs/aws-setup.md) - Amazon Nova Lite on Bedrock, behind an interface that makes the model a config value.
 

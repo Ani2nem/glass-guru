@@ -126,12 +126,28 @@ class WorldState:
         return multiplier
 
 
-def _close_latest_outage(outages: list[Unavailability], at: datetime) -> None:
-    """Close the most recent open-ended outage. A restore with none open is a no-op."""
-    for index in range(len(outages) - 1, -1, -1):
-        if outages[index].until_time is None:
-            outages[index] = outages[index].model_copy(update={"until_time": at})
-            return
+def _carve_outages(outages: list[Unavailability], start: datetime, end: datetime | None) -> None:
+    """Remove the interval ``[start, end)`` from every outage, splitting as needed.
+
+    This replaced "close the most recent open-ended outage", which made a restore
+    silently do nothing against an outage recorded with an explicit until - the board
+    grew a ↺ button that could never bring anyone back. A restore means the person is
+    available for that stretch, full stop: an outage inside the window disappears, one
+    overlapping an edge is trimmed, and one spanning the whole window becomes two.
+    ``end`` of ``None`` means "from start onwards", the plain "he's back" case.
+    """
+    kept: list[Unavailability] = []
+    for outage in outages:
+        before_window = outage.until_time is not None and outage.until_time <= start
+        after_window = end is not None and outage.from_time >= end
+        if before_window or after_window:
+            kept.append(outage)
+            continue
+        if outage.from_time < start:
+            kept.append(outage.model_copy(update={"until_time": start}))
+        if end is not None and (outage.until_time is None or outage.until_time > end):
+            kept.append(outage.model_copy(update={"from_time": end}))
+    outages[:] = kept
 
 
 def _apply(state: WorldState, event: Event) -> None:
@@ -219,7 +235,11 @@ def _apply(state: WorldState, event: Event) -> None:
             )
 
         case WorkerRestored():
-            _close_latest_outage(state.worker_outages.get(event.worker_id, []), event.occurred_at)
+            _carve_outages(
+                state.worker_outages.get(event.worker_id, []),
+                event.window_start or event.occurred_at,
+                event.window_end,
+            )
 
         case VanUnavailable():
             state.van_outages.setdefault(event.van_id, []).append(
@@ -231,7 +251,11 @@ def _apply(state: WorldState, event: Event) -> None:
             )
 
         case VanRestored():
-            _close_latest_outage(state.van_outages.get(event.van_id, []), event.occurred_at)
+            _carve_outages(
+                state.van_outages.get(event.van_id, []),
+                event.window_start or event.occurred_at,
+                event.window_end,
+            )
 
         case TrafficDelay():
             state.traffic_overrides.append(

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, subscribe } from "./api";
 import { Calendar } from "./components/Calendar";
 import { NotePanel } from "./components/NotePanel";
-import { ProposalPanel } from "./components/ProposalPanel";
 import { TodayPanel } from "./components/TodayPanel";
 import { RouteMap } from "./components/RouteMap";
 import type { Plan, Week, World } from "./types";
@@ -150,7 +149,6 @@ export default function App() {
             <NotePanel onChanged={() => void refresh()} prefill={prefill} />
             {/* Directly under the note, because that is what produces it: something
                 goes wrong, and these are the ways out of it. */}
-            <ProposalPanel onChanged={() => void refresh()} />
           </div>
           {world && <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />}
         </section>

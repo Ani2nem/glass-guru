@@ -15,6 +15,7 @@ export interface Stop {
   crew_size: number;
   commitment_state: string;
   gap_minutes: number;
+  past_shift: boolean;
   lat: number;
   lon: number;
 }
@@ -133,13 +134,6 @@ export interface Candidate {
   recommended: boolean;
 }
 
-export interface Repair {
-  baseline_plan_id: string;
-  candidates: Candidate[];
-  recommended: string;
-  rationale: string;
-  chosen_by: string;
-}
 
 export interface Slot {
   needs_overtime: boolean;

@@ -193,7 +193,6 @@ textarea::placeholder { color: var(--faint); }
    Two boxes that looked identical is how "van 3 won't start" became a customer named
    Dan who wanted auto glass. */
 .panel--note { border-left: 3px solid var(--line-strong); }
-.panel--fix { border-left: 3px solid var(--ok); }
 .panel--today { border-left: 3px solid var(--muted); }
 .panel--booking { border-left-color: var(--accent); }
 .panel--disruption { border-left-color: var(--warn); }
@@ -471,33 +470,18 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 
 /* ---------------------------------------------------------------- proposals */
 
-.candidate { border: 1px solid var(--line-strong); border-radius: 10px; padding: 12px 14px; margin-top: 12px; background: var(--raised); }
-.candidate--rec { border-color: var(--accent); }
-.candidate header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.candidate h3 { text-transform: capitalize; }
 
 .tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--accent); color: #000000; border-radius: 4px; padding: 2px 6px; font-weight: 700; }
 .tag--call { background: var(--warn); }
 
-.metrics { display: flex; gap: 12px; font-size: 13px; margin: 10px 0; flex-wrap: wrap; }
 .blast { border-radius: 4px; padding: 2px 8px; background: #1c1c2c; font-size: 12px; }
 .blast--customer_visible { background: #3a1013; color: #ffb4b6; }
 .blast--crew_only { background: #06303a; color: #7fd9e8; }
 
-.diff { margin: 8px 0; padding-left: 18px; font-size: 13px; }
-.diff li { margin-bottom: 3px; }
-.actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 
-.messages { margin-top: 16px; }
-.msg { border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px 12px; margin-top: 10px; background: var(--raised); }
-/* A held draft states a time the plan does not support. It must look wrong. */
-.msg--held { border-color: var(--error); background: #250b0d; }
-.msg header { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
-.msg p { margin: 0; font-size: 14px; }
 
-/* The rota: days across, one row per fitter. The grey "can stay to 7:00 PM" line is
-   the single fact that explains most of the planner's choices, so it lives in the
-   cell rather than in anyone's head. */
+/* The rota: days across, one row per fitter, and the cells are the controls - click
+   a day to mark that fitter out for it, click an out day to bring them back. */
 .rota { overflow-x: auto; }
 .rota table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .rota th {
@@ -514,10 +498,9 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .rota__who strong { font-size: 13px; }
 .rota__certs { margin-left: 6px; letter-spacing: 2px; cursor: default; }
 .rota__cell { line-height: 1.3; }
-.rota__cell--off { color: var(--faint); }
-.rota__outrow td { color: var(--error); }
 
-/* Mark out / restore: one quiet glyph. The text-pill version made the panel unreadable. */
+
+/* The van line's quiet glyph: cross out, arrow back. */
 .rota__toggle {
   margin-left: 6px;
   padding: 0 6px;
@@ -569,47 +552,6 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .unserved { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; }
 .unserved p { margin: 5px 0; font-size: 13px; }
 
-/* "Out for how long?" - the menu the cross opens. Anchored to the name cell so the
-   table never reflows; dark like every other floating surface. */
-.rota__out {
-  position: relative;
-  display: inline-flex;
-}
-.rota__menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
-  min-width: 10.5rem;
-  padding: 0.3rem;
-  background: var(--surface-raised, #09091a);
-  border: 1px solid var(--border, #26263a);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
-}
-.rota__menu-title {
-  padding: 0.2rem 0.5rem;
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim, #c0c0c8);
-}
-.rota__menu button {
-  padding: 0.35rem 0.5rem;
-  text-align: left;
-  font-size: 0.8rem;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  color: var(--text, #fff);
-  cursor: pointer;
-}
-.rota__menu button:hover {
-  background: var(--accent, #1fbad6);
-  color: #000;
-}
 
 /* A slot that keeps somebody past their shift. Not a warning - the price already
    carries the premium - just the cue to have the "who wants the hours?" conversation
@@ -622,5 +564,63 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   letter-spacing: 0.05em;
   border: 1px solid var(--warn, #f0a13a);
   border-radius: 999px;
+  color: var(--warn, #f0a13a);
+}
+
+/* The cells are the controls. An available day shows its shift and grows a small
+   cross on hover; an out day is dashed - absence drawn as a hole in the week, not a
+   label - and grows the restore arrow. The whole cell is the hit target. */
+.rota__daybtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.3rem 0.4rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rota__hovermark {
+  margin-left: auto;
+  opacity: 0;
+  color: var(--error, #ff5a5f);
+}
+.rota__daybtn:hover {
+  border-color: var(--border, #26263a);
+}
+.rota__daybtn:hover .rota__hovermark {
+  opacity: 1;
+}
+.rota__cell--out .rota__daybtn,
+.rota__daybtn--out {
+  border: 1px dashed var(--error, #ff5a5f);
+  color: var(--error, #ff5a5f);
+  justify-content: flex-start;
+}
+.rota__daybtn--out .rota__hovermark {
+  color: var(--accent-green, #06c167);
+}
+.rota__cell--rest {
+  color: var(--text-dim, #c0c0c8);
+}
+
+/* Work that runs past the crew's shift: dashed amber, with a small OT tag. The same
+   language as the overtime pill on a slot card - a late booking is visibly a late
+   stay, on the calendar where the lateness actually lives. */
+.block--ot {
+  border: 1px dashed var(--warn, #f0a13a);
+}
+.block__ot-tag {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   color: var(--warn, #f0a13a);
 }

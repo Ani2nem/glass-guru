@@ -147,7 +147,7 @@ function Block({
 
   return (
     <button
-      className={`block block--${stop.commitment_state}${selected ? " block--selected" : ""}`}
+      className={`block block--${stop.commitment_state}${stop.past_shift ? " block--ot" : ""}${selected ? " block--selected" : ""}`}
       style={{
         top: `${(stop.start_minute - top) * SCALE}px`,
         height: `${height}px`,
@@ -159,9 +159,11 @@ function Block({
         `${stop.customer_name} - ${stop.service_type.replace(/_/g, " ")}\n` +
         `${clock(stop.start_minute)}-${clock(stop.end_minute)}\n` +
         `${crew} · ${route.van_id}\n` +
-        `${stop.travel_minutes} min drive, ${stop.travel_miles} mi`
+        `${stop.travel_minutes} min drive, ${stop.travel_miles} mi` +
+        (stop.past_shift ? "\nruns past shift - overtime" : "")
       }
     >
+      {stop.past_shift && <span className="block__ot-tag">OT</span>}
       <span className="block__what">{stop.customer_name}</span>
       {/* The shortest job on the fixture is forty-five minutes, which is fifty pixels
           tall and just holds a wrapped name plus the time. Below that the time goes
