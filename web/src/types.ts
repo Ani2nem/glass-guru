@@ -69,6 +69,7 @@ export interface WorkerDay {
   shift: string;
   reach: string;
   available: boolean;
+  actionable: boolean;
 }
 
 export interface Worker {

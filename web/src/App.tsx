@@ -77,16 +77,22 @@ export default function App() {
       <header className="topbar">
         <h1>Glass Guru</h1>
         {plan ? (
-          <div className="topbar__plan">
-            <code>{plan.plan_id}</code>
-            <span className="muted">{plan.content_hash}</span>
-            <span>${plan.cost.total.toFixed(2)}</span>
+          <div
+            className="topbar__plan"
+            title={`version ${plan.plan_id} \u00B7 ${plan.content_hash}`}
+          >
             <span className={plan.feasible ? "ok" : "error"}>
-              {plan.feasible ? "plan holds" : "plan no longer holds"}
+              {plan.feasible ? "schedule holds" : "schedule broken"}
+            </span>
+            <span
+              className="muted"
+              title="what the planner expects this week to cost us in wages and driving - not revenue"
+            >
+              runs the week for ~${Math.round(plan.cost.total)}
             </span>
           </div>
         ) : (
-          <span className="muted">nothing committed</span>
+          <span className="muted">no schedule committed yet</span>
         )}
         <div className="topbar__actions">
           {world?.calibration_warning && (
@@ -101,6 +107,7 @@ export default function App() {
           <button
             className="primary"
             disabled={busy}
+            title="Rebuild the whole week's schedule from everything recorded - bookings, absences, breakdowns - and commit it. Safe to press any time; promised windows are kept wherever possible."
             onClick={async () => {
               setBusy(true);
               try {
@@ -112,7 +119,7 @@ export default function App() {
               }
             }}
           >
-            {busy ? "Solving…" : plan ? "Re-plan" : "Plan the week"}
+            {busy ? "Solving…" : plan ? "Re-plan the week" : "Plan the week"}
           </button>
         </div>
       </header>
@@ -130,7 +137,7 @@ export default function App() {
               <li key={violation}>{readable(violation)}</li>
             ))}
           </ul>
-          Use <strong>Fix the day</strong> to see the ways out, or re-plan from scratch.
+          Press <strong>Re-plan the week</strong> to rebuild around it.
         </div>
       )}
       {error && (
@@ -140,19 +147,17 @@ export default function App() {
         </div>
       )}
 
-      {/* Panels across the top, board underneath at the full width of the window.
-          A five-day horizon on four crews is a wide thing; squeezing it between two
-          sidebars left every bar too narrow to read the customer's name in. */}
+      {/* The calendar is the thing a dispatcher looks at all day, so it owns the
+          screen: a fixed-viewport grid, no page scroll. The call box lives in a rail
+          on the left - it is a stand-in until phones and email feed this directly,
+          and a stand-in does not get the hero slot. The crew rota runs as a wide
+          strip under the calendar, which is the shape the table actually is. */}
       <div className="layout">
-        <section className="workbench">
-          <div className="stack">
-            <NotePanel onChanged={() => void refresh()} prefill={prefill} />
-            {/* Directly under the note, because that is what produces it: something
-                goes wrong, and these are the ways out of it. */}
-          </div>
-          {world && <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />}
-        </section>
+        <aside className="rail">
+          <NotePanel onChanged={() => void refresh()} prefill={prefill} />
+        </aside>
 
+        <div className="boardcol">
         <main className="main">
           <div className="tabs">
             <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>
@@ -174,7 +179,7 @@ export default function App() {
           {week && view === "board" && (
             <>
               {selectedStop && (
-                <div className="detail">
+                <div className="detail detail--overlay">
                   <header>
                     <h3>{selectedStop.customer_name}</h3>
                     <span className={`blast blast--${selectedStop.commitment_state}`}>
@@ -268,6 +273,8 @@ export default function App() {
           )}
         </main>
 
+        {world && <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />}
+        </div>
       </div>
     </div>
   );

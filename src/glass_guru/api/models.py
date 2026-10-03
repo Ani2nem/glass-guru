@@ -93,6 +93,10 @@ class WorkerDayView(Api):
     #: single fact that explains why an after-four job keeps landing on Dan.
     reach: str = ""
     available: bool = True
+    #: False once the day can no longer be changed - the shift plus any overtime
+    #: reach is already behind the clock. The board greys these instead of offering
+    #: a click that silently does nothing, which is the worst thing a click can do.
+    actionable: bool = True
 
 
 class WorkerView(Api):

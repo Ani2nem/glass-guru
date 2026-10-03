@@ -170,6 +170,7 @@ def _worker_week(
             else:
                 opens = datetime.combine(cursor, hours.start, tzinfo=tz)
                 closes = datetime.combine(cursor, hours.end, tzinfo=tz)
+                latest = closes + timedelta(minutes=overtime if worker.overtime_eligible else 0)
                 reach = ""
                 if worker.overtime_eligible and overtime:
                     reach = f"can stay to {clock(closes + timedelta(minutes=overtime))}"
@@ -180,6 +181,9 @@ def _worker_week(
                         shift=clock_range(hours.start, hours.end),
                         reach=reach,
                         available=world.is_worker_available(worker.id, opens, closes),
+                        # Once the shift and any overtime reach are behind the clock
+                        # there is nothing left to block out or bring back.
+                        actionable=datetime.now(tz) < latest,
                     )
                 )
         cursor += timedelta(days=1)

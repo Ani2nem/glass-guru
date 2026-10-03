@@ -79,12 +79,13 @@ export function TodayPanel({
 
   return (
     <section className="panel panel--today">
+      <div className="rota__split">
+      <div className="rota__left">
       <h2>Crew availability</h2>
       <p className="panel__hint">
         Click a day to mark someone out for that day; click it again to bring them
-        back. Out for hours, not days? Type it in the box - {"\u201C"}Dan is out till
-        noon{"\u201D"} - and it lands as the same record. Anyone can be kept up to two
-        hours past shift on overtime.
+        back. Out for hours, not days? Type it in the call box. Anyone can stay up to
+        two hours past shift on overtime.
       </p>
 
       <div className="rota">
@@ -117,6 +118,16 @@ export function TodayPanel({
                   d.shift === "off" ? (
                     <td key={d.date} className="rota__cell rota__cell--rest">
                       off
+                    </td>
+                  ) : !d.actionable ? (
+                    // The shift is already behind the clock. A click here could not
+                    // change anything, so there is nothing to click.
+                    <td
+                      key={d.date}
+                      className="rota__cell rota__cell--past"
+                      title="already past - nothing left to block out"
+                    >
+                      {d.available ? d.shift : "out"}
                     </td>
                   ) : d.available ? (
                     <td key={d.date} className="rota__cell">
@@ -184,6 +195,8 @@ export function TodayPanel({
         ))}
       </div>
 
+      </div>
+
       {byDate.size > 0 && (
         <div className="workload">
           <h3>How the week loads them</h3>
@@ -218,6 +231,7 @@ export function TodayPanel({
           ))}
         </div>
       )}
+      </div>
     </section>
   );
 }

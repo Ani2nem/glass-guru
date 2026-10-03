@@ -155,33 +155,48 @@ textarea::placeholder { color: var(--faint); }
   flex: 0 0 auto;
 }
 
-/* Panels across the top, board underneath at the full width of the window. A
-   five-day horizon on four crews is a wide thing, and squeezing it between two
-   sidebars left every bar too narrow to read the customer's name in. */
+/* One screen, no page scroll. The calendar is what a dispatcher looks at all day,
+   so it owns the width and the height; the call box is a rail on the left (it is a
+   stand-in until phones and email feed the system directly, and a stand-in does not
+   get the hero slot); the crew rota runs as a wide strip underneath, which is the
+   shape that table actually is. Everything scrolls inside its own frame. */
 .layout {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) 1fr;
   gap: 14px;
   padding: 14px;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.rail {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.rail .panel { flex: 0 0 auto; }
+
+.boardcol {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+}
+/* The rota strip keeps a readable height and yields the rest to the calendar. */
+.boardcol .panel--today {
+  flex: 0 1 auto;
+  max-height: 36vh;
   overflow-y: auto;
 }
 
-.workbench {
-  display: grid;
-  grid-template-columns: minmax(380px, 1fr) minmax(340px, 0.85fr);
-  gap: 14px;
-  align-items: start;
-  flex: 0 0 auto;
+@media (max-width: 1100px) {
+  .layout { grid-template-columns: 1fr; overflow-y: auto; }
+  .rail { overflow-y: visible; }
 }
-@media (max-width: 1000px) { .workbench { grid-template-columns: 1fr; } }
-
-.stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-
-/* The panels are tall once an agent has answered. Capping them keeps the calendar on
-   screen without scrolling the page, and each scrolls inside itself instead. */
-.workbench .panel { max-height: 48vh; overflow-y: auto; }
 
 .panel {
   background: var(--panel);
@@ -220,7 +235,12 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   padding: 18px;
   min-height: 0;
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  position: relative; /* the job-detail card overlays here */
 }
+.main > .cal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
 .tabs { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
 .tabs select { width: auto; margin: 0; }
 
@@ -274,9 +294,12 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .cal__count { font-size: 11px; color: var(--cal-muted); }
 
 /* The frame the 18-hour grid scrolls inside. Day headers stay put above it, so
-   scrolling to 7 PM does not lose track of which column is Wednesday. */
+   scrolling to 7 PM does not lose track of which column is Wednesday. It takes
+   whatever height the layout grants the calendar rather than a fixed share of the
+   window, because the calendar is now the element everything else yields to. */
 .cal__scroll {
-  max-height: 58vh;
+  flex: 1 1 auto;
+  min-height: 240px;
   overflow-y: auto;
   border-radius: 10px;
 }
@@ -287,15 +310,9 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   grid-template-columns: 60px repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
-@media (max-width: 900px) { /* The frame the 18-hour grid scrolls inside. Day headers stay put above it, so
-   scrolling to 7 PM does not lose track of which column is Wednesday. */
-.cal__scroll {
-  max-height: 58vh;
-  overflow-y: auto;
-  border-radius: 10px;
+@media (max-width: 900px) {
+  .cal__grid { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); }
 }
-
-.cal__grid { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
 
 .cal__gutter { position: relative; }
 .cal__gutter span {
@@ -370,6 +387,18 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 16px;
+}
+/* Floats over the calendar's top-right corner. Opening a job used to shove the whole
+   calendar down a card's height, which cost the exact context - the rest of the week
+   - that the click was asking about. */
+.detail--overlay {
+  position: absolute;
+  top: 56px;
+  right: 18px;
+  z-index: 30;
+  width: min(440px, calc(100% - 36px));
+  margin-bottom: 0;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
 }
 .detail header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
@@ -623,4 +652,28 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--warn, #f0a13a);
+}
+
+/* The rota strip: table on the left, the week's load on the right - two readings of
+   the same crew, side by side instead of stacked into a tower. */
+.rota__split {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+.rota__left { flex: 1 1 auto; min-width: 0; }
+.rota__split .workload {
+  flex: 0 0 300px;
+  margin-top: 0;
+}
+@media (max-width: 1100px) {
+  .rota__split { flex-direction: column; }
+  .rota__split .workload { flex: 1 1 auto; width: 100%; }
+}
+
+/* A day already behind the clock. Not clickable, and visibly so - a dead click that
+   silently does nothing is the worst thing a cell can offer. */
+.rota__cell--past {
+  color: var(--faint);
+  cursor: not-allowed;
 }
