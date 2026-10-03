@@ -110,10 +110,10 @@ def test_unserved_separates_failures_from_routine(client: TestClient):
 
 
 def test_recording_an_event_changes_the_world(client: TestClient):
-    client.post(
-        "/api/events",
-        json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"},
-    )
+    # No "at": the outage starts now. A bare HH:MM lands on the NEXT WORKING day,
+    # which made this test a calendar bomb - green on weekday mornings, red from a
+    # Saturday, because a Monday outage leaves the van correctly available today.
+    client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1"})
     vans = {v["id"]: v for v in client.get("/api/world").json()["vans"]}
     assert vans["van-1"]["available"] is False
 
