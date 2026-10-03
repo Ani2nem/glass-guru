@@ -33,8 +33,8 @@ PLAN 2026-09-21  (d9c64a4f7a1cfb3c)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $249.32   vehicle $55.43   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $304.75
-  solver objective $363.68  (+$58.93 vs actual)   status OPTIMAL   N.NNNs
+  cost  vehicle $55.43   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $55.43
+  solver objective $55.48  (+$0.05 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

@@ -29,6 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from glass_guru.agents.intake import _URGENCY_NOT_ARRANGEMENT
 from glass_guru.api import views
 from glass_guru.api.models import (
     AcceptRequest,
@@ -48,6 +49,7 @@ from glass_guru.api.models import (
 )
 from glass_guru.cli.events import EventArgumentError, build_event
 from glass_guru.config import BusinessParams
+from glass_guru.domain.invariants import ValidationConfig, validate_plan
 from glass_guru.domain.models import Job
 from glass_guru.domain.state import WorldState
 from glass_guru.formatting import clock, clock_range
@@ -359,7 +361,6 @@ def get_plan() -> PlanView | None:
     if head is None:
         return None
 
-    from glass_guru.domain.invariants import ValidationConfig, validate_plan
     from glass_guru.scheduler.costing import cost_plan
 
     travel = svc.travel(world)
@@ -461,7 +462,6 @@ def apply_repair(strategy: str = Query(...), force: bool = Query(default=False))
             )
 
         world = svc.world()
-        from glass_guru.domain.invariants import ValidationConfig, validate_plan
         from glass_guru.scheduler.costing import cost_plan
 
         travel = svc.travel(world)
@@ -525,8 +525,69 @@ def record_event(request: EventRequest) -> dict[str, str]:
         except (EventArgumentError, ServiceError, ValueError) as exc:
             raise _fail(exc, 400, "check the event kind and target id") from exc
 
+        note = ""
+        if event.type in {"worker_unavailable", "van_unavailable"}:
+            note = _quiet_reroute(svc)
+
         broadcaster.publish("world", {"event": event.type})
-        return {"event_id": event.event_id, "type": event.type, "dispatch_id": dispatch_id}
+        return {
+            "event_id": event.event_id,
+            "type": event.type,
+            "dispatch_id": dispatch_id,
+            "note": note,
+        }
+
+
+def _quiet_reroute(svc: DispatchService) -> str:
+    """Absorb an outage without a human in the loop, when that is safe.
+
+    "Priya is out" used to mean a red banner and a button, even when five other
+    fitters could trivially cover her day - the dispatcher was being asked to approve
+    arithmetic. So: if the committed plan still validates, nothing happens. If it is
+    broken, run the repair strategies, and when the best candidate keeps every
+    promise - zero customer calls, zero released promises, nobody dropped - commit it
+    silently and say so in one sentence. Anything that would touch a customer stays
+    exactly where it was: stale banner, human decision. The autonomy policy is the
+    same one the repair button enforces; this just presses the button when the policy
+    says the press is free.
+    """
+    baseline = svc.head()
+    if baseline is None:
+        return ""
+    world = svc.world()
+    travel = svc.travel(world)
+    if not validate_plan(baseline, world, travel, ValidationConfig(business_tz=svc.tz)):
+        return ""  # the outage touched nothing that was planned
+
+    try:
+        options, baseline = svc.repair()
+    except ServiceError:
+        return ""
+    best = options.best_by_fewest_calls
+    if best is None or best.customer_calls:
+        return ""
+    served_before = {s.job_id for r in baseline.routes for s in r.stops}
+    served_after = {s.job_id for r in best.plan.routes for s in r.stops}
+    if not served_before <= served_after:
+        return ""  # somebody's job fell out; that is a judgement, not arithmetic
+    if not svc.autonomy(best.diff).auto:
+        return ""
+    # The decisive check. A strategy may have been AUTHORISED to release promises
+    # (that is what released_promises records), but what matters is what came out:
+    # validated with no release authorisation at all, so a plan that actually moved
+    # or dropped a promised window fails here and stays a human decision.
+    if validate_plan(best.plan, world, travel, ValidationConfig(business_tz=svc.tz)):
+        return ""
+
+    try:
+        committed = svc.commit(best.plan, expected_parent=baseline.id)
+    except ServiceError:
+        return ""
+    broadcaster.publish("plan", {"plan_id": committed.id})
+    moved = best.changes
+    return "rerouted automatically - every promise kept" + (
+        f", {moved} internal change(s)" if moved else ""
+    )
 
 
 # -------------------------------------------------------------------------- agents
@@ -919,6 +980,9 @@ def run_intake(request: TextRequest) -> IntakeView:
             repairs=result.extraction.repairs,
             note=result.geocode_note,
             when_text=_when_text(result.earliest_hour, result.latest_hour),
+            # Deterministic, from the transcript itself - the same vocabulary the
+            # commitment grounding uses to tell urgency from arrangement.
+            asked_for_speed=bool(_URGENCY_NOT_ARRANGEMENT.search(request.text)),
         )
 
 

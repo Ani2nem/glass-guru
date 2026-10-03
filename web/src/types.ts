@@ -42,7 +42,6 @@ export interface Unserved {
 }
 
 export interface Cost {
-  travel_labor: number;
   vehicle: number;
   overtime: number;
   lateness: number;
@@ -184,6 +183,7 @@ export interface Intake {
   flexible_slots: Slot[];
   unavailable: UnavailableDay[];
   when_text: string;
+  asked_for_speed: boolean;
   repairs: number;
   note: string;
 }

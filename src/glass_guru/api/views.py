@@ -127,7 +127,6 @@ def plan_view(
             for u in plan.unserved
         ],
         cost=CostView(
-            travel_labor=round(cost.travel_labor, 2),
             vehicle=round(cost.vehicle, 2),
             overtime=round(cost.overtime, 2),
             lateness=round(cost.lateness_penalty, 2),

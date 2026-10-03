@@ -61,7 +61,6 @@ class UnservedView(Api):
 
 
 class CostView(Api):
-    travel_labor: float
     vehicle: float
     overtime: float
     lateness: float
@@ -258,6 +257,11 @@ class IntakeView(Api):
     unavailable: list[UnavailableDayView] = Field(default_factory=list)
     #: The caller's stated hours, as words for the fixed intake form.
     when_text: str = ""
+    #: True when the caller used urgency words - "as soon as possible", "urgent".
+    #: The board then leads with the soonest slot; otherwise it leads with the
+    #: cheapest, because a caller who named no hurry is being sold overtime they
+    #: never asked for when the priciest day happens to sort first.
+    asked_for_speed: bool = False
     repairs: int = 0
     note: str = ""
 

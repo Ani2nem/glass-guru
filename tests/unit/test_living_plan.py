@@ -321,8 +321,14 @@ def test_repair_keeps_a_promised_window(world, travel, business, committed):
 
 
 def test_repair_offers_genuinely_different_trade_offs(world, travel, business, committed):
-    """One answer would hide the judgement. Losing two vans forces the strategies apart."""
-    for van_id in ("van-1", "van-2"):
+    """One answer would hide the judgement.
+
+    Two vans down used to be enough of a squeeze; under marginal-cash economics the
+    strategies all found the same cheap answer, because moving work costs fuel rather
+    than wages. Three vans down leaves one van for the whole day, and there the
+    strategies genuinely part ways - what to keep is now a judgement, not arithmetic.
+    """
+    for van_id in ("van-1", "van-2", "van-3"):
         world.van_outages[van_id] = [
             Unavailability(from_time=_at(0, 0), until_time=None, reason="out")
         ]

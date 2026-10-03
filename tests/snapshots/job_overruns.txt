@@ -3,21 +3,21 @@ The shower-door install runs two hours over while the crew is on site.
 
 !  42 of 42 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (add351ceef014c89)
+PLAN 2026-09-21  (47731a1931fdbcfc)
 ------------------------------------------------------------------------------
 
   crew-van-1   Marcus + Priya   [van-1]
       6:23 AM-8:53 AM  Rodriguez Storefront       storefront_glass                23min drive  needs 2
-      9:09 AM-11:09 AM  Chen Residence             residential_window_replacement  16min drive  
-                   travel 56min / 24.9mi  (112 person-min)   idle 0min   on-site 83%
+                   travel 56min / 24.7mi  (112 person-min)   idle 0min   on-site 73%
 
   crew-van-2   Ken   [van-2]
       8:19 AM-9:04 AM  Nakamura Screens           screen_repair                   19min drive  
                    travel 39min / 15.6mi  (39 person-min)   idle 0min   on-site 54%
 
-  crew-van-3   Alex   [van-3]
-      10:00 AM-2:30 PM  Patel Shower Door          shower_door_install             40min drive  
-                   travel 70min / 40.0mi  (70 person-min)   idle 0min   on-site 79%
+  crew-van-3   Alex + Dan   [van-3]
+      9:00 AM-11:00 AM  Chen Residence             residential_window_replacement  25min drive  
+      11:18 AM-3:48 PM  Patel Shower Door          shower_door_install             18min drive  
+                   travel 85min / 40.1mi  (170 person-min)   idle 0min   on-site 82%
 
   crew-van-4   Sofia   [van-4]
       8:34 AM-10:04 AM  Okonkwo Auto Glass         auto_glass                      34min drive  
@@ -36,8 +36,8 @@ PLAN 2026-09-21  (add351ceef014c89)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $258.52   vehicle $68.37   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $326.89
-  solver objective $384.91  (+$58.02 vs actual)   status OPTIMAL   N.NNNs
+  cost  vehicle $68.30   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $68.30
+  solver objective $68.36  (+$0.06 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

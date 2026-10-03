@@ -51,7 +51,11 @@ export function NotePanel({
   const [text, setText] = useState("");
   const [note, setNote] = useState<Note | null>(null);
   const [booked, setBooked] = useState<string | null>(null);
-  const [showFlexible, setShowFlexible] = useState(false);
+  /** Which ordering leads. "cheapest" unless the caller used urgency words - a
+   * caller who named no hurry was being led with the overtime slot whenever the
+   * soonest day happened to be the priciest, which is selling urgency nobody asked
+   * for. "soonest" when they did ask. "flexible" is the outside-their-hours tab. */
+  const [slotTab, setSlotTab] = useState<"cheapest" | "soonest" | "flexible" | null>(null);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const dictation = useRef<Dictation | null>(null);
@@ -98,6 +102,7 @@ export function NotePanel({
     setError(null);
     setBooked(null);
     try {
+      setSlotTab(null); // a fresh call decides its own leading order
       setNote(await api.note(text, kind));
     } catch (exc) {
       setError(exc as ApiError);
@@ -143,6 +148,19 @@ export function NotePanel({
 
   const draft = note?.booking?.draft;
   const booking = note?.booking;
+  const activeTab = slotTab ?? (booking?.asked_for_speed ? "soonest" : "cheapest");
+  const orderedSlots = (() => {
+    if (!booking) return [];
+    if (activeTab === "flexible") return booking.flexible_slots;
+    const copy = [...booking.slots];
+    if (activeTab === "cheapest") {
+      // Money first, then the calendar: among equally priced days the earlier wins.
+      copy.sort((a, b) => a.quote_total - b.quote_total || a.date.localeCompare(b.date));
+    } else {
+      copy.sort((a, b) => a.date.localeCompare(b.date) || a.quote_total - b.quote_total);
+    }
+    return copy;
+  })();
   const disruption = note?.disruption;
   const other = note?.kind === "disruption" ? "booking" : "disruption";
 
@@ -284,29 +302,34 @@ export function NotePanel({
                 What they asked for, priced. The big number is the quote, tax included;
                 underneath is what we keep once the glass, wages and driving are paid.
               </p>
-              {booking.flexible_slots.length === 0 && booking.slots.length > 0 && (
-                <p className="muted">
-                  No cheaper alternative exists - these are already the best prices
-                  for this job.
-                </p>
-              )}
-              {booking.flexible_slots.length > 0 && (
-                <div className="slots__tabs">
+              <div className="slots__tabs">
+                <button
+                  className={activeTab === "cheapest" ? "on" : ""}
+                  onClick={() => setSlotTab("cheapest")}
+                  title="lowest quote first; overtime days sink to the bottom on price"
+                >
+                  Cheapest first
+                </button>
+                <button
+                  className={activeTab === "soonest" ? "on" : ""}
+                  onClick={() => setSlotTab("soonest")}
+                  title="earliest day first, even when that day needs overtime"
+                >
+                  Soonest first
+                </button>
+                {booking.flexible_slots.length > 0 && (
                   <button
-                    className={showFlexible ? "" : "on"}
-                    onClick={() => setShowFlexible(false)}
+                    className={activeTab === "flexible" ? "on" : ""}
+                    onClick={() => setSlotTab("flexible")}
                   >
-                    As requested
+                    Cheaper outside their hours ({booking.flexible_slots.length})
                   </button>
-                  <button
-                    className={showFlexible ? "on" : ""}
-                    onClick={() => setShowFlexible(true)}
-                  >
-                    Cheaper if flexible ({booking.flexible_slots.length})
-                  </button>
-                </div>
+                )}
+              </div>
+              {booking.asked_for_speed && activeTab === "soonest" && (
+                <p className="muted">They asked for speed, so the earliest day leads.</p>
               )}
-              {(showFlexible ? booking.flexible_slots : booking.slots).map((slot, index) => (
+              {orderedSlots.map((slot, index) => (
                 <div
                   key={slot.date + slot.window + slot.arrival}
                   className={`slot${index === 0 ? " slot--best" : ""}${slot.outside_preference ? " slot--flex" : ""}`}
@@ -363,7 +386,7 @@ export function NotePanel({
               ))}
               {(() => {
                 const theirs = booking.slots;
-                if (theirs.length < 2 || showFlexible) return null;
+                if (theirs.length < 2 || activeTab === "flexible") return null;
                 const spread =
                   Math.max(...theirs.map((s) => s.margin)) -
                   Math.min(...theirs.map((s) => s.margin));

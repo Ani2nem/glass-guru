@@ -149,7 +149,7 @@ def _world_with(world: WorldState, job: Job) -> WorldState:
 
 def _route_operating_cost(route_cost: RouteCost) -> float:
     """Driving and labour only - the marginal cost of *serving*, not of penalties."""
-    return float(route_cost.travel_labor + route_cost.vehicle + route_cost.overtime)
+    return float(route_cost.vehicle + route_cost.overtime)
 
 
 def _reason_for(
