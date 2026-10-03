@@ -42,6 +42,21 @@ export function TodayPanel({
    * every promise kept - it says so, and that sentence is worth showing: the
    * difference between "the schedule broke" and "the schedule healed" is the
    * difference between a task and a notification. */
+  /** "Ken texted back yes" - the dispatcher relays the reply with one tap. First
+   * claim wins server-side, so two taps in two tabs cannot double-book an evening. */
+  async function claim(jobId: string, workerId: string) {
+    setBusy(true);
+    try {
+      const result = await api.claimOvertime(jobId, workerId);
+      setNote(`${result.worker} took the overtime - ${result.status}`);
+      onChanged();
+    } catch (exc) {
+      setNote((exc as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function record(event: Record<string, unknown>) {
     setBusy(true);
     try {
@@ -199,6 +214,42 @@ export function TodayPanel({
           </span>
         ))}
       </div>
+
+      {world.overtime_offers.length > 0 && (
+        <div className="otboard">
+          <h3>Overtime on offer</h3>
+          {world.overtime_offers.map((offer) => (
+            <div key={offer.job_id} className={`otboard__row otboard__row--${offer.status}`}>
+              <span className="otboard__what">
+                {offer.customer} · {offer.day} {offer.arrival} · ~
+                {offer.overtime_minutes} min past shift
+              </span>
+              {offer.status === "claimed" ? (
+                <span className="otboard__state ok">claimed by {offer.claimed_by}</span>
+              ) : offer.status === "expired" ? (
+                <span className="otboard__state">
+                  nobody claimed by {offer.deadline} - stays with {offer.fallback}
+                </span>
+              ) : (
+                <span className="otboard__state">
+                  first yes by {offer.deadline} ·
+                  {offer.offered_to.map((name, index) => (
+                    <button
+                      key={name}
+                      className="otboard__claim"
+                      disabled={busy}
+                      title={`${name} texted back yes`}
+                      onClick={() => void claim(offer.job_id, offer.offered_ids[index] ?? "")}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       </div>
 

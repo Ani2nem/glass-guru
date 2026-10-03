@@ -843,3 +843,134 @@ def test_an_absorbable_outage_reroutes_without_a_human(client: TestClient):
     else:
         # Not absorbable (no cover, or a promise would move): the honest stale banner.
         assert not after["feasible"]
+
+
+def test_booking_overtime_floats_an_offer_and_a_claim_moves_the_crew(
+    client: TestClient, monkeypatch
+):
+    """The whole volunteer-overtime loop over HTTP: a four-o'clock booking that runs
+    past five floats an offer to every qualified fitter (texted, in log mode), the
+    rota shows it, a relayed "yes" pins the claimant, and the re-plan puts them on
+    the route without the customer's window moving."""
+    from glass_guru.api import main as api_main
+    from glass_guru.notify import RecordingNotifier
+
+    recorder = RecordingNotifier()
+    monkeypatch.setattr(api_main, "notifier", lambda: recorder)
+    # Synthetic travel: this booking lands on a REAL future Monday, and the frozen
+    # snapshot only holds the legs and buckets the fixture week exercises.
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+
+    draft = {
+        "customer_name": "Evening caller",
+        "phone": "9132934243",
+        "address": "somewhere real",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 120,
+        "duration_confidence": 60,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    # A real future Monday: the fixture week is behind the clock by now, and a
+    # booking in the past can never be placed on the rolling horizon.
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    today = _date.today()
+    monday = today + _timedelta(days=(7 - today.weekday()) % 7 or 7)
+    booked = client.post(
+        "/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "16:00"}
+    ).json()
+    assert booked["status"] == "scheduled"
+    assert "past shift" in booked["overtime"], booked["overtime"]
+
+    world = client.get("/api/world").json()
+    offers = world["overtime_offers"]
+    assert len(offers) == 1
+    offer = offers[0]
+    assert offer["status"] == "open"
+    assert offer["overtime_minutes"] > 0
+    # Everyone qualified got the text; nobody unqualified did.
+    assert recorder.sent, "offer must be texted"
+    assert set(offer["offered_to"]) >= {"Dan", "Ken"}
+    assert "Sofia" not in offer["offered_to"], "not residential-certified"
+
+    # A fitter who was never offered cannot claim.
+    refused = client.post(
+        f"/api/overtime/{booked['job_id']}/claim", params={"worker_id": "w-sofia"}
+    )
+    assert refused.status_code == 422
+
+    # Ken says yes.
+    names = dict(zip(offer["offered_to"], offer["offered_ids"], strict=True))
+    claimer = names["Ken"]
+    claimed = client.post(
+        f"/api/overtime/{booked['job_id']}/claim", params={"worker_id": claimer}
+    ).json()
+    assert claimed["worker"] == "Ken"
+    assert claimed["status"] == "on the route"
+
+    plan = client.get("/api/plan").json()
+    crew = next(
+        r["worker_names"]
+        for r in plan["routes"]
+        for s in r["stops"]
+        if s["job_id"] == booked["job_id"]
+    )
+    assert "Ken" in crew
+    stop = next(s for r in plan["routes"] for s in r["stops"] if s["job_id"] == booked["job_id"])
+    assert stop["past_shift"] is True, "still drawn as overtime on the calendar"
+
+    # Second yes is politely turned away.
+    second = client.post(
+        f"/api/overtime/{booked['job_id']}/claim",
+        params={"worker_id": offer["offered_ids"][0]},
+    )
+    assert second.status_code == 409
+    assert "already took these hours" in second.json()["detail"]["detail"]
+
+    # The board shows who has it.
+    world = client.get("/api/world").json()
+    assert world["overtime_offers"][0]["claimed_by"] == "Ken"
+
+
+def test_hours_are_only_offered_to_fitters_who_can_actually_reach_them(
+    client: TestClient, monkeypatch
+):
+    """The first live run offered a four-to-six evening to two fitters whose shifts
+    end at three - people whose yes the solver could never honour. An offer must go
+    only to crew whose shift plus overtime covers the job's whole span."""
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    from glass_guru.api import main as api_main
+    from glass_guru.notify import RecordingNotifier
+
+    monkeypatch.setattr(api_main, "notifier", lambda: RecordingNotifier())
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+
+    draft = {
+        "customer_name": "Evening caller",
+        "phone": "9132934243",
+        "address": "somewhere real",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 120,
+        "duration_confidence": 60,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    today = _date.today()
+    monday = today + _timedelta(days=(7 - today.weekday()) % 7 or 7)
+    client.post("/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "16:00"})
+
+    offer = client.get("/api/world").json()["overtime_offers"][0]
+    assert set(offer["offered_to"]) == {"Dan", "Ken"}, (
+        "Marcus and Priya finish at three and cannot reach six even on overtime; "
+        "Sofia and Alex are not residential-certified"
+    )

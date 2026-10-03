@@ -11,7 +11,7 @@ whole disruption is one trace end to end.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import Field
@@ -216,6 +216,35 @@ class ProposalRejected(EventBase):
     note: str = ""
 
 
+class OvertimeOffered(EventBase):
+    """A booked job runs past shift, and the hours went up for grabs.
+
+    The owner's policy: overtime is volunteered, not assigned. The solver proves the
+    slot feasible and pencils somebody in, the crew gets first refusal on the extra
+    money, and the schedule never waits on the group chat - if nobody claims by the
+    deadline, the pencilled-in fitter stands.
+    """
+
+    type: Literal["overtime_offered"] = "overtime_offered"
+    job_id: JobId
+    on_date: date
+    #: Everyone qualified, rostered and overtime-eligible that day - the people the
+    #: text went to.
+    offered_to: tuple[WorkerId, ...]
+    #: Who the solver pencilled in; the fallback if nobody claims.
+    fallback: WorkerId
+    overtime_minutes: int
+    claim_deadline: datetime
+
+
+class OvertimeClaimed(EventBase):
+    """A fitter said yes. First reply wins; the fold ignores the rest."""
+
+    type: Literal["overtime_claimed"] = "overtime_claimed"
+    job_id: JobId
+    worker_id: WorkerId
+
+
 Event = Annotated[
     WorkerRegistered
     | VanRegistered
@@ -237,6 +266,8 @@ Event = Annotated[
     | PlanCommitted
     | PlanProposed
     | ProposalApproved
-    | ProposalRejected,
+    | ProposalRejected
+    | OvertimeOffered
+    | OvertimeClaimed,
     Field(discriminator="type"),
 ]

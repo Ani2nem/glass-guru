@@ -103,12 +103,27 @@ export interface Job {
   lon: number;
 }
 
+export interface OvertimeOffer {
+  job_id: string;
+  customer: string;
+  day: string;
+  arrival: string;
+  overtime_minutes: number;
+  status: "open" | "claimed" | "expired";
+  offered_to: string[];
+  offered_ids: string[];
+  claimed_by: string;
+  fallback: string;
+  deadline: string;
+}
+
 export interface World {
   depot_address: string;
   as_of: string;
   workers: Worker[];
   vans: Van[];
   jobs: Job[];
+  overtime_offers: OvertimeOffer[];
   committed_plan_id: string;
   calibration_warning: string;
 }

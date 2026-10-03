@@ -103,6 +103,7 @@ WORKERS: tuple[Worker, ...] = (
         working_hours=EARLY_SHIFT,
         home_location=_geo("w-marcus", 32.9409, -97.1302, "Southlake, TX"),
         loaded_cost_per_hour=62.0,
+        phone="+18175550141",
     ),
     Worker(
         id="w-priya",
@@ -117,6 +118,7 @@ WORKERS: tuple[Worker, ...] = (
         working_hours=EARLY_SHIFT,
         home_location=_geo("w-priya", 32.7696, -97.3086, "2600 E Belknap St, Fort Worth, TX"),
         loaded_cost_per_hour=60.0,
+        phone="+18175550142",
     ),
     Worker(
         id="w-dan",
@@ -127,6 +129,7 @@ WORKERS: tuple[Worker, ...] = (
         working_hours=DAY_SHIFT,
         home_location=_geo("w-dan", 33.1866, -97.108, "Denton, TX"),
         loaded_cost_per_hour=55.0,
+        phone="+18175550143",
     ),
     Worker(
         id="w-sofia",
@@ -135,6 +138,7 @@ WORKERS: tuple[Worker, ...] = (
         working_hours=DAY_SHIFT,
         home_location=_geo("w-sofia", 32.8091, -97.2, "Hurst, TX"),
         loaded_cost_per_hour=57.0,
+        phone="+18175550144",
     ),
     Worker(
         id="w-ken",
@@ -143,6 +147,7 @@ WORKERS: tuple[Worker, ...] = (
         working_hours=DAY_SHIFT,
         home_location=_geo("w-ken", 32.9678, -97.2902, "Alliance, Fort Worth, TX"),
         loaded_cost_per_hour=48.0,
+        phone="+18175550145",
         # Everyone may work overtime now - the owner's call, on the grounds that a
         # fitter who wants the time-and-a-half should be able to take it. The flag
         # stays in the model because a real roster will have someone it is false for.
@@ -157,6 +162,7 @@ WORKERS: tuple[Worker, ...] = (
         working_hours=DAY_SHIFT,
         home_location=_geo("w-alex", 33.0431, -97.0165, "Lewisville, TX"),
         loaded_cost_per_hour=52.0,
+        phone="+18175550146",
     ),
 )
 

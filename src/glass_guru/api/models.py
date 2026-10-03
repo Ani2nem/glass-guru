@@ -131,11 +131,29 @@ class JobView(Api):
     transcript: str = ""
 
 
+class OvertimeOfferView(Api):
+    """Hours past shift, up for grabs - rendered as a strip on the crew panel."""
+
+    job_id: str
+    customer: str
+    day: str
+    arrival: str
+    overtime_minutes: int
+    #: "open", "claimed" or "expired" (deadline passed; the fallback stands).
+    status: str
+    offered_to: list[str] = Field(default_factory=list)
+    offered_ids: list[str] = Field(default_factory=list)
+    claimed_by: str = ""
+    fallback: str = ""
+    deadline: str = ""
+
+
 class WorldView(Api):
     as_of: str
     workers: list[WorkerView]
     vans: list[VanView]
     jobs: list[JobView]
+    overtime_offers: list[OvertimeOfferView] = Field(default_factory=list)
     committed_plan_id: str = ""
     #: Shown on screen. Every cost here rests on numbers nobody has validated.
     calibration_warning: str = ""

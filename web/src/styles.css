@@ -754,3 +754,37 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   outline: 2px solid var(--accent, #1fbad6);
   outline-offset: -2px;
 }
+
+/* The overtime board: hours past shift, up for grabs. One row per offer; the open
+   ones carry a button per fitter so the dispatcher can relay "yes" in one tap. */
+.otboard {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.otboard h3 { font-size: 13px; margin: 0 0 8px; color: var(--warn); }
+.otboard__row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.otboard__what { color: var(--ink); }
+.otboard__state { color: var(--muted); }
+.otboard__row--claimed .otboard__what { color: var(--muted); }
+.otboard__claim {
+  margin-left: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid var(--warn);
+  border-radius: 999px;
+  background: none;
+  color: var(--warn);
+  cursor: pointer;
+}
+.otboard__claim:hover:not(:disabled) {
+  background: var(--warn);
+  color: #000000;
+}
