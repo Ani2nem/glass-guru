@@ -313,9 +313,12 @@ def test_an_invented_day_is_caught():
 
 
 def test_a_change_inside_the_promised_window_drafts_nothing():
-    """If the crew still arrives within the window the customer was given, they have
-    not been let down and there is nothing to tell them."""
-    window = TimeWindow(start=_at(0, 14), end=_at(0, 16))
+    """If the visit still fits the window the customer was given - arrives after it
+    opens AND finishes before it closes - they have not been let down and there is
+    nothing to tell them. The original version of this test promised 14:00-16:00 and
+    called a 15:10-17:10 visit "inside", which is the arrival-only reading of a
+    promise that the diff layer has since been cured of."""
+    window = TimeWindow(start=_at(0, 14), end=_at(0, 18))
     provider = ScriptedLLMProvider.always({"messages": []})
     with dispatch("d"):
         result = draft_customer_messages(
