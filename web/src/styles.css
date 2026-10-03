@@ -40,7 +40,7 @@
 
 * { box-sizing: border-box; }
 
-html, body, #root { height: 100%; }
+html, body, #root { min-height: 100%; }
 
 body {
   margin: 0;
@@ -107,14 +107,20 @@ textarea::placeholder { color: var(--faint); }
 
 /* ---------------------------------------------------------------- structure */
 
-.app { display: flex; flex-direction: column; height: 100%; }
+.app { display: flex; flex-direction: column; min-height: 100%; }
 
+/* Pinned while the page scrolls underneath - the status and the Re-plan button are
+   the two things that must never be somewhere else. */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 12px 18px;
-  background: var(--panel);
+  padding: 12px 22px;
+  background: rgb(9 9 26 / 0.92);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
@@ -155,47 +161,46 @@ textarea::placeholder { color: var(--faint); }
   flex: 0 0 auto;
 }
 
-/* One screen, no page scroll. The calendar is what a dispatcher looks at all day,
-   so it owns the width and the height; the call box is a rail on the left (it is a
-   stand-in until phones and email feed the system directly, and a stand-in does not
-   get the hero slot); the crew rota runs as a wide strip underneath, which is the
-   shape that table actually is. Everything scrolls inside its own frame. */
+/* One page, one scroll. The previous version locked the viewport and gave the
+   calendar, the rail and the rota each a scrollbar of their own, which read as three
+   patches rather than a design. Now the page scrolls the way every data-heavy
+   product the user already trusts scrolls: sticky header, full-height sections in
+   reading order, a footer to land on. The call box keeps its left rail - it is a
+   stand-in until phones and email feed the system directly - and sticks under the
+   header so slot cards stay reachable while the calendar runs long. */
 .layout {
   display: grid;
-  grid-template-columns: minmax(300px, 360px) 1fr;
-  gap: 14px;
-  padding: 14px;
+  grid-template-columns: minmax(300px, 370px) 1fr;
+  gap: 20px;
+  padding: 20px 22px 28px;
   flex: 1 1 auto;
-  min-height: 0;
+  align-items: start;
 }
 
+/* Sticks under the header so the slot cards stay in reach while the calendar runs
+   long. The max-height only matters when a call's results outgrow the window -
+   until then there is no scrollbar to see. */
 .rail {
   min-width: 0;
-  min-height: 0;
+  position: sticky;
+  top: 72px;
+  max-height: calc(100vh - 92px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
-.rail .panel { flex: 0 0 auto; }
 
 .boardcol {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
   min-width: 0;
-  min-height: 0;
-}
-/* The rota strip keeps a readable height and yields the rest to the calendar. */
-.boardcol .panel--today {
-  flex: 0 1 auto;
-  max-height: 36vh;
-  overflow-y: auto;
 }
 
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr; overflow-y: auto; }
-  .rail { overflow-y: visible; }
+  .layout { grid-template-columns: 1fr; }
+  .rail { position: static; }
 }
 
 .panel {
@@ -232,14 +237,9 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 18px;
-  min-height: 0;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
+  padding: 20px;
   position: relative; /* the job-detail card overlays here */
 }
-.main > .cal { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
 .tabs { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; }
 .tabs select { width: auto; margin: 0; }
@@ -292,17 +292,6 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .cal__dow { font-size: 12px; color: var(--cal-muted); text-transform: lowercase; }
 .cal__date { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 .cal__count { font-size: 11px; color: var(--cal-muted); }
-
-/* The frame the 18-hour grid scrolls inside. Day headers stay put above it, so
-   scrolling to 7 PM does not lose track of which column is Wednesday. It takes
-   whatever height the layout grants the calendar rather than a fixed share of the
-   window, because the calendar is now the element everything else yields to. */
-.cal__scroll {
-  flex: 1 1 auto;
-  min-height: 240px;
-  overflow-y: auto;
-  border-radius: 10px;
-}
 
 .cal__grid {
   position: relative;
@@ -375,9 +364,6 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .cal__crew .muted { color: var(--cal-muted); }
 .cal__crew .warn { color: #a45f0c; } /* 4.65:1 on the calendar ground */
 
-.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 12px; flex-wrap: wrap; }
-.legend span { display: flex; align-items: center; gap: 6px; }
-.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 
 /* The detail that appears when a block is clicked. The calendar answers "what is the
    shape of the week"; this answers "what is that". */
@@ -391,12 +377,16 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 /* Floats over the calendar's top-right corner. Opening a job used to shove the whole
    calendar down a card's height, which cost the exact context - the rest of the week
    - that the click was asking about. */
+/* Pinned under the header while the page scrolls, so the card stays readable
+   wherever on the week you opened it. position: absolute scrolled away with the
+   grid; sticky would have shoved the calendar down, which is the original sin this
+   card exists to avoid. */
 .detail--overlay {
-  position: absolute;
-  top: 56px;
-  right: 18px;
-  z-index: 30;
-  width: min(440px, calc(100% - 36px));
+  position: fixed;
+  top: 76px;
+  right: 22px;
+  z-index: 40;
+  width: min(440px, calc(100vw - 44px));
   margin-bottom: 0;
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
 }
@@ -677,3 +667,34 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   color: var(--faint);
   cursor: not-allowed;
 }
+
+/* The footer. A page that scrolls needs somewhere to land; ending on the rota's
+   bottom border read as the window being cut off mid-sentence. It also takes in the
+   quiet reference facts - where the vans start from, what the colours mean, which
+   plan is on screen - that were crowding the working surfaces above. */
+.footer {
+  margin-top: auto;
+  padding: 16px 22px 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.footer__brand { color: var(--fg); font-weight: 600; letter-spacing: 0.02em; }
+.footer__legend { display: flex; gap: 16px; flex-wrap: wrap; }
+.footer__legend span { display: inline-flex; align-items: center; gap: 6px; }
+.footer__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+/* The exact tints the calendar blocks wear, so the legend is a key and not a theme. */
+.footer__swatch--provisional { background: #d8f2f8; }
+.footer__swatch--confirmed { background: #cdf2e2; }
+.footer__swatch--dispatched { background: #fde8c8; }
+.footer__swatch--ot { border: 1.5px dashed var(--warn); background: transparent; }
+.footer__plan { margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--faint); }

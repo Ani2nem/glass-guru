@@ -276,6 +276,33 @@ export default function App() {
         {world && <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />}
         </div>
       </div>
+
+      {/* Somewhere to land. The quiet reference facts live here - where every route
+          starts, what the calendar's colours mean, which plan is on screen - instead
+          of crowding the surfaces people actually work on. */}
+      <footer className="footer">
+        <span className="footer__brand">Glass Guru</span>
+        {world?.depot_address && <span>routes start and end at {world.depot_address}</span>}
+        <div className="footer__legend">
+          <span>
+            <i className="footer__swatch footer__swatch--provisional" /> scheduled, not yet promised
+          </span>
+          <span>
+            <i className="footer__swatch footer__swatch--confirmed" /> promised to the customer
+          </span>
+          <span>
+            <i className="footer__swatch footer__swatch--dispatched" /> crew on the way
+          </span>
+          <span>
+            <i className="footer__swatch footer__swatch--ot" /> runs past shift (overtime)
+          </span>
+        </div>
+        {plan && (
+          <span className="footer__plan" title="plan version and content hash">
+            {plan.plan_id} · {plan.content_hash.slice(0, 8)}
+          </span>
+        )}
+      </footer>
     </div>
   );
 }
