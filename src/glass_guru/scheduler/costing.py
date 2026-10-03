@@ -23,10 +23,17 @@ from glass_guru.domain.state import WorldState
 
 @dataclass(frozen=True, slots=True)
 class RouteCost:
-    """Per-crew detail, so an expensive day can be attributed to a specific route."""
+    """Per-crew detail, so an expensive day can be attributed to a specific route.
+
+    Marginal cash, matching the solver's objective: fuel and overtime, not rostered
+    wages. A fitter's shift is owed whether the van rolls or not, so charging their
+    driving minutes here made an idle colleague look expensive to deploy - which is
+    how every job of a day once piled onto one fitter's overtime while five rostered
+    people sat free. Payroll belongs in the quote's cost-to-serve, where per-job
+    profitability is judged; it does not belong in the number that decides routes.
+    """
 
     crew_id: str
-    travel_labor: float
     vehicle: float
     overtime: float
     lateness: float
@@ -39,7 +46,7 @@ class RouteCost:
 
     @property
     def total(self) -> float:
-        return self.travel_labor + self.vehicle + self.overtime + self.lateness
+        return self.vehicle + self.overtime + self.lateness
 
     @property
     def utilization(self) -> float:
@@ -59,7 +66,9 @@ def cost_route(
     tz: tzinfo,
 ) -> RouteCost:
     rate = business.labor.loaded_rate_per_minute.value
-    ot_premium = business.labor.overtime_multiplier.value - 1.0
+    # The full multiplied rate, not the premium over base: past shift the whole
+    # wage is marginal money, since off the clock the fitter costs nothing.
+    ot_rate = rate * business.labor.overtime_multiplier.value
     late_rate = business.penalties.lateness_per_minute.value
 
     headcount = len(route.worker_ids)
@@ -124,9 +133,8 @@ def cost_route(
 
     return RouteCost(
         crew_id=route.crew_id,
-        travel_labor=person_travel * rate,
         vehicle=route.total_travel_miles * per_mile,
-        overtime=overtime_minutes * rate * ot_premium,
+        overtime=overtime_minutes * ot_rate,
         lateness=lateness_minutes * late_rate,
         travel_minutes=travel_minutes,
         person_travel_minutes=person_travel,
@@ -179,7 +187,6 @@ def cost_plan(
     """Exact cost of the plan as materialized, plus per-crew attribution."""
     per_route = [cost_route(route, world, business, tz) for route in plan.routes]
     breakdown = CostBreakdown(
-        travel_labor=sum(r.travel_labor for r in per_route),
         vehicle=sum(r.vehicle for r in per_route),
         overtime=sum(r.overtime for r in per_route),
         lateness_penalty=sum(r.lateness for r in per_route),

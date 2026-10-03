@@ -99,7 +99,14 @@ class JobChange:
         if self.kind is ChangeKind.RETIMED:
             if self.promised_window is None or self.after is None:
                 return True
-            return not self.promised_window.contains(self.after.arrival)
+            # Both ends of the visit must fit. This used to test only the arrival,
+            # which blessed a repair that turned up inside the window and worked an
+            # hour past its end as "nothing the customer would notice" - a confirmed
+            # nine-to-half-eleven looked untouched while the crew left at ten to one.
+            return not (
+                self.promised_window.contains(self.after.arrival)
+                and self.after.departure <= self.promised_window.end
+            )
         return False
 
     def describe(self) -> str:

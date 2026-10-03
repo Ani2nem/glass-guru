@@ -53,7 +53,7 @@ export const api = {
   plan: () => request<Plan | null>("/api/plan"),
   commit: () => post<Plan>("/api/plan/commit"),
   recordEvent: (event: Record<string, unknown>) =>
-    post<{ event_id: string; type: string }>("/api/events", event),
+    post<{ event_id: string; type: string; note?: string }>("/api/events", event),
   triage: (text: string) => post<Triage>("/api/triage", { text }),
   acceptTriage: (events: Record<string, unknown>[]) =>
     post<{ recorded: number }>("/api/triage/accept", { events }),

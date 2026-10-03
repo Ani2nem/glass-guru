@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { Plan, Route, Stop } from "../types";
 
 /**
@@ -46,18 +48,44 @@ function isoDate(value: Date): string {
   ].join("-");
 }
 
-/** Every date in the horizon, not only the ones with work on them. */
-function horizonDates(from: string, to: string): string[] {
+/** The Monday of the week holding `d` - the roster runs Monday to Friday. */
+function mondayOf(d: Date): Date {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() - ((copy.getDay() + 6) % 7));
+  return copy;
+}
+
+/** Where the board opens: this week on a weekday, next week on a weekend. The old
+ * behaviour anchored to the committed plan's start, which on a Saturday showed last
+ * Friday first - a diary opening on yesterday. */
+function initialMonday(): string {
+  const today = new Date();
+  const monday = mondayOf(today);
+  if (today.getDay() === 0 || today.getDay() === 6) monday.setDate(monday.getDate() + 7);
+  return isoDate(monday);
+}
+
+/** Monday through Friday of the week starting at `monday`. */
+function weekDates(monday: string): string[] {
   const dates: string[] = [];
-  const end = new Date(`${to}T12:00:00`);
-  for (
-    let cursor = new Date(`${from}T12:00:00`);
-    cursor <= end;
-    cursor.setDate(cursor.getDate() + 1)
-  ) {
+  const cursor = new Date(`${monday}T12:00:00`);
+  for (let i = 0; i < 5; i += 1) {
     dates.push(isoDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
+}
+
+/** The Mondays whose week begins inside the given month. */
+function mondaysOf(year: number, month: number): string[] {
+  const cursor = new Date(year, month, 1, 12);
+  cursor.setDate(cursor.getDate() + ((8 - cursor.getDay()) % 7));
+  const mondays: string[] = [];
+  while (cursor.getMonth() === month) {
+    mondays.push(isoDate(cursor));
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return mondays;
 }
 
 /**
@@ -195,19 +223,50 @@ function Block({
 
 export function Calendar({
   plan,
-  week,
   selected,
   onSelect,
 }: {
   /** Null before anything is committed. An empty diary still has a week in it, and a
    * blank panel is the least useful thing to show somebody whose diary is empty. */
   plan: Plan | null;
-  week: { start: string; end: string };
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
-  const routes = plan?.routes ?? [];
-  const dates = horizonDates(plan?.horizon_start ?? week.start, plan?.horizon_end ?? week.end);
+  /** The Monday on screen. Free navigation - the diary is not chained to whatever
+   * week the committed plan happens to start in. */
+  const [monday, setMonday] = useState(initialMonday);
+  const shift = (weeks: number) => {
+    const d = new Date(`${monday}T12:00:00`);
+    d.setDate(d.getDate() + weeks * 7);
+    setMonday(isoDate(d));
+  };
+
+  const dates = weekDates(monday);
+  const anchor = new Date(`${monday}T12:00:00`);
+  const monthValue = `${anchor.getFullYear()}-${anchor.getMonth()}`;
+  // Two clicks to anywhere: pick a month, then one of its weeks.
+  const monthOptions: { value: string; label: string }[] = [];
+  {
+    const base = new Date();
+    base.setDate(1);
+    base.setMonth(base.getMonth() - 1);
+    for (let i = 0; i < 7; i += 1) {
+      monthOptions.push({
+        value: `${base.getFullYear()}-${base.getMonth()}`,
+        label: base.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      });
+      base.setMonth(base.getMonth() + 1);
+    }
+    if (!monthOptions.some((m) => m.value === monthValue)) {
+      monthOptions.push({
+        value: monthValue,
+        label: anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+      });
+    }
+  }
+  const weekOptions = mondaysOf(anchor.getFullYear(), anchor.getMonth());
+  const today = isoDate(new Date());
+  const routes = (plan?.routes ?? []).filter((r) => dates.includes(r.date));
   const [start, end] = gridBounds(routes);
   const hours: number[] = [];
   for (let h = Math.ceil(start / 60) * 60; h <= end; h += 60) hours.push(h);
@@ -219,6 +278,43 @@ export function Calendar({
 
   return (
     <div className="cal">
+      <div className="cal__nav">
+        <button onClick={() => shift(-1)} title="previous week">{"\u2039"}</button>
+        <button
+          className={monday === initialMonday() ? "on" : ""}
+          onClick={() => setMonday(initialMonday())}
+        >
+          This week
+        </button>
+        <button onClick={() => shift(1)} title="next week">{"\u203A"}</button>
+        <select
+          value={monthValue}
+          onChange={(e) => {
+            const parts = e.target.value.split("-");
+            const picked = mondaysOf(Number(parts[0]), Number(parts[1]));
+            setMonday(picked[0] ?? monday);
+          }}
+          title="jump to a month"
+        >
+          {monthOptions.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <select value={monday} onChange={(e) => setMonday(e.target.value)} title="then a week">
+          {(weekOptions.includes(monday) ? weekOptions : [...weekOptions, monday].sort()).map(
+            (w) => {
+              const d = new Date(`${w}T12:00:00`);
+              const f = new Date(d);
+              f.setDate(f.getDate() + 4);
+              return (
+                <option key={w} value={w}>
+                  {d.getDate()} - {f.getDate()}
+                </option>
+              );
+            },
+          )}
+        </select>
+      </div>
       <div className="cal__days">
         <div className="cal__corner" />
         {dates.map((date) => {
@@ -226,7 +322,12 @@ export function Calendar({
           const jobs = routes.reduce((n, r) => n + r.stops.length, 0);
           const day = new Date(`${date}T12:00:00`);
           return (
-            <div key={date} className={`cal__day${jobs === 0 ? " cal__day--free" : ""}`}>
+            <div
+              key={date}
+              className={`cal__day${jobs === 0 ? " cal__day--free" : ""}${
+                date === today ? " cal__day--today" : ""
+              }`}
+            >
               <span className="cal__dow">
                 {day.toLocaleDateString(undefined, { weekday: "short" })}
               </span>
@@ -268,7 +369,7 @@ export function Calendar({
 
       {routes.length === 0 && (
         <p className="cal__empty">
-          Nothing booked this week. Take a call on the left, or press “Plan the week”.
+          Nothing booked this week. Take a call on the left, or browse another week above.
         </p>
       )}
     </div>

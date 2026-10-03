@@ -73,6 +73,10 @@ class SolveParams:
     business_tz: tzinfo
 
     labor_rate_per_minute: float = 0.92
+    #: What a minute past shift costs in cash. Multiplies the loaded rate: overtime
+    #: pay is wholly marginal money - the fitter would otherwise be off the clock -
+    #: unlike rostered wages, which are owed whether the van rolls or not.
+    overtime_rate_multiplier: float = 1.5
     unserved_penalty_base: float = 500.0
     #: Added per prior deferral. Without this, cost minimization drops the same
     #: far-out, low-revenue customer every single day until they leave.
@@ -181,6 +185,7 @@ class SolveParams:
         return cls(
             business_tz=business_tz,
             labor_rate_per_minute=business.labor.loaded_rate_per_minute.value,
+            overtime_rate_multiplier=business.labor.overtime_multiplier.value,
             unserved_penalty_base=business.penalties.unserved_base.value,
             deferral_escalation=business.penalties.deferral_escalation.value,
             lateness_per_minute=business.penalties.lateness_per_minute.value,
@@ -913,8 +918,18 @@ def plan_day(
             model.add(late[job.id, k] == 0).only_enforce_if(~visit[job.id, k])
 
     # ------------------------------------------------------------------ objective
-    labor_per_min = _cents(params.labor_rate_per_minute)
+    #
+    # Marginal cash only. An earlier version charged every driving minute at the
+    # loaded wage and charged overtime nothing at all, and the optimum under those
+    # prices was exactly what a dispatcher reported as broken: every job of the day
+    # piled onto one fitter, 36 minutes into her overtime, while five rostered
+    # colleagues sat idle. Under the real cash flows that plan is the expensive one.
+    # A rostered fitter's wage is owed whether their van rolls or not - deploying
+    # them costs fuel, not salary - while every minute past shift is money that
+    # would otherwise not be spent, at time and a half. So: vehicle miles and
+    # overtime minutes are costs; in-shift labour is capacity.
     late_per_min = _cents(params.lateness_per_minute)
+    ot_per_min = _cents(params.labor_rate_per_minute * params.overtime_rate_multiplier)
 
     terms: list[cp_model.LinearExpr] = []
     for k, van_id in enumerate(vans):
@@ -928,17 +943,16 @@ def plan_day(
         ]
         terms.extend(vehicle_terms)
 
-        # Labour is per person-minute. Modelled as crew_minutes x headcount so an
-        # oversized crew is priced honestly instead of riding along for free.
-        crew_travel = model.new_int_var(0, MINUTES_PER_DAY, f"crew_travel_{k}")
-        model.add(
-            crew_travel == sum(arc_vars[k, i, j] * travel_min[i][j] for (i, j) in allowed_arcs)
-        )
-        headcount_var = model.new_int_var(0, 2, f"headcount_{k}")
-        model.add(headcount_var == sum(assign[w.id, k] for w in workers))
-        person_minutes = model.new_int_var(0, 2 * MINUTES_PER_DAY, f"person_travel_{k}")
-        model.add_multiplication_equality(person_minutes, [crew_travel, headcount_var])
-        terms.append(person_minutes * labor_per_min)
+        # Overtime, per assigned member past their own shift close. only_enforce_if
+        # leaves the variable floating for the unassigned, and minimization settles
+        # it at zero; for the assigned it settles at max(0, crew_end - their close),
+        # which covers late driving as well as late work - a van on the road at six
+        # is a fitter being paid at six.
+        for worker in workers:
+            span_close = shift_span[worker.id][1]
+            member_ot = model.new_int_var(0, overtime, f"ot_{worker.id}_{k}")
+            model.add(member_ot >= crew_end[k] - span_close).only_enforce_if(assign[worker.id, k])
+            terms.append(member_ot * ot_per_min)
 
     # Epsilon tie-break: one cent per van index, so equal-cost plans always pick the
     # same vans instead of reshuffling whenever an unrelated cost term shifts. Real
@@ -992,6 +1006,14 @@ def plan_day(
     # is also simply better: slack belongs at the end of a day, where an overrun can
     # use it, rather than at the start where it cannot.
     #
+    # First tier: no riders. In-shift labour is capacity rather than cost now, so
+    # nothing in the primary objective stops a second fitter riding along on
+    # one-person work - free in cash terms, but it burns the flexibility of having
+    # them somewhere else when the phone rings. Fewer people deployed wins any cash
+    # tie before timing does.
+    deployed = sum(assign.values())
+    deployed_ceiling = len(workers) * num_crews
+
     # `start` is only constrained when its job is actually visited, so an unvisited
     # pair sits at zero and contributes nothing.
     earliness = sum(start.values())
@@ -1006,8 +1028,10 @@ def plan_day(
     )
     worker_ceiling = len(workers) * num_crews * (len(workers) * num_crews + 1)
 
-    tie_break = earliness * (worker_ceiling + 1) + worker_order
-    tie_break_ceiling = (earliness_ceiling + 1) * (worker_ceiling + 1)
+    timing_order = earliness * (worker_ceiling + 1) + worker_order
+    timing_ceiling = (earliness_ceiling + 1) * (worker_ceiling + 1)
+    tie_break = deployed * (timing_ceiling + 1) + timing_order
+    tie_break_ceiling = (deployed_ceiling + 1) * (timing_ceiling + 1)
     model.minimize(primary * (tie_break_ceiling + 1) + tie_break)
 
     # --------------------------------------------------------------------- solve

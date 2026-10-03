@@ -316,9 +316,14 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .cal__column { position: relative; border-radius: 10px; background: #ffffff; }
 .cal__line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--cal-line); }
 
+/* Black cards on the light grid - the product's own colour, and the strongest
+   possible figure-ground for the one surface that matters. Commitment state moved
+   from the fill to a left edge stripe so the fill could carry a single loud
+   distinction instead: orange means overtime. */
 .block {
   position: absolute;
   border: none;
+  border-left: 4px solid transparent;
   border-radius: 10px;
   padding: 6px 9px;
   text-align: left;
@@ -327,7 +332,8 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   gap: 1px;
   overflow: hidden;
   cursor: pointer;
-  color: var(--cal-ink);
+  background: #09091a;
+  color: #ffffff;
   font-size: 12px;
   line-height: 1.25;
 }
@@ -336,17 +342,15 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
    day, which holds the customer, the time and often the crew. No truncation, and no
    text moving about to be read. */
 .block__what { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
-.block__when { color: var(--cal-muted); font-variant-numeric: tabular-nums; }
-.block__who { color: var(--cal-muted); overflow-wrap: anywhere; }
+.block__when { color: #c0c0c8; font-variant-numeric: tabular-nums; }
+.block__who { color: #c0c0c8; overflow-wrap: anywhere; }
 
-/* Colour carries commitment state, because "can this move?" is the question a
-   dispatcher asks of every block. Tinted from the palette's own blue and green so a
-   light surface reads as the same product as the dark one around it. */
-.block--provisional { background: #d8f2f8; }
-.block--confirmed   { background: #cdf2e2; }
-.block--dispatched  { background: #fde8c8; }
-.block--completed   { background: #ececf1; color: var(--cal-muted); }
-.block:hover { filter: brightness(0.96); }
+/* The edge stripe answers "can this move?" without stealing the fill. */
+.block--provisional { border-left-color: #1fbad6; }
+.block--confirmed   { border-left-color: #06c167; }
+.block--dispatched  { border-left-color: #f0a13a; }
+.block--completed   { border-left-color: #55556a; color: #8a8a99; }
+.block:hover { filter: brightness(1.25); }
 .block--selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 3; }
 
 .cal__crews {
@@ -628,12 +632,22 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   color: var(--text-dim, #c0c0c8);
 }
 
-/* Work that runs past the crew's shift: dashed amber, with a small OT tag. The same
-   language as the overtime pill on a slot card - a late booking is visibly a late
-   stay, on the calendar where the lateness actually lives. */
+/* Work that runs past the crew's shift wears overtime as its whole body: orange
+   fill, dashed outline, dark text for contrast, the same language as the pill on a
+   slot card - a late booking is visibly a late stay, on the calendar where the
+   lateness actually lives. The edge stripe stays, so state still reads. */
 .block--ot {
-  border: 1px dashed var(--warn, #f0a13a);
+  background: var(--warn, #f0a13a);
+  border-top: 1px dashed #7c5312;
+  border-right: 1px dashed #7c5312;
+  border-bottom: 1px dashed #7c5312;
+  color: #141400;
 }
+.block--ot .block__when,
+.block--ot .block__who {
+  color: #4a3a10;
+}
+.block--ot:hover { filter: brightness(1.05); }
 .block__ot-tag {
   position: absolute;
   top: 2px;
@@ -641,7 +655,7 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--warn, #f0a13a);
+  color: #141400;
 }
 
 /* The rota strip: table on the left, the week's load on the right - two readings of
@@ -692,9 +706,51 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   border-radius: 3px;
   display: inline-block;
 }
-/* The exact tints the calendar blocks wear, so the legend is a key and not a theme. */
-.footer__swatch--provisional { background: #d8f2f8; }
-.footer__swatch--confirmed { background: #cdf2e2; }
-.footer__swatch--dispatched { background: #fde8c8; }
-.footer__swatch--ot { border: 1.5px dashed var(--warn); background: transparent; }
+/* Exactly what the calendar blocks wear: black cards, a coloured edge for state,
+   orange body for overtime - so the legend is a key and not a theme. */
+.footer__swatch--provisional { background: #09091a; border-left: 4px solid #1fbad6; }
+.footer__swatch--confirmed { background: #09091a; border-left: 4px solid #06c167; }
+.footer__swatch--dispatched { background: #09091a; border-left: 4px solid #f0a13a; }
+.footer__swatch--ot { background: var(--warn); border: 1px dashed #7c5312; }
 .footer__plan { margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--faint); }
+
+/* The one-line receipt for an outage the system absorbed by itself. Green, because
+   the message is "nothing for you to do". */
+.rota__healed {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--ok, #06c167);
+}
+
+/* Week navigation: two arrows, home, then two clicks to anywhere - a month, then
+   one of its weeks. */
+.cal__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cal__nav button {
+  background: var(--cal-bg, #f7f7f9);
+  border: 1px solid var(--cal-line, #e4e4ea);
+  border-radius: 8px;
+  padding: 4px 12px;
+  color: var(--cal-ink, #16161d);
+  font-size: 13px;
+  cursor: pointer;
+}
+.cal__nav button.on {
+  background: #09091a;
+  color: #ffffff;
+  border-color: #09091a;
+}
+.cal__nav select {
+  width: auto;
+  margin: 0 0 0 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.cal__day--today {
+  outline: 2px solid var(--accent, #1fbad6);
+  outline-offset: -2px;
+}

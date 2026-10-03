@@ -9,7 +9,7 @@ the system moves an appointment somebody booked a day off work for.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 
 import pytest
 
@@ -321,8 +321,14 @@ def test_repair_keeps_a_promised_window(world, travel, business, committed):
 
 
 def test_repair_offers_genuinely_different_trade_offs(world, travel, business, committed):
-    """One answer would hide the judgement. Losing two vans forces the strategies apart."""
-    for van_id in ("van-1", "van-2"):
+    """One answer would hide the judgement.
+
+    Two vans down used to be enough of a squeeze; under marginal-cash economics the
+    strategies all found the same cheap answer, because moving work costs fuel rather
+    than wages. Three vans down leaves one van for the whole day, and there the
+    strategies genuinely part ways - what to keep is now a judgement, not arithmetic.
+    """
+    for van_id in ("van-1", "van-2", "van-3"):
         world.van_outages[van_id] = [
             Unavailability(from_time=_at(0, 0), until_time=None, reason="out")
         ]
@@ -408,3 +414,46 @@ def test_seeding_twice_is_refused(tmp_path):
     workspace.seed(seed_events())
     with pytest.raises(FileExistsError):
         workspace.seed(seed_events())
+
+
+def test_a_retime_that_overruns_the_promised_end_is_customer_visible():
+    """Arriving inside the window is not enough - the work must FINISH inside it.
+
+    Found when the quality tier went silent: a repair moved a confirmed
+    nine-to-half-eleven job to arrive at 10:49 and leave at 12:49, and the diff
+    called it invisible because only the arrival was tested. The customer whose
+    morning ended at half eleven would not have agreed.
+    """
+    from datetime import datetime
+
+    from glass_guru.domain.diff import ChangeKind, JobChange, Placement
+    from glass_guru.domain.enums import CommitmentState
+    from glass_guru.domain.models import TimeWindow
+
+    tz = UTC
+    window = TimeWindow(
+        start=datetime(2026, 9, 21, 9, 0, tzinfo=tz), end=datetime(2026, 9, 21, 11, 30, tzinfo=tz)
+    )
+
+    def placed(arrive_h: int, arrive_m: int, leave_h: int, leave_m: int) -> Placement:
+        return Placement(
+            on_date=window.start.date(),
+            crew_id="c",
+            van_id="v",
+            worker_ids=("w",),
+            arrival=datetime(2026, 9, 21, arrive_h, arrive_m, tzinfo=tz),
+            departure=datetime(2026, 9, 21, leave_h, leave_m, tzinfo=tz),
+        )
+
+    def change(after: Placement) -> JobChange:
+        return JobChange(
+            job_id="j",
+            kind=ChangeKind.RETIMED,
+            before=placed(9, 0, 11, 0),
+            after=after,
+            commitment_state=CommitmentState.CONFIRMED,
+            promised_window=window,
+        )
+
+    assert change(placed(10, 49, 12, 49)).customer_visible, "overruns the promise"
+    assert not change(placed(9, 20, 11, 20)).customer_visible, "fits entirely - no call"

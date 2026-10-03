@@ -142,8 +142,7 @@ def _render_cost(
     return [
         "",
         RULE,
-        f"  cost  travel {_money(cost.travel_labor)}"
-        f"   vehicle {_money(cost.vehicle)}"
+        f"  cost  vehicle {_money(cost.vehicle)}"
         f"   overtime {_money(cost.overtime)}"
         f"   late {_money(cost.lateness_penalty)}",
         f"        unserved {_money(cost.unserved_penalty)}   TOTAL {_money(cost.total)}",

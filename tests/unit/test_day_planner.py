@@ -116,15 +116,31 @@ def test_two_person_job_gets_two_people(world, travel, params):
     assert crew is not None and len(crew) == 2
 
 
-def test_one_person_jobs_do_not_gratuitously_pair_workers(world, travel, params):
-    """Travel labour is charged per person, so pairing must buy something."""
+def test_no_useless_riders(world, travel, params):
+    """Everyone aboard must be there for a reason.
+
+    This used to assert crew size == the largest crew the route's jobs demand, which
+    was the wage-per-driving-minute economics talking: under marginal cash, two
+    specialists SHOULD share a van when their solo jobs sit on one route - the ride
+    saves a whole van trip and the wage is owed either way. What stays wrong is a
+    rider nobody needs: every member must either be demanded by headcount or hold a
+    certification some stop needs that the rest of the crew cannot cover.
+    """
     result = solve(world, travel, params)
     for route in result.routes:
-        needed = max(world.jobs[jid].crew_size for jid in route.job_ids)
-        assert len(route.worker_ids) == needed, (
-            f"{route.crew_id} carries {len(route.worker_ids)} workers for "
-            f"jobs needing at most {needed}"
-        )
+        for worker_id in route.worker_ids:
+            worker = world.workers[worker_id]
+            others = [world.workers[w] for w in route.worker_ids if w != worker_id]
+            needed = any(
+                world.jobs[jid].crew_size >= len(route.worker_ids)
+                or any(
+                    cert in worker.certifications
+                    and not any(cert in o.certifications for o in others)
+                    for cert in world.jobs[jid].required_certifications
+                )
+                for jid in route.job_ids
+            )
+            assert needed, f"{worker.name} rides on {route.crew_id} doing nothing"
 
 
 def test_only_certified_crews_are_assigned(world, travel, params):
@@ -191,10 +207,13 @@ def test_repeated_deferral_eventually_forces_a_job_in(world, travel):
     world.jobs["j-409"] = far.model_copy(
         update={"windows": world.jobs["j-402"].windows, "deferral_count": 0}
     )
+    # Serving a job now costs only fuel and overtime, so the bar that makes
+    # dropping it "cheaper" must sit below a dedicated trip's fuel - not below a
+    # morning of wages, as it did when driving minutes were charged at the rate.
     tight = SolveParams(
         business_tz=BUSINESS_TZ,
         max_solve_seconds=20.0,
-        unserved_penalty_base=40.0,
+        unserved_penalty_base=2.0,
         deferral_escalation=0.0,
         revenue_weight=0.0,
     )
@@ -324,8 +343,9 @@ def test_the_tie_break_never_outweighs_a_cent_of_real_cost(world, travel, params
     result = solve(world, travel, params)
     assert result.status == "OPTIMAL"
     assert_feasible(result, world, travel)
-    # The value this fixture produces. It moved from 244.09 to 374.22 when the business
-    # moved from Seattle to Texas, which is the point of pinning it: a number that only
-    # changes when the geography does is a number that would catch a tie-break quietly
-    # buying a worse plan.
-    assert round(result.objective_cost, 2) == 374.22
+    # The value this fixture produces. 244.09 -> 374.22 when the business moved from
+    # Seattle to Texas; 374.22 -> 57.14 when the objective became marginal cash -
+    # fuel and overtime instead of wages owed regardless. The point of pinning it is
+    # unchanged: a number that only moves when the economics or the geography do is a
+    # number that would catch a tie-break quietly buying a worse plan.
+    assert round(result.objective_cost, 2) == 57.14

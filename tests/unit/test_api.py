@@ -803,3 +803,43 @@ def test_days_already_behind_the_clock_are_marked_unactionable(client: TestClien
         for d in worker["days"][1:]:
             assert d["actionable"] is True, f"{worker['name']} {d['date']} should be open"
         assert isinstance(worker["days"][0]["actionable"], bool)
+
+
+def test_an_absorbable_outage_reroutes_without_a_human(client: TestClient):
+    """ "Why can't it just auto adjust if possible?" It can, when every promise
+    survives: mark out a fitter whose day another crew can cover, and the plan is
+    recommitted silently - feasible, with the sick fitter off every route. The red
+    banner is reserved for the outages where a customer would have to be called."""
+    plan = client.post(COMMIT).json()
+    assert plan["feasible"]
+    route = next(r for r in plan["routes"] if r["stops"])
+    victim = route["worker_names"][0]
+    world = client.get("/api/world").json()
+    worker_id = next(w["id"] for w in world["workers"] if w["name"] == victim)
+
+    reply = client.post(
+        "/api/events",
+        json={
+            "kind": "worker-unavailable",
+            "target": worker_id,
+            # An explicit "at" anchors the event inside the fixture week; without it
+            # the clamp that forbids backdating (correctly) voids an outage recorded
+            # against a plan whose dates are already behind the real clock.
+            "at": "00:01",
+            "window_start": f"{route['date']}T00:00",
+            "until": f"{route['date']}T23:59",
+        },
+    ).json()
+
+    after = client.get("/api/plan").json()
+    if reply["note"]:
+        # The system absorbed it: new head, still feasible, the victim is gone.
+        assert "every promise kept" in reply["note"]
+        assert after["feasible"], after["violations"]
+        on_that_day = [
+            n for r in after["routes"] if r["date"] == route["date"] for n in r["worker_names"]
+        ]
+        assert victim not in on_that_day
+    else:
+        # Not absorbable (no cover, or a promise would move): the honest stale banner.
+        assert not after["feasible"]

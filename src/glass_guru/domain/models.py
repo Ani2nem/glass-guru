@@ -303,9 +303,13 @@ class UnservedJob(Frozen):
 
 
 class CostBreakdown(Frozen):
-    """Objective decomposition in dollars, so a plan's price is explainable."""
+    """Objective decomposition in dollars, so a plan's price is explainable.
 
-    travel_labor: float = 0.0
+    Marginal cash: fuel, overtime, penalties. Rostered wages are deliberately
+    absent - they are owed whether the plan runs or not, and a cost view that
+    counted them taught the solver to hoard work onto one fitter's overtime.
+    """
+
     vehicle: float = 0.0
     overtime: float = 0.0
     unserved_penalty: float = 0.0
@@ -315,8 +319,7 @@ class CostBreakdown(Frozen):
     @property
     def total(self) -> float:
         return (
-            self.travel_labor
-            + self.vehicle
+            self.vehicle
             + self.overtime
             + self.unserved_penalty
             + self.lateness_penalty

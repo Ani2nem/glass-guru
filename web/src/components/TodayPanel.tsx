@@ -35,14 +35,18 @@ export function TodayPanel({
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
 
   /** Out sick, van won't start - recorded as the same events everything else already
-   * understands, so the plan banner and the replan flow react without knowing a
-   * button exists. */
+   * understands. When the backend absorbed the outage on its own - rerouted with
+   * every promise kept - it says so, and that sentence is worth showing: the
+   * difference between "the schedule broke" and "the schedule healed" is the
+   * difference between a task and a notification. */
   async function record(event: Record<string, unknown>) {
     setBusy(true);
     try {
-      await api.recordEvent(event);
+      const result = await api.recordEvent(event);
+      setNote(result.note ?? "");
       onChanged();
     } finally {
       setBusy(false);
@@ -82,6 +86,7 @@ export function TodayPanel({
       <div className="rota__split">
       <div className="rota__left">
       <h2>Crew availability</h2>
+      {note && <p className="rota__healed">{note}</p>}
       <p className="panel__hint">
         Click a day to mark someone out for that day; click it again to bring them
         back. Out for hours, not days? Type it in the call box. Anyone can stay up to

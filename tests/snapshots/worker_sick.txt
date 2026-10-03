@@ -3,7 +3,7 @@ Ken calls in sick, taking a residential certification out of the week.
 
 !  42 of 42 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (781527602cd79b77)
+PLAN 2026-09-21  (ecc221910bacfa52)
 ------------------------------------------------------------------------------
 
   crew-van-1   Alex   [van-1]
@@ -14,12 +14,12 @@ PLAN 2026-09-21  (781527602cd79b77)
       6:23 AM-8:53 AM  Rodriguez Storefront       storefront_glass                23min drive  needs 2
                    ..34 min gap, leaves 9:27 AM
       10:00 AM-12:30 PM  Patel Shower Door          shower_door_install             33min drive  
-      12:48 PM-2:48 PM  Chen Residence             residential_window_replacement  18min drive  
-                   travel 91min / 44.2mi  (182 person-min)   idle 34min   on-site 77%   OT 10min
+                   travel 86min / 45.0mi  (172 person-min)   idle 34min   on-site 71%
 
-  crew-van-4   Sofia   [van-4]
-      8:34 AM-10:04 AM  Okonkwo Auto Glass         auto_glass                      34min drive  
-                   travel 60min / 24.6mi  (60 person-min)   idle 0min   on-site 60%
+  crew-van-4   Dan + Sofia   [van-4]
+      9:00 AM-11:00 AM  Chen Residence             residential_window_replacement  25min drive  
+      11:15 AM-12:45 PM  Okonkwo Auto Glass         auto_glass                      15min drive  
+                   travel 66min / 27.2mi  (132 person-min)   idle 0min   on-site 76%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
@@ -34,8 +34,8 @@ PLAN 2026-09-21  (781527602cd79b77)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  travel $258.52   vehicle $54.93   overtime $4.60   late $0.00
-        unserved $0.00   TOTAL $318.05
-  solver objective $374.22  (+$56.17 vs actual)   status OPTIMAL   N.NNNs
+  cost  vehicle $57.09   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $57.09
+  solver objective $57.14  (+$0.05 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations
