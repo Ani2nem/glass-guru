@@ -34,6 +34,9 @@ class StopView(Api):
     gap_minutes: int = 0
     lat: float = 0.0
     lon: float = 0.0
+    #: True when the work runs past the crew's shift - the overtime portion of the
+    #: day. The board draws these dashed so a late booking is visibly a late stay.
+    past_shift: bool = False
 
 
 class RouteView(Api):

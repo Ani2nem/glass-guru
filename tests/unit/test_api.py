@@ -707,3 +707,88 @@ def test_marking_a_fitter_out_shows_in_their_week(client: TestClient):
     world = client.get("/api/world").json()
     dan = next(w for w in world["workers"] if w["name"] == "Dan")
     assert dan["available"] is True
+
+
+def test_a_one_day_mark_out_touches_exactly_one_day(client: TestClient):
+    """Clicking a rota cell means "out THAT day". The first shipped version recorded
+    "out from this moment", which at the wrong time of night either emptied the whole
+    visible week or did nothing at all - both reported from the same evening."""
+    world = client.get("/api/world").json()
+    dan = next(w for w in world["workers"] if w["name"] == "Dan")
+    target = next(d["date"] for d in dan["days"][1:] if d["shift"] != "off")
+
+    client.post(
+        "/api/events",
+        json={
+            "kind": "worker-unavailable",
+            "target": "w-dan",
+            "window_start": f"{target}T00:00",
+            "until": f"{target}T23:59",
+        },
+    )
+    dan = next(w for w in client.get("/api/world").json()["workers"] if w["name"] == "Dan")
+    out = [d["date"] for d in dan["days"] if d["shift"] != "off" and not d["available"]]
+    assert out == [target], "exactly the clicked day, nothing else"
+    assert dan["available"] is True, "a future absence does not grey the row today"
+
+    # Clicking the out cell again brings that day back.
+    client.post(
+        "/api/events",
+        json={
+            "kind": "worker-restored",
+            "target": "w-dan",
+            "window_start": f"{target}T00:00",
+            "window_end": f"{target}T23:59",
+        },
+    )
+    dan = next(w for w in client.get("/api/world").json()["workers"] if w["name"] == "Dan")
+    assert all(d["available"] for d in dan["days"] if d["shift"] != "off")
+
+
+def test_restore_beats_an_outage_with_an_explicit_until(client: TestClient):
+    """The bug that made the restore arrow a lie: restore only closed OPEN-ENDED
+    outages, so anything recorded with an until could never be brought back."""
+    world = client.get("/api/world").json()
+    dan = next(w for w in world["workers"] if w["name"] == "Dan")
+    # Today's cell depends on what time the suite runs (a shift already over cannot
+    # be "taken out"), so the assertions stick to strictly future days.
+    future = [d["date"] for d in dan["days"][1:] if d["shift"] != "off"]
+
+    client.post(
+        "/api/events",
+        json={"kind": "worker-unavailable", "target": "w-dan", "until": f"{future[-1]}T23:59"},
+    )
+    dan = next(w for w in client.get("/api/world").json()["workers"] if w["name"] == "Dan")
+    assert not any(d["available"] for d in dan["days"] if d["date"] in future)
+
+    client.post("/api/events", json={"kind": "worker-restored", "target": "w-dan"})
+    dan = next(w for w in client.get("/api/world").json()["workers"] if w["name"] == "Dan")
+    assert all(d["available"] for d in dan["days"] if d["date"] in future)
+
+
+def test_restoring_one_day_carves_a_hole_in_a_longer_absence(client: TestClient):
+    """ "He can do Wednesday after all" must not cancel the rest of the sick week."""
+    world = client.get("/api/world").json()
+    dan = next(w for w in world["workers"] if w["name"] == "Dan")
+    week = [d["date"] for d in dan["days"][1:] if d["shift"] != "off"]
+    assert len(week) >= 3
+    middle = week[1]
+
+    client.post(
+        "/api/events",
+        json={"kind": "worker-unavailable", "target": "w-dan", "until": f"{week[-1]}T23:59"},
+    )
+    client.post(
+        "/api/events",
+        json={
+            "kind": "worker-restored",
+            "target": "w-dan",
+            "window_start": f"{middle}T00:00",
+            "window_end": f"{middle}T23:59",
+        },
+    )
+    dan = next(w for w in client.get("/api/world").json()["workers"] if w["name"] == "Dan")
+    state_by_day = {d["date"]: d["available"] for d in dan["days"] if d["date"] in week}
+    assert state_by_day[middle] is True, "the restored day is back"
+    others = [v for k, v in state_by_day.items() if k != middle]
+    assert not any(others), "every other day of the absence still stands"

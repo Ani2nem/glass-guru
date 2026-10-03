@@ -141,8 +141,15 @@ class WorkerUnavailable(EventBase):
 
 
 class WorkerRestored(EventBase):
+    """Back at work. With no window: from this moment on - whatever was recorded,
+    however long it said it would last, the person standing in the doorway wins.
+    With a window: back for just that stretch, carving it out of any outage that
+    covered it - "he can do Wednesday after all" without cancelling the sick week."""
+
     type: Literal["worker_restored"] = "worker_restored"
     worker_id: WorkerId
+    window_start: datetime | None = None
+    window_end: datetime | None = None
 
 
 class VanUnavailable(EventBase):
@@ -156,6 +163,8 @@ class VanUnavailable(EventBase):
 class VanRestored(EventBase):
     type: Literal["van_restored"] = "van_restored"
     van_id: VanId
+    window_start: datetime | None = None
+    window_end: datetime | None = None
 
 
 class TrafficDelay(EventBase):

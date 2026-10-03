@@ -6,59 +6,24 @@ import type { Plan, World } from "../types";
 /**
  * The crew, as a rota rather than a list.
  *
- * The old panel said "Dan 8:00 AM - 5:00 PM" and nothing else, and the dispatcher had
- * no way to see why every after-four job landed on Dan. The answer was always in the
- * data - who holds which certification, and how late each person may legally be kept -
- * it was just never on the screen. Days across, one row per fitter, the overtime
- * reach in grey, and a symbol per skill: "why did the machine choose Dan" becomes a
- * thing you can see, not a thing you have to ask.
+ * Days across, one row per fitter, a symbol per skill. The cells are the controls:
+ * click a day to mark that fitter out for that day, click an out day to bring them
+ * back. The first version put a popup menu on the row with choices like "rest of
+ * today", which answered the wrong question - absence has a date, and the dates are
+ * already on the screen. The popup also opened inside the table's scroll frame,
+ * where overflow clipped it invisible. Cells cannot be clipped by their own table.
  */
 
 /** One symbol per certification, readable at a squint. The legend underneath spells
  * them out; the tooltip on each chip repeats it on hover. */
 const CERT_BADGES: Record<string, { icon: string; label: string }> = {
-  residential_glazing: { icon: "🏠", label: "residential glazing" },
-  commercial_storefront: { icon: "🏢", label: "commercial storefront" },
-  auto_glass: { icon: "🚗", label: "auto glass" },
-  tempered_safety: { icon: "🛡️", label: "tempered safety" },
-  screen_repair: { icon: "🪟", label: "screen repair" },
-  shower_door: { icon: "🚿", label: "shower door" },
+  residential_glazing: { icon: "\u{1F3E0}", label: "residential glazing" },
+  commercial_storefront: { icon: "\u{1F3E2}", label: "commercial storefront" },
+  auto_glass: { icon: "\u{1F697}", label: "auto glass" },
+  tempered_safety: { icon: "\u{1F6E1}\u{FE0F}", label: "tempered safety" },
+  screen_repair: { icon: "\u{1FA9F}", label: "screen repair" },
+  shower_door: { icon: "\u{1F6BF}", label: "shower door" },
 };
-
-/** Local date, because toISOString shifts the day east of UTC. */
-function isoDate(d: Date): string {
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-/** The end of a day `plus` days from now, as an ISO stamp the API reads in the
- * business's own timezone. 23:59, because "out today" means the whole of today. */
-function endOfDay(plus: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + plus);
-  return `${isoDate(d)}T23:59`;
-}
-
-/** Days from now to the coming Sunday - "rest of the week" as a person means it. */
-function daysToSunday(): number {
-  return (7 - new Date().getDay()) % 7;
-}
-
-/**
- * Marking somebody out used to mean out *indefinitely*: one click emptied their whole
- * visible week, when the fact being recorded was "Marcus is sick today". The event
- * always supported an `until`; the button just never asked. So the cross asks - four
- * answers, one tap each - and "back sooner than expected" is still the restore arrow.
- */
-const OUT_FOR: { label: string; until: () => string | undefined }[] = [
-  { label: "rest of today", until: () => endOfDay(0) },
-  { label: "today + tomorrow", until: () => endOfDay(1) },
-  { label: "rest of this week", until: () => endOfDay(daysToSunday()) },
-  { label: "until further notice", until: () => undefined },
-];
 
 export function TodayPanel({
   world,
@@ -70,65 +35,40 @@ export function TodayPanel({
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [asking, setAsking] = useState<string | null>(null);
 
   /** Out sick, van won't start - recorded as the same events everything else already
    * understands, so the plan banner and the replan flow react without knowing a
-   * button exists. A quiet icon, because the loud version made the panel unreadable. */
-  async function record(kind: string, target: string, until?: string) {
+   * button exists. */
+  async function record(event: Record<string, unknown>) {
     setBusy(true);
-    setAsking(null);
     try {
-      await api.recordEvent(until ? { kind, target, until } : { kind, target });
+      await api.recordEvent(event);
       onChanged();
     } finally {
       setBusy(false);
     }
   }
 
-  /** The ✕ / ↺ pair plus the "for how long?" menu, shared by fitters and vans. */
-  function OutControl({ id, name, kind }: { id: string; name: string; kind: string }) {
-    const available = kind === "worker"
-      ? world.workers.find((w) => w.id === id)?.available ?? true
-      : world.vans.find((v) => v.id === id)?.available ?? true;
-    if (!available) {
-      return (
-        <button
-          className="rota__toggle"
-          disabled={busy}
-          title={`${name} is back - restore`}
-          onClick={() => void record(`${kind}-restored`, id)}
-        >
-          ↺
-        </button>
-      );
-    }
-    return (
-      <span className="rota__out">
-        <button
-          className="rota__toggle"
-          disabled={busy}
-          title={`mark ${name} out (sick, absent, off the road)`}
-          onClick={() => setAsking(asking === id ? null : id)}
-        >
-          ✕
-        </button>
-        {asking === id && (
-          <span className="rota__menu">
-            <span className="rota__menu-title">out for</span>
-            {OUT_FOR.map((choice) => (
-              <button
-                key={choice.label}
-                disabled={busy}
-                onClick={() => void record(`${kind}-unavailable`, id, choice.until())}
-              >
-                {choice.label}
-              </button>
-            ))}
-          </span>
-        )}
-      </span>
-    );
+  /** Mark one fitter out for one calendar day: midnight to midnight, so the shift
+   * and any overtime reach are both covered, and no other day is touched. */
+  function dayOut(workerId: string, date: string) {
+    void record({
+      kind: "worker-unavailable",
+      target: workerId,
+      window_start: `${date}T00:00`,
+      until: `${date}T23:59`,
+    });
+  }
+
+  /** Bring one day back. The restore carries the day as a window, so an outage that
+   * spans several days is carved around it rather than cancelled outright. */
+  function dayBack(workerId: string, date: string) {
+    void record({
+      kind: "worker-restored",
+      target: workerId,
+      window_start: `${date}T00:00`,
+      window_end: `${date}T23:59`,
+    });
   }
 
   const days = world.workers[0]?.days ?? [];
@@ -140,12 +80,12 @@ export function TodayPanel({
   return (
     <section className="panel panel--today">
       <h2>Crew availability</h2>
-      {world.depot_address && (
-        <p className="panel__hint">
-          Every route starts and ends at the shop: {world.depot_address}. Anyone can be
-          kept up to two hours past shift on overtime.
-        </p>
-      )}
+      <p className="panel__hint">
+        Click a day to mark someone out for that day; click it again to bring them
+        back. Out for hours, not days? Type it in the box - {"\u201C"}Dan is out till
+        noon{"\u201D"} - and it lands as the same record. Anyone can be kept up to two
+        hours past shift on overtime.
+      </p>
 
       <div className="rota">
         <table>
@@ -159,7 +99,7 @@ export function TodayPanel({
           </thead>
           <tbody>
             {world.workers.map((worker) => (
-              <tr key={worker.id} className={worker.available ? "" : "rota__outrow"}>
+              <tr key={worker.id}>
                 <td className="rota__who">
                   <strong>{worker.name}</strong>
                   <span className="rota__certs">
@@ -167,31 +107,43 @@ export function TodayPanel({
                       const badge = CERT_BADGES[cert];
                       return (
                         <span key={cert} title={badge?.label ?? cert}>
-                          {badge?.icon ?? "•"}
+                          {badge?.icon ?? "\u2022"}
                         </span>
                       );
                     })}
                   </span>
-                  <OutControl id={worker.id} name={worker.name} kind="worker" />
                 </td>
-                {worker.days.map((d) => (
-                  <td
-                    key={d.date}
-                    className={
-                      d.shift === "off" || !d.available
-                        ? "rota__cell rota__cell--off"
-                        : "rota__cell"
-                    }
-                  >
-                    {!d.available ? (
-                      "out"
-                    ) : d.shift === "off" ? (
-                      "off"
-                    ) : (
-                      d.shift
-                    )}
-                  </td>
-                ))}
+                {worker.days.map((d) =>
+                  d.shift === "off" ? (
+                    <td key={d.date} className="rota__cell rota__cell--rest">
+                      off
+                    </td>
+                  ) : d.available ? (
+                    <td key={d.date} className="rota__cell">
+                      <button
+                        className="rota__daybtn"
+                        disabled={busy}
+                        title={`mark ${worker.name} out on ${d.day} (sick, absent)`}
+                        onClick={() => dayOut(worker.id, d.date)}
+                      >
+                        {d.shift}
+                        <span className="rota__hovermark">{"\u2715"}</span>
+                      </button>
+                    </td>
+                  ) : (
+                    <td key={d.date} className="rota__cell rota__cell--out">
+                      <button
+                        className="rota__daybtn rota__daybtn--out"
+                        disabled={busy}
+                        title={`${worker.name} is back on ${d.day} - restore`}
+                        onClick={() => dayBack(worker.id, d.date)}
+                      >
+                        out
+                        <span className="rota__hovermark">{"\u21BA"}</span>
+                      </button>
+                    </td>
+                  ),
+                )}
               </tr>
             ))}
           </tbody>
@@ -211,7 +163,23 @@ export function TodayPanel({
           <span key={van.id} className={van.available ? "" : "warn"}>
             {van.id}
             {!van.available && " out"}
-            <OutControl id={van.id} name={van.id} kind="van" />
+            <button
+              className="rota__toggle"
+              disabled={busy}
+              title={
+                van.available
+                  ? `mark ${van.id} off the road until it is restored`
+                  : `${van.id} is fixed - restore`
+              }
+              onClick={() =>
+                void record({
+                  kind: van.available ? "van-unavailable" : "van-restored",
+                  target: van.id,
+                })
+              }
+            >
+              {van.available ? "\u2715" : "\u21BA"}
+            </button>
           </span>
         ))}
       </div>

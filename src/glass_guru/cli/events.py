@@ -75,20 +75,31 @@ def build_event(
         "van-unavailable": lambda: VanUnavailable(
             **base,
             van_id=_require(target, "a van id"),
-            from_time=at,
-            until_time=until,
+            from_time=max(window_start, at) if window_start else at,
+            until_time=until or window_end,
             reason=reason,
         ),
-        "van-restored": lambda: VanRestored(**base, van_id=_require(target, "a van id")),
+        "van-restored": lambda: VanRestored(
+            **base,
+            van_id=_require(target, "a van id"),
+            window_start=window_start,
+            window_end=window_end,
+        ),
         "worker-unavailable": lambda: WorkerUnavailable(
             **base,
             worker_id=_require(target, "a worker id"),
-            from_time=at,
-            until_time=until,
+            # A window may place the absence on a future day, but never before this
+            # moment: backdating an outage would retroactively invalidate work the
+            # person already did today.
+            from_time=max(window_start, at) if window_start else at,
+            until_time=until or window_end,
             reason=reason,
         ),
         "worker-restored": lambda: WorkerRestored(
-            **base, worker_id=_require(target, "a worker id")
+            **base,
+            worker_id=_require(target, "a worker id"),
+            window_start=window_start,
+            window_end=window_end,
         ),
         "job-dispatched": lambda: JobDispatched(**base, job_id=_require(target, "a job id")),
         "job-cancelled": lambda: JobCancelled(

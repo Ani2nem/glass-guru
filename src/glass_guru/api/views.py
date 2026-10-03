@@ -46,6 +46,16 @@ def route_view(
     stops: list[StopView] = []
     previous_departure: datetime | None = None
 
+    # When any member of the crew runs past their shift, the time is overtime. The
+    # earliest close among the crew is the moment that starts.
+    closes: list[int] = []
+    for worker_id in route.worker_ids:
+        worker = world.workers.get(worker_id)
+        hours = worker.hours_for(route.date.weekday()) if worker else None
+        if hours is not None:
+            closes.append(hours.end.hour * 60 + hours.end.minute)
+    shift_close = min(closes) if closes else 24 * 60
+
     for stop in route.stops:
         job = world.jobs.get(stop.job_id)
         gap = 0
@@ -70,6 +80,7 @@ def route_view(
                 gap_minutes=gap,
                 lat=job.location.lat if job else 0.0,
                 lon=job.location.lon if job else 0.0,
+                past_shift=_minute_of_day(stop.departure, tz) > shift_close,
             )
         )
 
@@ -176,9 +187,12 @@ def _worker_week(
 
 
 def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> WorldView:
-    today = world.as_of
-    end_of_day = today + timedelta(hours=12)
-    weekday = today.astimezone(tz).weekday()
+    # The wall clock, not world.as_of. The fold clock is the LAST EVENT'S time, so a
+    # board quiet since Tuesday would judge "available now" as of Tuesday - the same
+    # stale-clock family as the resurrected cancellation. "Now" means now.
+    today = datetime.now(tz)
+    end_of_day = today.replace(hour=23, minute=59)
+    weekday = today.weekday()
     head_id = world.committed_plan_id or ""
 
     return WorldView(

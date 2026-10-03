@@ -56,13 +56,11 @@ Type `Dan called, van 3 won't start, he's stuck at the Henderson site` into the 
 It should come back tagged as a disruption rather than as a customer named Dan, which is what it used to do when there were two boxes.
 Review the typed events before recording them; nothing an agent extracts is stored until a person agrees to it.
 
-**Choose a repair.**
-Press "Repair the plan" under *Fix the day*.
-Several priced candidates, each with how many customers would need telling and a deterministic autonomy verdict.
-A customer-visible change cannot be applied without an explicit override, and the button says "Approve and apply" rather than "Apply".
-
-**Read the drafts.**
-A message quoting a time the plan does not support is shown held, in red, with the offending phrase named.
+**Reroute around it.**
+The plan banner goes stale the moment the outage is recorded.
+Press "Re-plan": the solver rebuilds the week around the problem, keeping every confirmed window it can and reassigning crews where it must.
+If someone is out for a whole day rather than from a phone call, click their day in the crew rota instead - same event, one click.
+The richer repair flow (several priced candidates, blast radius, an autonomy verdict per option) still exists in the terminal as `glass-guru repair`; it came off the board because one well-explained button beats three unexplained ones.
 
 ## The same loop, in the terminal
 
