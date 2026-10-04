@@ -8,6 +8,7 @@ both by hand and as snapshot tests.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import sys
 from collections.abc import Sequence
@@ -717,8 +718,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--workspace",
-        default=".glass-guru",
-        help="where the event log and plan history live: a directory, or s3://bucket/prefix",
+        # The same variable the API server reads. The CLI used to default to
+        # ".glass-guru" regardless, so `GLASS_GURU_WORKSPACE=/tmp/x glass-guru init
+        # --force` quietly wiped and re-seeded the LIVE board's workspace while
+        # claiming to act on /tmp/x - the exact split-brain this flag's own
+        # docstring warns about, one layer up.
+        default=os.environ.get("GLASS_GURU_WORKSPACE", ".glass-guru"),
+        help=(
+            "where the event log and plan history live: a directory, or "
+            "s3://bucket/prefix (default: $GLASS_GURU_WORKSPACE, else .glass-guru)"
+        ),
     )
     parser.add_argument(
         "--travel",
