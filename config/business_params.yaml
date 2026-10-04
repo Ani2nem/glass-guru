@@ -14,6 +14,16 @@ meta:
   name: "Sample Glass Co (fixture)"
   timezone: "America/Chicago"
   currency: "USD"
+  # What this business sells: glass for buildings. Vehicles are deliberately absent
+  # - "he needs his car glass repaired" was drafted, priced and nearly booked before
+  # the owner pointed out they have never fitted a windscreen in their life.
+  services:
+    - storefront_glass
+    - residential_window_replacement
+    - shower_door_install
+    - screen_repair
+    - emergency_board_up
+    - measure_quote
 
 labor:
   loaded_rate_per_minute:

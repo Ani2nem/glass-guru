@@ -19,7 +19,6 @@ import type { Plan, World } from "../types";
 const CERT_BADGES: Record<string, { icon: string; label: string }> = {
   residential_glazing: { icon: "\u{1F3E0}", label: "residential glazing" },
   commercial_storefront: { icon: "\u{1F3E2}", label: "commercial storefront" },
-  auto_glass: { icon: "\u{1F697}", label: "auto glass" },
   tempered_safety: { icon: "\u{1F6E1}\u{FE0F}", label: "tempered safety" },
   screen_repair: { icon: "\u{1FA9F}", label: "screen repair" },
   shower_door: { icon: "\u{1F6BF}", label: "shower door" },

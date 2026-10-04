@@ -228,6 +228,7 @@ export interface Intake {
   when_text: string;
   asked_for_speed: boolean;
   crew_ask: CrewAskSuggestion | null;
+  not_offered: string;
   repairs: number;
   note: string;
 }

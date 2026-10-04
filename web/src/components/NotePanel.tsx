@@ -208,6 +208,10 @@ export function NotePanel({
         </p>
       )}
 
+      {note?.booking?.not_offered && (
+        <p className="error">{note.booking.not_offered}</p>
+      )}
+
       {note && (
         <div className="routed">
           <span className={`tag tag--${note.kind}`}>

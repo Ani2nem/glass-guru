@@ -495,3 +495,21 @@ def test_a_bare_hour_is_still_refused_for_a_time_that_is_not_on_the_hour():
 
     draft = DraftMessage(job_id="j-402", channel="sms", body="See you at 3pm.")
     assert verify_grounding(draft, {"15:10", "3:10pm", "3:10"}) != ()
+
+
+def test_a_service_the_business_does_not_sell_is_a_referral_not_a_quote(business, geocoder):
+    """ "He needs his car glass repaired" was drafted, priced and nearly booked.
+    Glass Guru fits glass in buildings; the config says so, and the gate is
+    deterministic - a perfect extraction of a service we do not sell must come
+    back unbookable with a referral message, never a slot list."""
+    result = run_intake(
+        {**CALL, "service_type": "auto_glass", "property_type": "commercial"},
+        business,
+        geocoder,
+    )
+    assert result.not_offered, "the refusal must be explicit"
+    assert "auto glass" in result.not_offered
+    assert not result.bookable, "no pricing, no slots, no crew ask for a referral"
+
+    offered = run_intake(CALL, business, geocoder)
+    assert not offered.not_offered, "residential work books exactly as before"
