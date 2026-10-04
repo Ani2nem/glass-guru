@@ -324,6 +324,17 @@ export default function App() {
                     <dd>{world?.jobs.find((j) => j.id === selectedStop.job_id)?.address || "-"}</dd>
                     <dt>Phone</dt>
                     <dd>{world?.jobs.find((j) => j.id === selectedStop.job_id)?.phone || "-"}</dd>
+                    <dt>Quoted</dt>
+                    <dd>
+                      {(() => {
+                        const total = world?.jobs.find(
+                          (j) => j.id === selectedStop.job_id,
+                        )?.quoted_total;
+                        // Jobs seeded before prices were stored show a dash, not $0 -
+                        // zero would read as "free", which nobody promised.
+                        return total ? `$${total.toFixed(2)} (tax included)` : "-";
+                      })()}
+                    </dd>
                     <dt>On site</dt>
                     <dd>
                       {twelveHour(selectedStop.arrival)} to {twelveHour(selectedStop.departure)}

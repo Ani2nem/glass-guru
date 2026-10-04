@@ -138,6 +138,7 @@ class JobView(Api):
     lon: float
     phone: str = ""
     address: str = ""
+    quoted_total: float = 0.0
     transcript: str = ""
 
 
@@ -266,6 +267,11 @@ class BookRequest(Api):
     arrival: str
     #: What the caller said, kept on the job so a reschedule can start from it.
     transcript: str = ""
+    #: The tax-inclusive total on the slot card the dispatcher pressed - the price
+    #: the customer just heard. Stored on the job; without it the agreed price
+    #: evaporated the moment the quote left the screen, and the scheduler weighed a
+    #: nine-hundred-dollar booking exactly like a zero-dollar one.
+    quoted_total: float = 0.0
 
 
 class UnavailableDayView(Api):

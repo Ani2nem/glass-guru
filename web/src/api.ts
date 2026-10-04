@@ -89,11 +89,14 @@ export const api = {
   /** Accept a quoted slot. The draft goes back with it: nothing an agent produced is
    * stored until a person agrees to it, and a draft held server-side awaiting
    * confirmation is stored. */
-  book: (draft: Draft, date: string, arrival: string, transcript = "") =>
-    post<{ job_id: string; customer: string; when: string; status: string }>(
-      "/api/book",
-      { draft, date, arrival, transcript },
-    ),
+  book: (draft: Draft, date: string, arrival: string, transcript = "", quotedTotal = 0) =>
+    post<{ job_id: string; customer: string; when: string; status: string }>("/api/book", {
+      draft,
+      date,
+      arrival,
+      transcript,
+      quoted_total: quotedTotal,
+    }),
   /** Take a booking back out of the diary. Same-call changes of mind are normal. */
   cancel: (jobId: string) =>
     post<{ job_id: string; customer: string; status: string }>(

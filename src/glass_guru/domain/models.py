@@ -218,6 +218,11 @@ class Job(Frozen):
     windows: tuple[TimeWindow, ...] = ()
     priority: Priority = Priority.NORMAL
     revenue: float = Field(default=0.0, ge=0)
+    #: The tax-inclusive total read to the customer when they accepted the slot.
+    #: ``revenue`` above is the pre-tax share and is what scheduling weighs; this is
+    #: what the phone call actually said, kept verbatim because a price that exists
+    #: only in the moment of quoting is a disconnection waiting for an invoice.
+    quoted_total: float = Field(default=0.0, ge=0)
 
     commitment_state: CommitmentState = CommitmentState.DRAFT
     #: Dollar weight resisting a reschedule. This is where "I'll take off work that

@@ -1069,7 +1069,10 @@ def book_slot(request: BookRequest) -> dict[str, str]:
         # book and cancel identical timestamps, where ordering falls to the random
         # event id and a cancellation can fold *before* the confirmation it undoes.
         now = datetime.now(svc.tz)
-        job_id = f"j-{len(world.jobs) + 501}"
+        # Highest existing suffix plus one, never a recount: len() shrinks if ids
+        # ever leave the dict and two same-moment bookings would mint twins.
+        taken = [int(jid.split("-")[-1]) for jid in world.jobs if jid.split("-")[-1].isdigit()]
+        job_id = f"j-{max([*taken, 500]) + 1}"
         arrival = datetime.fromisoformat(f"{request.date}T{request.arrival}").replace(tzinfo=svc.tz)
         # The customer is promised an *arrival* window; the stored window has to hold
         # the work as well, because the solver bounds completion by it and the checker
@@ -1097,6 +1100,12 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             duration_confidence_min=draft.duration_confidence,
             commitment_cost=draft.commitment_cost,
             site_notes=draft.site_notes,
+            quoted_total=request.quoted_total,
+            # The pre-tax share of the accepted price. This is the weight the
+            # scheduler gives the job in every unserved penalty from now on.
+            revenue=round(
+                request.quoted_total / (1 + float(svc.business.pricing.tax_rate.value)), 2
+            ),
             requested_at=now,
             windows=(TimeWindow(start=opens, end=opens + quoted),),
             commitment_state=CommitmentState.CONFIRMED,
@@ -1148,12 +1157,19 @@ def book_slot(request: BookRequest) -> dict[str, str]:
 
         offer_note = _float_overtime_offer(svc, job_id, now)
 
-        promised = job.windows[0].start.astimezone(svc.tz)
-        finishes = arrival + timedelta(minutes=draft.duration_minutes)
+        # Echo exactly the promise the slot card made: the arrival window the
+        # customer was read. The old string fused the window's open with the
+        # estimate's finish ("6:00 - 8:40 AM") - a time that appeared nowhere else
+        # in the system and could be contradicted by both the slot card above it
+        # and the calendar beside it.
+        window_opens = job.windows[0].start.astimezone(svc.tz)
         return {
             "job_id": job_id,
             "customer": job.customer_name,
-            "when": f"{promised:%a %d %b} {clock_range(promised, finishes)}",
+            "when": (
+                f"{window_opens:%a %d %b}, arriving "
+                f"{clock_range(window_opens, window_opens + arrival_window)}"
+            ),
             "status": placed,
             "overtime": offer_note,
         }
