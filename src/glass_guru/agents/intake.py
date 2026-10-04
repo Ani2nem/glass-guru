@@ -569,6 +569,15 @@ _COUNTED = re.compile(
 
 
 #: "after 4pm", "from 4", "not before 4" - a lower bound on when we may turn up.
+#: "come at 5pm", "arrive at 5", "be there at 17:00" - an appointment TIME, which
+#: is a lower bound in disguise: the caller wants the visit to start then. Anchored
+#: to a verb of arrival so "we open at 9am" (a fact about the shop) stays untouched.
+_COME_AT = re.compile(
+    r"\b(?:come|arrive|be (?:t?here|at the \w+)|show up|stop by|swing by|fix(?:\s+\w+){0,3}?)"
+    r"\s+at\s+(\d{1,2})\s*(?::\s*(\d{2}))?\s*(am|pm|o'?clock)?",
+    re.IGNORECASE,
+)
+
 _AFTER = re.compile(
     r"\b(?:after|from|not before|no earlier than|past)\s+(\d{1,2})\s*(?::\s*(\d{2}))?\s*"
     r"(am|pm|o'?clock)?",
@@ -612,7 +621,7 @@ def _fix_the_direction(call: CallExtraction, text: str) -> CallExtraction:
     Which side of a range a word puts you on is not a matter of interpretation, so it
     is checked. The model still does the hard part: finding the time in the prose.
     """
-    after = _AFTER.search(text)
+    after = _AFTER.search(text) or _COME_AT.search(text)
     before = _BEFORE.search(text)
     update: dict[str, int | None] = {}
 

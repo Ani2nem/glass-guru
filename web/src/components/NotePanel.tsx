@@ -95,6 +95,7 @@ export function NotePanel({
     }
   }, [prefill]);
   const [busy, setBusy] = useState(false);
+  const [held, setHeld] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
   async function run(kind?: "booking" | "disruption") {
@@ -103,6 +104,7 @@ export function NotePanel({
     setBooked(null);
     try {
       setSlotTab(null); // a fresh call decides its own leading order
+      setHeld(false);
       setNote(await api.note(text, kind));
     } catch (exc) {
       setError(exc as ApiError);
@@ -292,6 +294,40 @@ export function NotePanel({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {booking.crew_ask && (
+            <div className="crewask">
+              {/* The call does not end with "no" - it ends with "let me check and
+                  call you back". Holding the ask stores it on the board, so the
+                  promise to call back survives a reload and a shift change. */}
+              <p className="crewask__msg">{booking.crew_ask.message}</p>
+              <button
+                className="crewask__hold"
+                disabled={busy || held}
+                onClick={async () => {
+                  if (!booking.crew_ask) return;
+                  setBusy(true);
+                  try {
+                    await api.openAsk({
+                      customer_name: draft.customer_name,
+                      phone: draft.phone,
+                      transcript: text,
+                      on_date: booking.crew_ask.on_date,
+                      until: booking.crew_ask.until,
+                      candidate_ids: booking.crew_ask.candidate_ids,
+                      detail: booking.crew_ask.message,
+                    });
+                    setHeld(true);
+                    onChanged();
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {held ? "On the board - tell them you'll call back" : "Hold while I check with the crew"}
+              </button>
             </div>
           )}
 

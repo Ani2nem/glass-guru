@@ -13,6 +13,8 @@ from datetime import date, datetime
 
 from glass_guru.domain.enums import CommitmentState
 from glass_guru.domain.events import (
+    CrewAskClosed,
+    CrewAskOpened,
     CustomerRescheduled,
     Event,
     JobCancelled,
@@ -26,11 +28,14 @@ from glass_guru.domain.events import (
     OvertimeClaimed,
     OvertimeOffered,
     PlanCommitted,
+    ShiftExtended,
     TrafficDelay,
     VanRegistered,
+    VanRemoved,
     VanRestored,
     VanUnavailable,
     WorkerRegistered,
+    WorkerRemoved,
     WorkerRestored,
     WorkerUnavailable,
 )
@@ -82,6 +87,19 @@ class OvertimeOffer(Frozen):
         return "expired" if now >= self.claim_deadline else "open"
 
 
+class CrewAsk(Frozen):
+    """An unresolved "can anyone make these hours?" - red on the board until closed."""
+
+    ask_id: str
+    customer_name: str
+    phone: str
+    transcript: str
+    on_date: date
+    until_time: datetime
+    candidate_ids: tuple[WorkerId, ...]
+    detail: str = ""
+
+
 class TrafficOverride(Frozen):
     """A multiplier layered on the travel matrix for a corridor and period."""
 
@@ -110,6 +128,11 @@ class WorldState:
     worker_outages: dict[WorkerId, list[Unavailability]] = field(default_factory=dict)
     van_outages: dict[VanId, list[Unavailability]] = field(default_factory=dict)
     overtime_offers: dict[JobId, OvertimeOffer] = field(default_factory=dict)
+    #: One-day agreements to work late, keyed by (worker, date). The value is how
+    #: late; scheduling honours it for that date, pay treats it as plain overtime.
+    shift_extensions: dict[tuple[WorkerId, date], datetime] = field(default_factory=dict)
+    #: Unresolved crew asks - promises to call a customer back.
+    crew_asks: dict[str, CrewAsk] = field(default_factory=dict)
     traffic_overrides: list[TrafficOverride] = field(default_factory=list)
     committed_plan_id: str | None = None
     applied_event_count: int = 0
@@ -126,6 +149,9 @@ class WorldState:
     def schedulable_jobs(self) -> list[Job]:
         """Active jobs that the solver may place - excludes in-flight work."""
         return [j for j in self.active_jobs() if j.commitment_state != CommitmentState.DISPATCHED]
+
+    def extension_for(self, worker_id: WorkerId, on_date: date) -> datetime | None:
+        return self.shift_extensions.get((worker_id, on_date))
 
     def is_worker_available(self, worker_id: WorkerId, start: datetime, end: datetime) -> bool:
         if worker_id not in self.workers:
@@ -293,6 +319,37 @@ def _apply(state: WorldState, event: Event) -> None:
                 overtime_minutes=event.overtime_minutes,
                 claim_deadline=event.claim_deadline,
             )
+
+        case WorkerRemoved():
+            state.workers.pop(event.worker_id, None)
+            state.worker_outages.pop(event.worker_id, None)
+
+        case VanRemoved():
+            state.vans.pop(event.van_id, None)
+            state.van_outages.pop(event.van_id, None)
+
+        case ShiftExtended():
+            key = (event.worker_id, event.on_date)
+            standing = state.shift_extensions.get(key)
+            # Two agreements for the same day keep the later hour; "I can stay to
+            # seven" does not cancel "I can stay to eight".
+            if standing is None or event.until_time > standing:
+                state.shift_extensions[key] = event.until_time
+
+        case CrewAskOpened():
+            state.crew_asks[event.ask_id] = CrewAsk(
+                ask_id=event.ask_id,
+                customer_name=event.customer_name,
+                phone=event.phone,
+                transcript=event.transcript,
+                on_date=event.on_date,
+                until_time=event.until_time,
+                candidate_ids=event.candidate_ids,
+                detail=event.detail,
+            )
+
+        case CrewAskClosed():
+            state.crew_asks.pop(event.ask_id, None)
 
         case OvertimeClaimed():
             offer = state.overtime_offers.get(event.job_id)

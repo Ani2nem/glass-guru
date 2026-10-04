@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, subscribe } from "./api";
 import { Calendar } from "./components/Calendar";
 import { NotePanel } from "./components/NotePanel";
+import { ConfigPanel } from "./components/ConfigPanel";
 import { TodayPanel } from "./components/TodayPanel";
 import { RouteMap } from "./components/RouteMap";
 import type { Plan, Week, World } from "./types";
@@ -44,6 +45,7 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [week, setWeek] = useState<Week | null>(null);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
 
   const refresh = useCallback(async () => {
@@ -104,23 +106,31 @@ export default function App() {
               estimated costs
             </span>
           )}
-          <button
-            className="primary"
-            disabled={busy}
-            title="Rebuild the whole week's schedule from everything recorded - bookings, absences, breakdowns - and commit it. Safe to press any time; promised windows are kept wherever possible."
-            onClick={async () => {
-              setBusy(true);
-              try {
-                setPlan(await api.commit());
-              } catch (exc) {
-                setError(exc as ApiError);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {busy ? "Solving…" : plan ? "Re-plan the week" : "Plan the week"}
+          <button disabled={busy} onClick={() => setConfiguring(true)}>
+            Configure
           </button>
+          {/* Bookings, outages and claims all re-plan themselves now, so this
+              button only exists when there is genuinely something for it to do:
+              no schedule yet, or a break the system could not absorb on its own. */}
+          {(!plan || !plan.feasible) && (
+            <button
+              className="primary"
+              disabled={busy}
+              title="Rebuild the whole week's schedule from everything recorded - bookings, absences, breakdowns - and commit it. Promised windows are kept wherever possible."
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  setPlan(await api.commit());
+                } catch (exc) {
+                  setError(exc as ApiError);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? "Solving…" : plan ? "Re-plan the week" : "Plan the week"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -158,6 +168,82 @@ export default function App() {
         </aside>
 
         <div className="boardcol">
+        {world && world.crew_asks.length > 0 && (
+          <section className="asks">
+            {/* Unresolved promises to call a customer back. Red and persistent on
+                purpose: each one is a person waiting by their phone. */}
+            {world.crew_asks.map((ask) => (
+              <div key={ask.ask_id} className="asks__row">
+                <div className="asks__what">
+                  <strong>{ask.customer || "A caller"}</strong>
+                  {ask.phone && <span className="muted"> · {ask.phone}</span>}
+                  <span> needs {ask.day} until {ask.until_label} - </span>
+                  <span className="asks__who">
+                    {ask.candidates
+                      .filter((c) => !ask.extended.includes(c.name))
+                      .map((c) => c.name)
+                      .join(", ") || "everyone asked"}{" "}
+                    {ask.extended.length === ask.candidates.length
+                      ? "all said yes"
+                      : "still to ask"}
+                  </span>
+                  {ask.extended.length > 0 && (
+                    <span className="ok"> · {ask.extended.join(", ")} said yes</span>
+                  )}
+                </div>
+                <div className="asks__actions">
+                  {ask.candidates
+                    .filter((c) => !ask.extended.includes(c.name))
+                    .map((c) => (
+                      <button
+                        key={c.id}
+                        disabled={busy}
+                        title={`${c.name} agreed to stay until ${ask.until_label} that day`}
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await api.extendAsk(ask.ask_id, c.id);
+                            await refresh();
+                          } catch (exc) {
+                            setError(exc as ApiError);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        {c.name} said yes
+                      </button>
+                    ))}
+                  <button
+                    disabled={busy}
+                    title="bring the customer's words back into the call box to book them"
+                    onClick={() => setPrefill({ text: ask.transcript, nonce: Date.now() })}
+                  >
+                    Book them
+                  </button>
+                  <button
+                    className="danger"
+                    disabled={busy}
+                    title="done - booked, or the customer was told no"
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        await api.closeAsk(ask.ask_id, "resolved");
+                        await refresh();
+                      } catch (exc) {
+                        setError(exc as ApiError);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                  >
+                    Resolve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
         <main className="main">
           <div className="tabs">
             <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}>
@@ -209,7 +295,7 @@ export default function App() {
                         }
                       }}
                     >
-                      Reschedule
+                      Edit
                     </button>
                     <button
                       className="danger"
@@ -234,6 +320,10 @@ export default function App() {
                   <dl>
                     <dt>Work</dt>
                     <dd>{selectedStop.service_type.replace(/_/g, " ")}</dd>
+                    <dt>Address</dt>
+                    <dd>{world?.jobs.find((j) => j.id === selectedStop.job_id)?.address || "-"}</dd>
+                    <dt>Phone</dt>
+                    <dd>{world?.jobs.find((j) => j.id === selectedStop.job_id)?.phone || "-"}</dd>
                     <dt>On site</dt>
                     <dd>
                       {twelveHour(selectedStop.arrival)} to {twelveHour(selectedStop.departure)}
@@ -243,7 +333,22 @@ export default function App() {
                       {selectedStop.travel_minutes} min · {selectedStop.travel_miles} mi
                     </dd>
                     <dt>Crew</dt>
-                    <dd>{selectedStop.crew_size === 1 ? "one fitter" : `${selectedStop.crew_size} fitters`}</dd>
+                    <dd>
+                      {(() => {
+                        // Who is actually rostered, not just how many the job needs.
+                        // "one fitter" next to a calendar card naming two people read
+                        // as a bug; the two are the van's crew, each aboard for their
+                        // own stops.
+                        const route = plan?.routes.find((r) =>
+                          r.stops.some((st) => st.job_id === selectedStop.job_id),
+                        );
+                        const needs =
+                          selectedStop.crew_size === 1 ? "needs one fitter" : `needs ${selectedStop.crew_size} fitters`;
+                        return route
+                          ? `${route.worker_names.join(" + ")} · ${route.van_id} (${needs})`
+                          : needs;
+                      })()}
+                    </dd>
                     <dt>Job</dt>
                     <dd><code>{selectedStop.job_id}</code></dd>
                   </dl>
@@ -280,6 +385,14 @@ export default function App() {
       {/* Somewhere to land. The quiet reference facts live here - where every route
           starts, what the calendar's colours mean, which plan is on screen - instead
           of crowding the surfaces people actually work on. */}
+      {configuring && world && (
+        <ConfigPanel
+          world={world}
+          onClose={() => setConfiguring(false)}
+          onChanged={() => void refresh()}
+        />
+      )}
+
       <footer className="footer">
         <span className="footer__brand">Glass Guru</span>
         {world?.depot_address && <span>routes start and end at {world.depot_address}</span>}

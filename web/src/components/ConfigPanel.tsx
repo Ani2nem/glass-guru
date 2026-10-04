@@ -1,0 +1,231 @@
+import { useState } from "react";
+
+import { api } from "../api";
+import type { World, Worker } from "../types";
+
+/**
+ * The roster, editable.
+ *
+ * Today a person types this in; the shape of each row is deliberately the subset a
+ * payroll or HR export would carry (name, phone, certs, shift, overtime), so that
+ * when such a system is connected one day it feeds the same endpoint this form
+ * does, and the form becomes a viewer with an override.
+ */
+
+const ALL_CERTS = [
+  "residential_glazing",
+  "commercial_storefront",
+  "auto_glass",
+  "tempered_safety",
+  "screen_repair",
+  "shower_door",
+];
+
+interface Row {
+  id: string;
+  name: string;
+  phone: string;
+  certifications: string[];
+  shift_start: string;
+  shift_end: string;
+  overtime_eligible: boolean;
+}
+
+function rowFrom(worker: Worker): Row {
+  return {
+    id: worker.id,
+    name: worker.name,
+    phone: worker.phone,
+    certifications: [...worker.certifications],
+    shift_start: worker.shift_start || "08:00",
+    shift_end: worker.shift_end || "17:00",
+    overtime_eligible: worker.overtime_eligible,
+  };
+}
+
+const FRESH: Row = {
+  id: "",
+  name: "",
+  phone: "",
+  certifications: [],
+  shift_start: "08:00",
+  shift_end: "17:00",
+  overtime_eligible: true,
+};
+
+export function ConfigPanel({
+  world,
+  onClose,
+  onChanged,
+}: {
+  world: World;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [rows, setRows] = useState<Row[]>([...world.workers.map(rowFrom)]);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+
+  function edit(index: number, patch: Partial<Row>) {
+    setRows((old) => old.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  async function run(work: () => Promise<unknown>, done: string) {
+    setBusy(true);
+    setStatus("");
+    try {
+      await work();
+      setStatus(done);
+      onChanged();
+    } catch (exc) {
+      setStatus((exc as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="config">
+      <div className="config__sheet">
+        <header className="config__head">
+          <h2>Crew and vans</h2>
+          <p className="panel__hint">
+            Edits land as roster events and the schedule re-plans around them. One
+            day this pulls from payroll; until then, this is payroll.
+          </p>
+          <button className="config__close" onClick={onClose}>
+            Close
+          </button>
+        </header>
+
+        <table className="config__table">
+          <thead>
+            <tr>
+              <th>name</th>
+              <th>phone</th>
+              <th>shift</th>
+              <th>OT</th>
+              <th>certifications</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={row.id || `new-${index}`}>
+                <td>
+                  <input
+                    value={row.name}
+                    placeholder="name"
+                    onChange={(e) => edit(index, { name: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    value={row.phone}
+                    placeholder="+1…"
+                    onChange={(e) => edit(index, { phone: e.target.value })}
+                  />
+                </td>
+                <td className="config__shift">
+                  <input
+                    type="time"
+                    value={row.shift_start}
+                    onChange={(e) => edit(index, { shift_start: e.target.value })}
+                  />
+                  –
+                  <input
+                    type="time"
+                    value={row.shift_end}
+                    onChange={(e) => edit(index, { shift_end: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={row.overtime_eligible}
+                    title="may work past shift on overtime"
+                    onChange={(e) => edit(index, { overtime_eligible: e.target.checked })}
+                  />
+                </td>
+                <td className="config__certs">
+                  {ALL_CERTS.map((cert) => (
+                    <label key={cert} title={cert.replace(/_/g, " ")}>
+                      <input
+                        type="checkbox"
+                        checked={row.certifications.includes(cert)}
+                        onChange={(e) =>
+                          edit(index, {
+                            certifications: e.target.checked
+                              ? [...row.certifications, cert]
+                              : row.certifications.filter((c) => c !== cert),
+                          })
+                        }
+                      />
+                      {cert
+                        .split("_")
+                        .map((word) => word[0])
+                        .join("")}
+                    </label>
+                  ))}
+                </td>
+                <td className="config__rowactions">
+                  <button
+                    disabled={busy || !row.name.trim()}
+                    onClick={() => void run(() => api.configWorker({ ...row }), `${row.name} saved`)}
+                  >
+                    Save
+                  </button>
+                  {row.id && (
+                    <button
+                      className="danger"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(() => api.removeWorker(row.id), `${row.name} removed`).then(
+                          () => setRows((old) => old.filter((_, i) => i !== index)),
+                        )
+                      }
+                    >
+                      Remove
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button
+          className="config__add"
+          disabled={busy}
+          onClick={() => setRows((old) => [...old, { ...FRESH }])}
+        >
+          + Add a fitter
+        </button>
+
+        <h3 className="config__vanshead">Vans</h3>
+        <div className="config__vans">
+          {world.vans.map((van) => (
+            <span key={van.id}>
+              {van.id}
+              <button
+                className="danger"
+                disabled={busy || world.vans.length <= 1}
+                title={world.vans.length <= 1 ? "the last van stays" : `retire ${van.id}`}
+                onClick={() => void run(() => api.removeVan(van.id), `${van.id} removed`)}
+              >
+                Remove
+              </button>
+            </span>
+          ))}
+          <button
+            disabled={busy}
+            onClick={() => void run(() => api.configVan({ id: "", label: "" }), "van added")}
+          >
+            + Add a van
+          </button>
+        </div>
+
+        {status && <p className="config__status">{status}</p>}
+      </div>
+    </div>
+  );
+}

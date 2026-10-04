@@ -73,6 +73,12 @@ def run_invariants() -> list[CaseResult]:
     params = SolveParams.from_business(business, _tz(), reproducible=True)
     results: list[CaseResult] = []
 
+    # promise_broken is DESIGNED to violate: breaking a promise is priced rather
+    # than forbidden now, so its plan serves the customer late and must carry
+    # exactly one confirmed_window_moved - a clean plan there would mean the breach
+    # went invisible, which is the actual failure.
+    expected_breach = {"promise_broken": "confirmed_window_moved"}
+
     for name, scenario in sorted(scenario_library.SCENARIOS.items()):
         world = scenario.world()
         day = plan_day(
@@ -90,13 +96,20 @@ def run_invariants() -> list[CaseResult]:
             routes=day.routes,
         )
         violations = validate_plan(plan, world, travel, ValidationConfig(business_tz=_tz()))
+        wanted = expected_breach.get(name)
+        if wanted is not None:
+            ok = len(violations) == 1 and violations[0].code.value == wanted
+            detail = "" if ok else f"expected exactly one {wanted}; got {summarize(violations)}"
+        else:
+            ok = not violations
+            detail = summarize(violations) if violations else ""
         results.append(
             CaseResult(
                 case_id=f"invariants/{name}",
                 tier=Tier.INVARIANTS,
-                score=0.0 if violations else 1.0,
-                passed=not violations,
-                detail=summarize(violations) if violations else "",
+                score=1.0 if ok else 0.0,
+                passed=ok,
+                detail=detail,
                 metrics={"violations": float(len(violations))},
             )
         )

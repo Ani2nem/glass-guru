@@ -216,7 +216,11 @@ function Block({
       {/* Only shown when the block is tall enough to hold it. A short job says who is
           on it in the tooltip and in the detail panel instead of squeezing three
           lines into two lines of space. */}
-      {height > 58 && <span className="block__who">{crew}</span>}
+      {height > 58 && (
+        <span className="block__who">
+          {crew} <span className="block__van">{route.van_id}</span>
+        </span>
+      )}
     </button>
   );
 }

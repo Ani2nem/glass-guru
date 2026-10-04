@@ -91,6 +91,9 @@ class WorkerDayView(Api):
     #: How late they may legally be kept with overtime - "can stay to 7:00 PM". The
     #: single fact that explains why an after-four job keeps landing on Dan.
     reach: str = ""
+    #: "agreed to stay to 8:00 PM" - a one-day ShiftExtended, shown in the cell so
+    #: the rota explains why an evening booking suddenly became possible.
+    extended: str = ""
     available: bool = True
     #: False once the day can no longer be changed - the shift plus any overtime
     #: reach is already behind the clock. The board greys these instead of offering
@@ -105,6 +108,11 @@ class WorkerView(Api):
     shift: str
     available: bool
     overtime_eligible: bool
+    #: Raw HH:MM pair + phone, so the configure panel edits what is actually stored
+    #: instead of parsing the display string back apart.
+    shift_start: str = ""
+    shift_end: str = ""
+    phone: str = ""
     #: The week ahead, one entry per working day the board shows.
     days: list[WorkerDayView] = Field(default_factory=list)
 
@@ -128,6 +136,8 @@ class JobView(Api):
     window: str
     lat: float
     lon: float
+    phone: str = ""
+    address: str = ""
     transcript: str = ""
 
 
@@ -154,6 +164,7 @@ class WorldView(Api):
     vans: list[VanView]
     jobs: list[JobView]
     overtime_offers: list[OvertimeOfferView] = Field(default_factory=list)
+    crew_asks: list[CrewAskView] = Field(default_factory=list)
     committed_plan_id: str = ""
     #: Shown on screen. Every cost here rests on numbers nobody has validated.
     calibration_warning: str = ""
@@ -264,6 +275,64 @@ class UnavailableDayView(Api):
     reason: str
 
 
+class CrewAskSuggestion(Api):
+    """Nobody can work the wanted hours - but somebody COULD, if they said yes.
+
+    The red sentence on the intake: "check with Marcus and Priya whether they can
+    stay to 8:00 PM on Monday". Holding it stores a CrewAsk so the promise to call
+    the customer back survives a reload and a shift change.
+    """
+
+    message: str
+    on_date: str
+    until: str  # "20:00", for the extension event
+    until_label: str  # "8:00 PM", for people
+    candidate_ids: list[str] = Field(default_factory=list)
+    candidate_names: list[str] = Field(default_factory=list)
+
+
+class CrewAskView(Api):
+    ask_id: str
+    customer: str
+    phone: str
+    day: str
+    until_label: str
+    detail: str
+    transcript: str
+    candidates: list[dict[str, str]] = Field(default_factory=list)
+    #: Candidates who have already said yes (a ShiftExtended exists for that day).
+    extended: list[str] = Field(default_factory=list)
+
+
+class AskRequest(Api):
+    customer_name: str = ""
+    phone: str = ""
+    transcript: str
+    on_date: str
+    until: str
+    candidate_ids: list[str]
+    detail: str = ""
+
+
+class WorkerConfig(Api):
+    """One fitter as the configure panel edits them. Today this is typed by hand;
+    the shape is deliberately the subset a payroll/HR export would carry, so when
+    one is connected it feeds the same endpoint instead of a new one."""
+
+    id: str = ""  # blank = new fitter; the server assigns an id
+    name: str
+    phone: str = ""
+    certifications: list[str] = Field(default_factory=list)
+    shift_start: str = "08:00"
+    shift_end: str = "17:00"
+    overtime_eligible: bool = True
+
+
+class VanConfig(Api):
+    id: str = ""  # blank = new van
+    label: str = ""
+
+
 class IntakeView(Api):
     draft: DraftView
     bookable: bool
@@ -280,6 +349,8 @@ class IntakeView(Api):
     #: cheapest, because a caller who named no hurry is being sold overtime they
     #: never asked for when the priciest day happens to sort first.
     asked_for_speed: bool = False
+    #: Present when no day works but an extended shift would make one work.
+    crew_ask: CrewAskSuggestion | None = None
     repairs: int = 0
     note: str = ""
 

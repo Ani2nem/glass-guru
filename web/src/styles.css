@@ -788,3 +788,91 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   background: var(--warn);
   color: #000000;
 }
+
+/* Unresolved crew asks: a person is waiting by their phone, so the strip is red and
+   it does not go away until somebody resolves it. */
+.asks {
+  background: var(--panel);
+  border: 1px solid var(--error, #ff5a5f);
+  border-left: 4px solid var(--error, #ff5a5f);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.asks__row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 4px 0;
+  font-size: 13px;
+}
+.asks__what { min-width: 0; }
+.asks__who { color: var(--error, #ff5a5f); }
+.asks__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.asks__actions button { font-size: 12px; padding: 4px 12px; }
+
+/* The red sentence on the intake, with the one button that keeps the promise. */
+.crewask {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--error, #ff5a5f);
+  border-radius: 10px;
+}
+.crewask__msg { margin: 0 0 8px; font-size: 13px; color: var(--error, #ff5a5f); }
+.crewask__hold { font-size: 12px; }
+
+/* A one-day agreement to stay late: the rota explains the suddenly-possible evening. */
+.rota__extended {
+  display: block;
+  font-size: 11px;
+  color: var(--accent, #1fbad6);
+}
+
+.block__van { opacity: 0.75; }
+
+/* The configure sheet: a modal, because the roster is edited rarely and the board
+   should not carry a permanent form. */
+.config {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgb(0 0 0 / 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  overflow-y: auto;
+}
+.config__sheet {
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 20px 24px;
+  width: min(880px, 100%);
+}
+.config__head { position: relative; margin-bottom: 12px; }
+.config__close { position: absolute; top: 0; right: 0; }
+.config__table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.config__table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 4px 8px 6px 0;
+}
+.config__table td { padding: 4px 8px 4px 0; border-top: 1px solid var(--line); }
+.config__table input[type="text"],
+.config__table input:not([type]) { width: 100%; margin: 0; }
+.config__shift { white-space: nowrap; }
+.config__shift input { width: auto; margin: 0 2px; }
+.config__certs { white-space: nowrap; }
+.config__certs label { margin-right: 8px; font-size: 11px; cursor: pointer; }
+.config__rowactions { white-space: nowrap; }
+.config__rowactions button { font-size: 12px; padding: 3px 10px; margin-right: 6px; }
+.config__add { margin-top: 10px; font-size: 13px; }
+.config__vanshead { margin: 18px 0 8px; font-size: 14px; }
+.config__vans { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+.config__vans button { font-size: 12px; padding: 3px 10px; margin-left: 6px; }
+.config__status { margin-top: 12px; font-size: 13px; color: var(--ok); }

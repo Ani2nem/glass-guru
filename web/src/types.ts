@@ -67,6 +67,7 @@ export interface WorkerDay {
   day: string;
   shift: string;
   reach: string;
+  extended: string;
   available: boolean;
   actionable: boolean;
 }
@@ -79,6 +80,9 @@ export interface Worker {
   shift: string;
   available: boolean;
   overtime_eligible: boolean;
+  shift_start: string;
+  shift_end: string;
+  phone: string;
 }
 
 export interface Van {
@@ -89,6 +93,8 @@ export interface Van {
 }
 
 export interface Job {
+  phone: string;
+  address: string;
   transcript: string;
   id: string;
   customer_name: string;
@@ -101,6 +107,27 @@ export interface Job {
   window: string;
   lat: number;
   lon: number;
+}
+
+export interface CrewAskSuggestion {
+  message: string;
+  on_date: string;
+  until: string;
+  until_label: string;
+  candidate_ids: string[];
+  candidate_names: string[];
+}
+
+export interface CrewAsk {
+  ask_id: string;
+  customer: string;
+  phone: string;
+  day: string;
+  until_label: string;
+  detail: string;
+  transcript: string;
+  candidates: { id: string; name: string }[];
+  extended: string[];
 }
 
 export interface OvertimeOffer {
@@ -124,6 +151,7 @@ export interface World {
   vans: Van[];
   jobs: Job[];
   overtime_offers: OvertimeOffer[];
+  crew_asks: CrewAsk[];
   committed_plan_id: string;
   calibration_warning: string;
 }
@@ -199,6 +227,7 @@ export interface Intake {
   unavailable: UnavailableDay[];
   when_text: string;
   asked_for_speed: boolean;
+  crew_ask: CrewAskSuggestion | null;
   repairs: number;
   note: string;
 }

@@ -34,7 +34,9 @@ from glass_guru.agents.intake import _URGENCY_NOT_ARRANGEMENT
 from glass_guru.api import views
 from glass_guru.api.models import (
     AcceptRequest,
+    AskRequest,
     BookRequest,
+    CrewAskSuggestion,
     EventRequest,
     IntakeView,
     MessageView,
@@ -46,6 +48,8 @@ from glass_guru.api.models import (
     TextRequest,
     TriageView,
     UnavailableDayView,
+    VanConfig,
+    WorkerConfig,
     WorldView,
 )
 from glass_guru.cli.events import EventArgumentError, build_event
@@ -732,19 +736,27 @@ def _booking_clock(
 
 
 def _capable_then(
-    world: WorldState, draft: Job, weekday: int, start_hour: int, duration_min: int, overtime: int
+    world: WorldState, draft: Job, on_date: date, start_hour: int, duration_min: int, overtime: int
 ) -> list[str]:
-    """Who holds the certifications AND can be on site for the whole window."""
+    """Who holds the certifications AND can be on site for the whole window.
+
+    Takes the date, not just the weekday: a one-day ShiftExtended agreement changes
+    the answer for that date, and a message still claiming "nobody can work these
+    hours" after two people said yes is worse than no message.
+    """
     names = []
     for worker in world.workers.values():
         if not draft.required_certifications <= worker.certifications:
             continue
-        hours = worker.hours_for(weekday)
+        hours = worker.hours_for(on_date.weekday())
         if hours is None:
             continue
         end = hours.end.hour * 60 + hours.end.minute
         if worker.overtime_eligible:
             end += overtime
+        extension = world.extension_for(worker.id, on_date)
+        if extension is not None:
+            end = max(end, extension.hour * 60 + extension.minute)
         if start_hour * 60 + duration_min <= end:
             names.append(worker.name)
     return sorted(names)
@@ -795,7 +807,7 @@ def _bottleneck_or(
     another day, or ask Dan - but not on "no room".
     """
     capable = _capable_then(
-        world, draft, on_date.weekday(), start_hour, draft.estimated_duration_min, overtime
+        world, draft, on_date, start_hour, draft.estimated_duration_min, overtime
     )
     if not capable:
         needs = ", ".join(sorted(c.value.replace("_", " ") for c in draft.required_certifications))
@@ -875,6 +887,7 @@ def run_intake(request: TextRequest) -> IntakeView:
         slots: list[SlotView] = []
         flexible: list[SlotView] = []
         unavailable: list[UnavailableDayView] = []
+        crew_ask: CrewAskSuggestion | None = None
         if result.bookable and result.draft is not None:
             # A caller who stated nothing gets civil hours, not the crack of dawn:
             # Marcus starts at six, so an unconstrained solve offered every customer
@@ -901,7 +914,7 @@ def run_intake(request: TextRequest) -> IntakeView:
             capable = _capable_then(
                 world,
                 result.draft,
-                start.weekday(),
+                start,
                 earliest or 8,
                 result.draft.estimated_duration_min,
                 overtime,
@@ -976,6 +989,10 @@ def run_intake(request: TextRequest) -> IntakeView:
                 )
                 for u in options.unavailable
             ]
+            if not slots and options.unavailable:
+                crew_ask = _suggest_crew_ask(
+                    svc, world, result.draft, options.unavailable[0].on_date, earliest or 8
+                )
 
         return IntakeView(
             draft=draft,
@@ -991,6 +1008,7 @@ def run_intake(request: TextRequest) -> IntakeView:
             # Deterministic, from the transcript itself - the same vocabulary the
             # commitment grounding uses to tell urgency from arrangement.
             asked_for_speed=bool(_URGENCY_NOT_ARRANGEMENT.search(request.text)),
+            crew_ask=crew_ask,
         )
 
 
@@ -1120,6 +1138,326 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             "status": placed,
             "overtime": offer_note,
         }
+
+
+def _suggest_crew_ask(
+    svc: DispatchService,
+    world: WorldState,
+    draft: Job,
+    on_date: date,
+    earliest_hour: int,
+) -> CrewAskSuggestion | None:
+    """When no day can hold the wanted hours, name who could change that.
+
+    "Nobody certified can work these hours" is true and useless on its own: the
+    right next sentence is "...unless Marcus or Priya says yes to staying late".
+    Candidates are everyone certified and rostered that day who is not marked out -
+    reach is deliberately NOT checked, because reach is the thing being asked about.
+    """
+    start = datetime.combine(on_date, time(min(earliest_hour, 23), 0), tzinfo=svc.tz)
+    # Work end PLUS the ride back to the shop: the first version asked people to
+    # "stay to 8:00" for a job finishing at 8:00, and the solver - which counts the
+    # drive home as shift time, correctly - kept refusing the slot their yes was
+    # supposed to unlock. 45 minutes covers the service radius pessimistically.
+    until = start + timedelta(minutes=draft.estimated_duration_min + 45)
+    opens = datetime.combine(on_date, time(0, 0), tzinfo=svc.tz)
+    candidates = sorted(
+        (
+            w
+            for w in world.workers.values()
+            if w.is_certified_for(draft.required_certifications)
+            and w.hours_for(on_date.weekday()) is not None
+            and world.is_worker_available(w.id, opens, opens + timedelta(days=1))
+        ),
+        key=lambda w: w.id,
+    )
+    if len(candidates) < draft.crew_size:
+        return None  # not an hours problem; nobody could cover it however late
+    names = " and ".join(w.name for w in candidates)
+    who = f"{draft.crew_size} of {names}" if draft.crew_size > 1 else names
+    return CrewAskSuggestion(
+        message=(
+            f"Check with {who} whether they can stay to "
+            f"{clock(until)} on {on_date:%A} - the hours are the only blocker."
+        ),
+        on_date=on_date.isoformat(),
+        until=f"{until:%H:%M}",
+        until_label=clock(until),
+        candidate_ids=[w.id for w in candidates],
+        candidate_names=[w.name for w in candidates],
+    )
+
+
+@app.post("/api/config/worker")
+def configure_worker(request: WorkerConfig) -> dict[str, str]:
+    """Add or edit a fitter. Registration events already upsert, so the roster is
+    editable without a schema change - and when a payroll system is connected one
+    day, its export lands on this same endpoint.
+
+    What the panel does not edit survives an edit: home location and loaded cost
+    stay whatever they were, and a brand-new fitter starts from the depot at the
+    blended default until somebody knows better.
+    """
+    from glass_guru.domain.enums import Certification
+    from glass_guru.domain.events import WorkerRegistered
+    from glass_guru.domain.models import DayHours, Worker
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.config_worker"):
+        world = svc.world()
+        existing = world.workers.get(request.id) if request.id else None
+        worker_id = request.id or f"w-{request.name.lower().replace(' ', '-')}"
+        if not request.name.strip():
+            raise HTTPException(422, detail={"error": "NoName", "detail": "a fitter needs a name"})
+        try:
+            start = datetime.strptime(request.shift_start, "%H:%M").time()
+            end = datetime.strptime(request.shift_end, "%H:%M").time()
+        except ValueError as exc:
+            raise HTTPException(
+                422, detail={"error": "BadHours", "detail": "shift times are HH:MM"}
+            ) from exc
+        if end <= start:
+            raise HTTPException(
+                422, detail={"error": "BadHours", "detail": "a shift must end after it starts"}
+            )
+        try:
+            certs = frozenset(Certification(c) for c in request.certifications)
+        except ValueError as exc:
+            raise HTTPException(
+                422, detail={"error": "BadCertification", "detail": str(exc)}
+            ) from exc
+
+        depot = next(
+            (van.home_depot for van in world.vans.values() if van.home_depot.address), None
+        )
+        home = existing.home_location if existing else depot
+        if home is None:
+            raise HTTPException(
+                409, detail={"error": "NoDepot", "detail": "no van to copy a depot from"}
+            )
+
+        now = datetime.now(svc.tz)
+        worker = Worker(
+            id=worker_id,
+            name=request.name.strip(),
+            phone=request.phone.strip(),
+            certifications=certs,
+            working_hours=tuple(DayHours(weekday=d, start=start, end=end) for d in range(5)),
+            home_location=home,
+            overtime_eligible=request.overtime_eligible,
+            loaded_cost_per_hour=existing.loaded_cost_per_hour if existing else 50.0,
+        )
+        svc.apply_events(
+            [
+                WorkerRegistered(
+                    event_id=new_dispatch_id("wr"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    worker=worker,
+                )
+            ]
+        )
+        broadcaster.publish("world", {"event": "worker_registered"})
+        return {"worker_id": worker_id, "status": "saved"}
+
+
+@app.delete("/api/config/worker/{worker_id}")
+def remove_worker(worker_id: str) -> dict[str, str]:
+    from glass_guru.domain.events import WorkerRemoved
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.remove_worker"):
+        if worker_id not in svc.world().workers:
+            raise HTTPException(404, detail={"error": "NoSuchWorker", "detail": worker_id})
+        now = datetime.now(svc.tz)
+        svc.apply_events(
+            [
+                WorkerRemoved(
+                    event_id=new_dispatch_id("wx"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    worker_id=worker_id,
+                )
+            ]
+        )
+        broadcaster.publish("world", {"event": "worker_removed"})
+        return {"worker_id": worker_id, "status": "removed"}
+
+
+@app.post("/api/config/van")
+def configure_van(request: VanConfig) -> dict[str, str]:
+    from glass_guru.domain.events import VanRegistered
+    from glass_guru.domain.models import Van
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.config_van"):
+        world = svc.world()
+        existing = world.vans.get(request.id) if request.id else None
+        taken = {
+            int(v.id.split("-")[-1]) for v in world.vans.values() if v.id.split("-")[-1].isdigit()
+        }
+        van_id = request.id or f"van-{max(taken, default=0) + 1}"
+        template = existing or next(iter(world.vans.values()), None)
+        if template is None:
+            raise HTTPException(
+                409, detail={"error": "NoDepot", "detail": "no van to copy a depot from"}
+            )
+        now = datetime.now(svc.tz)
+        van = Van(
+            id=van_id,
+            label=request.label.strip() or van_id,
+            rack_slots=template.rack_slots,
+            stock=dict(template.stock),
+            home_depot=template.home_depot,
+            cost_per_mile=template.cost_per_mile,
+        )
+        svc.apply_events(
+            [
+                VanRegistered(
+                    event_id=new_dispatch_id("vr"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    van=van,
+                )
+            ]
+        )
+        broadcaster.publish("world", {"event": "van_registered"})
+        return {"van_id": van_id, "status": "saved"}
+
+
+@app.delete("/api/config/van/{van_id}")
+def remove_van(van_id: str) -> dict[str, str]:
+    from glass_guru.domain.events import VanRemoved
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.remove_van"):
+        if van_id not in svc.world().vans:
+            raise HTTPException(404, detail={"error": "NoSuchVan", "detail": van_id})
+        now = datetime.now(svc.tz)
+        svc.apply_events(
+            [
+                VanRemoved(
+                    event_id=new_dispatch_id("vx"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    van_id=van_id,
+                )
+            ]
+        )
+        broadcaster.publish("world", {"event": "van_removed"})
+        return {"van_id": van_id, "status": "removed"}
+
+
+@app.post("/api/asks")
+def open_ask(request: AskRequest) -> dict[str, str]:
+    """Hold a "can anyone make these hours?" on the board until it is answered."""
+    from glass_guru.domain.events import CrewAskOpened
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.ask_open"):
+        now = datetime.now(svc.tz)
+        on_date = date.fromisoformat(request.on_date)
+        until = datetime.combine(
+            on_date, datetime.strptime(request.until, "%H:%M").time(), tzinfo=svc.tz
+        )
+        ask_id = new_dispatch_id("ask")
+        svc.apply_events(
+            [
+                CrewAskOpened(
+                    event_id=new_dispatch_id("ev"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    ask_id=ask_id,
+                    customer_name=request.customer_name,
+                    phone=request.phone,
+                    transcript=request.transcript,
+                    on_date=on_date,
+                    until_time=until,
+                    candidate_ids=tuple(request.candidate_ids),
+                    detail=request.detail,
+                )
+            ]
+        )
+        broadcaster.publish("world", {"event": "crew_ask_opened"})
+        return {"ask_id": ask_id}
+
+
+@app.post("/api/asks/{ask_id}/extend")
+def extend_for_ask(ask_id: str, worker_id: str = Query(...)) -> dict[str, str]:
+    """One fitter said yes: record the one-day agreement that makes the hours real.
+
+    The extension is a fact with a date on it - scheduling honours it for that day,
+    pay treats every minute past the rostered end as overtime. The ask stays open:
+    saying yes makes the slot bookable, booking the customer closes the loop.
+    """
+    from glass_guru.domain.events import ShiftExtended
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.ask_extend"):
+        world = svc.world()
+        ask = world.crew_asks.get(ask_id)
+        if ask is None:
+            raise HTTPException(404, detail={"error": "NoSuchAsk", "detail": ask_id})
+        if worker_id not in ask.candidate_ids:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "NotACandidate",
+                    "detail": "this ask was not about that fitter",
+                },
+            )
+        now = datetime.now(svc.tz)
+        svc.apply_events(
+            [
+                ShiftExtended(
+                    event_id=new_dispatch_id("ext"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    worker_id=worker_id,
+                    on_date=ask.on_date,
+                    until_time=ask.until_time,
+                    reason=f"agreed to {ask.customer_name or 'a customer'}'s hours",
+                )
+            ]
+        )
+        worker = world.workers.get(worker_id)
+        broadcaster.publish("world", {"event": "shift_extended"})
+        return {
+            "worker": worker.name if worker else worker_id,
+            "until": clock(ask.until_time),
+            "status": "their day now runs that late - read the call again to book it",
+        }
+
+
+@app.post("/api/asks/{ask_id}/close")
+def close_ask(ask_id: str, outcome: str = Query(default="")) -> dict[str, str]:
+    from glass_guru.domain.events import CrewAskClosed
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.ask_close"):
+        if ask_id not in svc.world().crew_asks:
+            raise HTTPException(404, detail={"error": "NoSuchAsk", "detail": ask_id})
+        now = datetime.now(svc.tz)
+        svc.apply_events(
+            [
+                CrewAskClosed(
+                    event_id=new_dispatch_id("ev"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    ask_id=ask_id,
+                    outcome=outcome,
+                )
+            ]
+        )
+        broadcaster.publish("world", {"event": "crew_ask_closed"})
+        return {"ask_id": ask_id, "status": "closed"}
 
 
 def _float_overtime_offer(svc: DispatchService, job_id: str, now: datetime) -> str:

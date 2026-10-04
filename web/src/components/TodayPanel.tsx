@@ -158,6 +158,7 @@ export function TodayPanel({
                         onClick={() => dayOut(worker.id, d.date)}
                       >
                         {d.shift}
+                        {d.extended && <span className="rota__extended">{d.extended}</span>}
                         <span className="rota__hovermark">{"\u2715"}</span>
                       </button>
                     </td>

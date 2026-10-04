@@ -47,6 +47,7 @@ from glass_guru.scheduler.day_planner import (
     SolveParams,
     _cents,
     _largest_free_interval,
+    _reach_end,
     _shift_window,
     _unserved_penalty,
     plan_day,
@@ -148,8 +149,12 @@ def day_capacity(world: WorldState, on_date: date, tz: tzinfo, utilization: floa
         span = _shift_window(worker, on_date)
         if span is None:
             continue
+        # A one-day agreement to stay late is real capacity. Without this, the
+        # horizon stage dropped a confirmed evening booking as "no day had enough
+        # crew-hours" minutes after two fitters had said yes to exactly those hours.
+        reach = _reach_end(world, worker, on_date, span[1], day_begins, tz)
         usable = _largest_free_interval(
-            world.worker_outages.get(worker.id, ()), day_begins, span[0], span[1]
+            world.worker_outages.get(worker.id, ()), day_begins, span[0], reach
         )
         if usable is None:
             continue

@@ -82,6 +82,14 @@ def test_a_real_count_survives(text: str, extracted: int):
         ("not before 8", 8, None),
         ("no earlier than 2pm", 14, None),
         ("after 4pm but before 7", 16, 19),
+        # "come at five" is an appointment time, which is a lower bound in
+        # disguise. Found live: the model carried "come to fix at 5pm" once and
+        # dropped it on the next read of the same words, so the earliest slot
+        # flipped between 5 PM and 6 AM call to call. Anchored to arrival verbs:
+        # "we open at 9am" is a fact about the shop, not a booking.
+        ("he said come to fix at 5pm as soon as possible", 17, None),
+        ("can you arrive at 10", 10, None),
+        ("we open at 9am and the front glass is broken", None, None),
         ("any time that suits", None, None),
     ],
 )
@@ -379,7 +387,7 @@ def test_one_qualified_name_is_called_a_single_point_of_failure():
     from glass_guru.domain.enums import Certification, ServiceType
     from glass_guru.domain.models import GlassSpec, Job, Location
     from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import _at, seed_events
+    from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
 
     world = fold(seed_events(with_jobs=False))
     draft = Job(
@@ -394,9 +402,12 @@ def test_one_qualified_name_is_called_a_single_point_of_failure():
         estimated_duration_min=120,
         requested_at=_at(0, 8),
     )
-    evening = _capable_then(world, draft, weekday=3, start_hour=16, duration_min=120, overtime=120)
+    from datetime import timedelta
+
+    thursday = WEEK_START + timedelta(days=3)
+    evening = _capable_then(world, draft, thursday, start_hour=16, duration_min=120, overtime=120)
     # Dan used to be alone here - the single point of failure the cover notes exist to
     # name. Making everyone overtime-eligible is what gave the evening a second name.
     assert evening == ["Dan", "Ken"]
-    morning = _capable_then(world, draft, weekday=3, start_hour=8, duration_min=120, overtime=120)
+    morning = _capable_then(world, draft, thursday, start_hour=8, duration_min=120, overtime=120)
     assert len(morning) > len(evening), "mornings still have more cover than evenings"

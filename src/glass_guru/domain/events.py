@@ -237,6 +237,66 @@ class OvertimeOffered(EventBase):
     claim_deadline: datetime
 
 
+class WorkerRemoved(EventBase):
+    """Off the roster - left the company, not merely out sick. The log keeps that
+    they existed; the world stops offering them work."""
+
+    type: Literal["worker_removed"] = "worker_removed"
+    worker_id: WorkerId
+
+
+class VanRemoved(EventBase):
+    type: Literal["van_removed"] = "van_removed"
+    van_id: VanId
+
+
+class ShiftExtended(EventBase):
+    """A fitter agreed to work past their rostered day, once, for a named date.
+
+    This is how "nobody certified can work those hours" becomes bookable: the
+    dispatcher asked, the person said yes, and the agreement is recorded as a fact
+    with a date on it. Scheduling honours it for that day only; pay does not change
+    shape - every minute past the rostered end is overtime, exactly as if the
+    standard allowance had covered it.
+    """
+
+    type: Literal["shift_extended"] = "shift_extended"
+    worker_id: WorkerId
+    on_date: date
+    until_time: datetime
+    reason: str = ""
+
+
+class CrewAskOpened(EventBase):
+    """A customer wants hours nobody can currently work; the crew is being asked.
+
+    The call does not end with "no" - it ends with "let me check and call you
+    back". This records the check so it survives a page reload and a shift change:
+    who wants what, which fitters could cover it if they agree, and the words the
+    customer used, so booking them later starts from their own call.
+    """
+
+    type: Literal["crew_ask_opened"] = "crew_ask_opened"
+    ask_id: str
+    customer_name: str
+    phone: str
+    transcript: str
+    #: What saying yes means: work this date until this hour.
+    on_date: date
+    until_time: datetime
+    candidate_ids: tuple[WorkerId, ...]
+    detail: str = ""
+
+
+class CrewAskClosed(EventBase):
+    """The check-back happened: somebody said yes (and was extended), or everyone
+    said no and the customer was told."""
+
+    type: Literal["crew_ask_closed"] = "crew_ask_closed"
+    ask_id: str
+    outcome: str = ""
+
+
 class OvertimeClaimed(EventBase):
     """A fitter said yes. First reply wins; the fold ignores the rest."""
 
@@ -268,6 +328,11 @@ Event = Annotated[
     | ProposalApproved
     | ProposalRejected
     | OvertimeOffered
-    | OvertimeClaimed,
+    | OvertimeClaimed
+    | ShiftExtended
+    | CrewAskOpened
+    | CrewAskClosed
+    | WorkerRemoved
+    | VanRemoved,
     Field(discriminator="type"),
 ]

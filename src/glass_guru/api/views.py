@@ -13,6 +13,7 @@ from glass_guru.api.models import (
     CandidateView,
     ChangeView,
     CostView,
+    CrewAskView,
     JobView,
     OvertimeOfferView,
     PlanView,
@@ -174,12 +175,18 @@ def _worker_week(
                 reach = ""
                 if worker.overtime_eligible and overtime:
                     reach = f"can stay to {clock(closes + timedelta(minutes=overtime))}"
+                extension = world.extension_for(worker.id, cursor)
                 days.append(
                     WorkerDayView(
                         date=cursor.isoformat(),
                         day=f"{cursor:%a}",
                         shift=clock_range(hours.start, hours.end),
                         reach=reach,
+                        extended=(
+                            f"agreed to stay to {clock(extension.astimezone(tz))}"
+                            if extension
+                            else ""
+                        ),
                         available=world.is_worker_available(worker.id, opens, closes),
                         # Once the shift and any overtime reach are behind the clock
                         # there is nothing left to block out or bring back.
@@ -217,6 +224,9 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 shift=(clock_range(h.start, h.end) if (h := w.hours_for(weekday)) else "off"),
                 available=world.is_worker_available(w.id, today, end_of_day),
                 overtime_eligible=w.overtime_eligible,
+                shift_start=(f"{h0.start:%H:%M}" if (h0 := w.hours_for(0)) else ""),
+                shift_end=(f"{h0.end:%H:%M}" if h0 else ""),
+                phone=w.phone,
                 days=_worker_week(w, world, business, tz),
             )
             for w in sorted(world.workers.values(), key=lambda w: w.id)
@@ -234,6 +244,8 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
             JobView(
                 id=j.id,
                 customer_name=j.customer_name,
+                phone=j.phone,
+                address=j.location.address,
                 service_type=j.service_type.value,
                 duration_minutes=j.estimated_duration_min,
                 crew_size=j.crew_size,
@@ -246,6 +258,28 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 transcript=j.provenance.transcript,
             )
             for j in world.active_jobs()
+        ],
+        crew_asks=[
+            CrewAskView(
+                ask_id=ask.ask_id,
+                customer=ask.customer_name,
+                phone=ask.phone,
+                day=f"{ask.on_date:%a %d %b}",
+                until_label=clock(ask.until_time.astimezone(tz)),
+                detail=ask.detail,
+                transcript=ask.transcript,
+                candidates=[
+                    {"id": w, "name": world.workers[w].name}
+                    for w in ask.candidate_ids
+                    if w in world.workers
+                ],
+                extended=[
+                    world.workers[w].name
+                    for w in ask.candidate_ids
+                    if w in world.workers and world.extension_for(w, ask.on_date) is not None
+                ],
+            )
+            for ask in sorted(world.crew_asks.values(), key=lambda a: a.ask_id)
         ],
         overtime_offers=[
             OvertimeOfferView(

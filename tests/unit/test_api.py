@@ -974,3 +974,93 @@ def test_hours_are_only_offered_to_fitters_who_can_actually_reach_them(
         "Marcus and Priya finish at three and cannot reach six even on overtime; "
         "Sofia and Alex are not residential-certified"
     )
+
+
+def test_the_ask_endpoints_round_trip(client: TestClient):
+    """Open a crew ask, record one yes, close it - the board state follows."""
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    opened = client.post(
+        "/api/asks",
+        json={
+            "customer_name": "Jimmy",
+            "phone": "8175768492",
+            "transcript": "walmart glass broke, come at 5pm",
+            "on_date": monday.isoformat(),
+            "until": "20:45",
+            "candidate_ids": ["w-marcus", "w-priya"],
+            "detail": "check with Marcus and Priya",
+        },
+    ).json()
+    ask_id = opened["ask_id"]
+
+    world = client.get("/api/world").json()
+    ask = next(a for a in world["crew_asks"] if a["ask_id"] == ask_id)
+    assert ask["customer"] == "Jimmy"
+    assert [c["name"] for c in ask["candidates"]] == ["Marcus", "Priya"]
+    assert ask["extended"] == []
+
+    refused = client.post(f"/api/asks/{ask_id}/extend", params={"worker_id": "w-dan"})
+    assert refused.status_code == 422, "Dan was never part of this ask"
+
+    said_yes = client.post(f"/api/asks/{ask_id}/extend", params={"worker_id": "w-priya"}).json()
+    assert said_yes["worker"] == "Priya"
+    world = client.get("/api/world").json()
+    ask = next(a for a in world["crew_asks"] if a["ask_id"] == ask_id)
+    assert ask["extended"] == ["Priya"]
+    priya = next(w for w in world["workers"] if w["name"] == "Priya")
+    monday_cell = next(d for d in priya["days"] if d["date"] == monday.isoformat())
+    assert "agreed to stay" in monday_cell["extended"], "the rota explains the late evening"
+
+    client.post(f"/api/asks/{ask_id}/close", params={"outcome": "booked"})
+    world = client.get("/api/world").json()
+    assert not any(a["ask_id"] == ask_id for a in world["crew_asks"])
+
+
+def test_the_configure_endpoints_edit_the_roster(client: TestClient):
+    """Save a fitter, trim the fleet, hire somebody new - all as roster events."""
+    world = client.get("/api/world").json()
+    sofia = next(w for w in world["workers"] if w["name"] == "Sofia")
+
+    saved = client.post(
+        "/api/config/worker",
+        json={
+            "id": sofia["id"],
+            "name": "Sofia",
+            "phone": "+18175550199",
+            "certifications": ["auto_glass", "residential_glazing"],
+            "shift_start": "07:00",
+            "shift_end": "16:00",
+            "overtime_eligible": False,
+        },
+    ).json()
+    assert saved["status"] == "saved"
+    sofia = next(w for w in client.get("/api/world").json()["workers"] if w["name"] == "Sofia")
+    assert sofia["shift_start"] == "07:00"
+    assert "residential_glazing" in sofia["certifications"]
+    assert sofia["overtime_eligible"] is False
+
+    hired = client.post(
+        "/api/config/worker",
+        json={"name": "Tess", "certifications": ["screen_repair"]},
+    ).json()
+    assert hired["status"] == "saved"
+    assert any(w["name"] == "Tess" for w in client.get("/api/world").json()["workers"])
+
+    client.delete(f"/api/config/worker/{hired['worker_id']}")
+    assert not any(w["name"] == "Tess" for w in client.get("/api/world").json()["workers"])
+
+    gone = client.delete("/api/config/van/van-4").json()
+    assert gone["status"] == "removed"
+    vans = {v["id"] for v in client.get("/api/world").json()["vans"]}
+    assert "van-4" not in vans
+    added = client.post("/api/config/van", json={"id": "", "label": ""}).json()
+    assert added["van_id"] not in vans, "a fresh id, not a reused one"
+
+    bad = client.post(
+        "/api/config/worker",
+        json={"name": "X", "shift_start": "18:00", "shift_end": "09:00"},
+    )
+    assert bad.status_code == 422, "a shift must end after it starts"
