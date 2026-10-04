@@ -945,3 +945,87 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   gap: 10px;
 }
 .brand svg { display: block; flex: 0 0 auto; }
+
+/* ------------------------------------------------------------------ crew tab */
+
+/* The crew view, in the calendar's own language: light, airy, the same gradient
+   whisper, pastel chips. It lived as a strip under the calendar and made the page
+   scroll; it is a tab now, so the one screen you look at stays one screen. */
+.crewcard {
+  --cal-ink: #16161d;
+  --cal-muted: #6d6d7a;
+  background:
+    linear-gradient(160deg, rgb(31 186 214 / 0.10), rgb(6 193 103 / 0.07) 28%, transparent 46%),
+    #fbfbfd;
+  border-radius: 18px;
+  padding: 18px;
+  color: var(--cal-ink);
+}
+.crewcard h2 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.crewcard h3 { color: var(--cal-ink); }
+.crewcard .panel__hint { color: var(--cal-muted); }
+
+.crewcard .rota th { color: var(--cal-muted); }
+.crewcard .rota td { border-top: 1px solid #e8e8ef; }
+.crewcard .rota__who strong { color: var(--cal-ink); font-size: 14px; }
+
+/* Day cells as the calendar's chips: soft grey when working, dashed rose when out,
+   quiet grey when off. The whole chip is still the button. */
+.crewcard .rota__daybtn {
+  background: #ededf3;
+  border: none;
+  border-radius: 10px;
+  padding: 6px 10px;
+  color: var(--cal-ink);
+}
+.crewcard .rota__daybtn:hover { background: #e4e4ee; }
+.crewcard .rota__hovermark { color: #c23b3b; }
+.crewcard .rota__cell--out .rota__daybtn,
+.crewcard .rota__daybtn--out {
+  background: #fdebea;
+  border: 1.5px dashed #d96a62;
+  color: #a83a32;
+}
+.crewcard .rota__daybtn--out .rota__hovermark { color: #067a44; }
+.crewcard .rota__cell--rest,
+.crewcard .rota__cell--past { color: #a9a9b4; }
+.crewcard .rota__extended { color: #0d93ab; }
+
+.crewcard .rota__legend { color: var(--cal-muted); }
+.crewcard .rota__vans { color: var(--cal-ink); }
+.crewcard .rota__vans > span {
+  background: #ededf3;
+  border-radius: 999px;
+  padding: 4px 6px 4px 14px;
+}
+.crewcard .rota__vans .warn { background: #fdebea; color: #a83a32; }
+.crewcard .rota__toggle { color: #8d8d9a; }
+.crewcard .rota__toggle:hover:not(:disabled) { color: #c23b3b; }
+.crewcard .rota__healed { color: #067a44; }
+
+/* The week's load, as light cards. */
+.crewcard .workload {
+  background: #ffffff;
+  border: 1px solid #e8e8ef;
+  border-radius: 14px;
+}
+.crewcard .workload__dow { color: var(--cal-muted); }
+.crewcard .workload .muted { color: var(--cal-muted); }
+.crewcard .workload .warn { color: #b06a0a; }
+
+/* Overtime on offer, in the calendar's amber pastel. */
+.crewcard .otboard { border-top: 1px solid #e8e8ef; }
+.crewcard .otboard h3 { color: #8a5a07; }
+.crewcard .otboard__what { color: var(--cal-ink); }
+.crewcard .otboard__state { color: var(--cal-muted); }
+.crewcard .otboard__claim {
+  background: #fbe3b4;
+  border: 1px dashed #d99a2b;
+  color: #6b5416;
+}
+.crewcard .otboard__claim:hover:not(:disabled) { background: #f6d58f; color: #3c2d05; }
