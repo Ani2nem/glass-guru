@@ -28,7 +28,7 @@ permissions:
 env:
   # Never reach for OSRM or Google from CI. The committed leg snapshot makes every
   # solve offline, free and identical to the one on a developer's machine.
-  GLASS_GURU_TRAVEL: frozen
+  KRAMA_TRAVEL: frozen
 
 jobs:
   quality:
@@ -88,7 +88,7 @@ jobs:
         # A slower runner does not change these numbers: the eval solves are bounded by
         # deterministic work rather than the wall clock, which is the whole reason a
         # committed baseline is comparable across machines at all.
-        run: glass-guru-eval --tier 0 --tier 3 --json reports/offline.json
+        run: krama-eval --tier 0 --tier 3 --json reports/offline.json
       - uses: actions/upload-artifact@v5
         if: always()
         with:
@@ -122,7 +122,7 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
           role-session-name: gg-evals-${{ github.run_id }}
       - name: tiers 1, 2 and 4 against the live model
-        run: glass-guru-eval --tier 1 --tier 2 --tier 4 --verbose --json reports/model.json
+        run: krama-eval --tier 1 --tier 2 --tier 4 --verbose --json reports/model.json
       - uses: actions/upload-artifact@v5
         if: always()
         with:
@@ -160,7 +160,7 @@ jobs:
           merge-multiple: true
       - name: render
         run: |
-          python -m glass_guru.evals.scorecard \
+          python -m krama.evals.scorecard \
             reports/offline.json reports/model.json \
             --baseline evals/baseline.json \
             --out scorecard.md
@@ -175,7 +175,7 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          marker='<!-- glass-guru-eval-scorecard -->'
+          marker='<!-- krama-eval-scorecard -->'
           printf '%s\n\n' "$marker" | cat - scorecard.md > body.md
           existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
             --jq "map(select(.body | startswith(\"$marker\"))) | .[0].id // empty")

@@ -33,10 +33,10 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=SNAPSHOT)
     args = parser.parse_args()
 
-    from glass_guru.config import BusinessParams
-    from glass_guru.fixtures.sample_business import DEPOT, JOBS, WORKERS, BUSINESS_TZ, WEEK_START
-    from glass_guru.scheduler.travel.cache import CachingTravelProvider, JsonLegStore
-    from glass_guru.scheduler.travel.osrm import OsrmTravelProvider, OsrmUnavailable
+    from krama.config import BusinessParams
+    from krama.fixtures.sample_business import DEPOT, JOBS, WORKERS, BUSINESS_TZ, WEEK_START
+    from krama.scheduler.travel.cache import CachingTravelProvider, JsonLegStore
+    from krama.scheduler.travel.osrm import OsrmTravelProvider, OsrmUnavailable
 
     business = BusinessParams.load()
     osrm = OsrmTravelProvider.from_business(business, args.osrm_url)

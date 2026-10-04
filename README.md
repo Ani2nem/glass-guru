@@ -1,4 +1,4 @@
-# glass-guru
+# krama
 
 AI dispatch and scheduling for a glass-fitting business: about six fitters, four vans, twenty-five jobs a day, a thirty-mile radius.
 
@@ -60,7 +60,7 @@ For the agents, see [docs/aws-setup.md](docs/aws-setup.md) - Amazon Nova Lite on
 ## Layout
 
 ```
-src/glass_guru/
+src/krama/
   domain/        models, the event log, fold, the invariant checker
   scheduler/     CP-SAT solvers, travel providers, marginal-cost booking
   agents/        intake, triage, coordinator, comms, A2A, LLM providers

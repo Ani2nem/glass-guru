@@ -1,5 +1,5 @@
 [project]
-name = "glass-guru"
+name = "krama"
 version = "0.1.0"
 description = "AI field-service dispatch and scheduling for a glass/window business"
 requires-python = ">=3.12,<3.13"
@@ -29,10 +29,10 @@ dependencies = [
 ]
 
 [project.scripts]
-glass-guru = "glass_guru.cli.main:main"
-glass-guru-mcp = "glass_guru.mcp_server.server:main"
-glass-guru-api = "glass_guru.api.main:main"
-glass-guru-eval = "glass_guru.evals.run:main"
+krama = "krama.cli.main:main"
+krama-mcp = "krama.mcp_server.server:main"
+krama-api = "krama.api.main:main"
+krama-eval = "krama.evals.run:main"
 
 [project.optional-dependencies]
 dev = [
@@ -53,7 +53,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/glass_guru"]
+packages = ["src/krama"]
 
 [tool.ruff]
 line-length = 100

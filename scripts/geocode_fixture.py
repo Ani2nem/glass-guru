@@ -27,7 +27,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 CACHE = REPO / "config" / "geocode_cache.json"
 ENDPOINT = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "glass-guru-dev/0.1 (field-service scheduling fixture)"
+USER_AGENT = "krama-dev/0.1 (field-service scheduling fixture)"
 RATE_LIMIT_SECONDS = 1.1
 
 
@@ -61,7 +61,7 @@ def main() -> int:
     parser.add_argument("--refresh", action="store_true", help="re-query cached entries")
     args = parser.parse_args()
 
-    from glass_guru.fixtures.sample_business import DEPOT, JOBS, WORKERS
+    from krama.fixtures.sample_business import DEPOT, JOBS, WORKERS
 
     targets: list[tuple[str, str, tuple[float, float]]] = [
         ("depot", DEPOT.address, (DEPOT.lat, DEPOT.lon)),
@@ -86,7 +86,7 @@ def main() -> int:
         # version appended ", Seattle, WA" to anything that did not say ", WA",
         # which quietly turned every Texas address into "…, Fort Worth, TX,
         # Seattle, WA" and matched nothing at all. Fully qualified addresses need
-        # no help; the service-area bound in glass_guru.geocoding is what stops a
+        # no help; the service-area bound in krama.geocoding is what stops a
         # bare street name resolving to the wrong state.
         query = address
         if key not in cache:

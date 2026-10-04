@@ -14,32 +14,32 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from glass_guru.agents.comms import (
+from krama.agents.comms import (
     CommsResult,
     DraftMessage,
     draft_customer_messages,
     verify_grounding,
 )
-from glass_guru.agents.intake import (
+from krama.agents.intake import (
     CommitmentSignal,
     IntakeResult,
     commitment_cost_for,
     intake,
 )
-from glass_guru.agents.llm.scripted import ScriptedLLMProvider
-from glass_guru.config import BusinessParams
-from glass_guru.domain.catalog import CATALOG, lookup
-from glass_guru.domain.diff import ChangeKind, JobChange, Placement, PlanDiff
-from glass_guru.domain.enums import (
+from krama.agents.llm.scripted import ScriptedLLMProvider
+from krama.config import BusinessParams
+from krama.domain.catalog import CATALOG, lookup
+from krama.domain.diff import ChangeKind, JobChange, Placement, PlanDiff
+from krama.domain.enums import (
     Certification,
     CommitmentState,
     GlassType,
     ServiceType,
 )
-from glass_guru.domain.models import TimeWindow
-from glass_guru.fixtures.sample_business import _at
-from glass_guru.geocoding import Geocoder
-from glass_guru.obs.correlation import dispatch
+from krama.domain.models import TimeWindow
+from krama.fixtures.sample_business import _at
+from krama.geocoding import Geocoder
+from krama.obs.correlation import dispatch
 
 #: Must match BUSINESS_TZ in the fixture, or a message saying 15:10 is checked
 #: against a plan that reads 13:10 and every grounded draft is rejected.
@@ -153,7 +153,7 @@ def test_scheduling_numbers_come_from_the_catalogue_not_the_call(business, geoco
 def test_the_schema_has_no_field_for_duration():
     """Enforced by construction rather than by instruction. A model cannot supply a
     number it is given nowhere to put."""
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     fields = set(CallExtraction.model_fields)
     assert not {"duration", "duration_minutes", "estimated_duration_min"} & fields
@@ -384,7 +384,7 @@ def test_grounding_is_checked_on_the_text_not_the_intent():
 def test_a_model_writing_nothing_is_read_as_nothing(written: str):
     """Asked for a field it was not told, a model would rather answer than leave a
     blank. "N/A" is perfectly truthy, and that is the whole bug."""
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     assert CallExtraction(phone=written).phone == ""
 
@@ -393,7 +393,7 @@ def test_a_model_writing_nothing_is_read_as_nothing(written: str):
 def test_a_real_answer_survives(written: str):
     """The check has to be exact. A customer called "None Ltd" is a stretch, but a
     company with N/A in its name is not, and clipping it would be a worse bug."""
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     assert CallExtraction(customer_name=written).customer_name == written
 
@@ -406,7 +406,7 @@ def test_a_missing_number_is_asked_for_rather_than_filled_in():
     screen as a value. The dispatcher hangs up without the number and the job is
     unbookable for a reason nobody was told.
     """
-    from glass_guru.agents.intake import REQUIRED_FIELDS, CallExtraction
+    from krama.agents.intake import REQUIRED_FIELDS, CallExtraction
 
     call = CallExtraction(
         customer_name="Maria",
@@ -429,7 +429,7 @@ def test_a_phone_field_that_could_not_be_dialled_is_blank(written: str):
     reaches for the nearest string and writes the company name in. Phone: Nguyen Glass
     is worse than Phone: N/A, because it looks like data.
     """
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     assert CallExtraction(phone=written).phone == ""
 
@@ -441,7 +441,7 @@ def test_a_phone_field_that_could_not_be_dialled_is_blank(written: str):
 def test_a_number_someone_could_actually_ring_survives(written: str):
     """The bar is "could this be dialled", not "does it match a format". A validator
     strict enough to reject a real customer is a worse bug than the one it fixes."""
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     assert CallExtraction(phone=written).phone == written
 
@@ -450,20 +450,20 @@ def test_a_number_someone_could_actually_ring_survives(written: str):
 def test_a_number_nobody_could_dial_is_blank(written: str):
     """Nine digits passed a seven-digit floor, was displayed, and would have been
     dialled. A US number is ten digits; a floor that verifies less verifies nothing."""
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     assert CallExtraction(phone=written).phone == ""
 
 
 @pytest.mark.parametrize("written", ["maria", "maria@", "@glass.com", "maria@glass", "n/a"])
 def test_an_address_without_an_at_is_not_an_email(written: str):
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     assert CallExtraction(email=written).email == ""
 
 
 def test_a_real_email_survives():
-    from glass_guru.agents.intake import CallExtraction
+    from krama.agents.intake import CallExtraction
 
     assert CallExtraction(email="maria@nguyenglass.com").email == "maria@nguyenglass.com"
 
@@ -476,7 +476,7 @@ def test_the_twelve_hour_form_the_brief_uses_is_grounded():
     "9:00am", and tier 4 fell from 97.9% to 72.9% - a grounded message reported as a
     fabrication because the checker and the brief had drifted apart.
     """
-    from glass_guru.agents.comms import verify_grounding
+    from krama.agents.comms import verify_grounding
 
     draft = DraftMessage(
         job_id="j-402", channel="sms", body="We can be with you at 9:00 on Monday."
@@ -488,7 +488,7 @@ def test_the_twelve_hour_form_the_brief_uses_is_grounded():
 def test_a_bare_hour_is_still_refused_for_a_time_that_is_not_on_the_hour():
     """The looser twelve-hour form must not reopen the rounding hole: "3pm" for a
     15:10 slot would also have passed for 15:55."""
-    from glass_guru.agents.comms import (
+    from krama.agents.comms import (
         _facts_for,  # noqa: F401  (import guard)
         verify_grounding,
     )
@@ -499,7 +499,7 @@ def test_a_bare_hour_is_still_refused_for_a_time_that_is_not_on_the_hour():
 
 def test_a_service_the_business_does_not_sell_is_a_referral_not_a_quote(business, geocoder):
     """ "He needs his car glass repaired" was drafted, priced and nearly booked.
-    Glass Guru fits glass in buildings; the config says so, and the gate is
+    Krama fits glass in buildings; the config says so, and the gate is
     deterministic - a perfect extraction of a service we do not sell must come
     back unbookable with a referral message, never a slot list."""
     result = run_intake(

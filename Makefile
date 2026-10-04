@@ -1,6 +1,6 @@
 VENV := .venv
 PY   := $(VENV)/bin/python
-GG   := $(VENV)/bin/glass-guru
+GG   := $(VENV)/bin/krama
 
 .PHONY: help install test lint fmt typecheck check board scenario scenarios snapshots \
         image image-run scorecard tf-bootstrap tf-app tf-check \
@@ -32,31 +32,31 @@ typecheck:  ## Strict type check
 check: lint typecheck test  ## Everything CI will eventually gate on
 
 eval:  ## Run the eval suite (model tiers skip without credentials)
-	GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval $(ARGS)
+	KRAMA_TRAVEL=frozen $(VENV)/bin/krama-eval $(ARGS)
 
 eval-offline:  ## Run only the tiers that need no model
-	GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval --tier 0 --tier 3
+	KRAMA_TRAVEL=frozen $(VENV)/bin/krama-eval --tier 0 --tier 3
 
 load:  ## Measure where the solver stops coping
-	$(PY) -m glass_guru.evals.load
+	$(PY) -m krama.evals.load
 
 eval-baseline:  ## Record the current scores as the regression baseline
-	GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval --update-baseline
+	KRAMA_TRAVEL=frozen $(VENV)/bin/krama-eval --update-baseline
 
 image:  ## Build the container image locally (linux/arm64, as deployed)
-	docker build --platform linux/arm64 -t glass-guru:dev .
+	docker build --platform linux/arm64 -t krama:dev .
 
 image-run:  ## Run the built image and print what its health endpoints say
-	@docker rm -f glass-guru-local >/dev/null 2>&1 || true
-	docker run -d --name glass-guru-local -p 8000:8000 glass-guru:dev
+	@docker rm -f krama-local >/dev/null 2>&1 || true
+	docker run -d --name krama-local -p 8000:8000 krama:dev
 	@until curl -sf http://127.0.0.1:8000/api/health >/dev/null; do sleep 1; done
 	@echo "health : $$(curl -s http://127.0.0.1:8000/api/health)"
 	@echo "ready  : $$(curl -s http://127.0.0.1:8000/api/ready)"
 	@echo "board  : http://127.0.0.1:8000"
 
 scorecard:  ## Render the eval scorecard CI posts on a pull request
-	@GLASS_GURU_TRAVEL=frozen $(VENV)/bin/glass-guru-eval $(ARGS) --json /tmp/gg-eval.json >/dev/null
-	@$(PY) -m glass_guru.evals.scorecard /tmp/gg-eval.json --baseline evals/baseline.json
+	@KRAMA_TRAVEL=frozen $(VENV)/bin/krama-eval $(ARGS) --json /tmp/gg-eval.json >/dev/null
+	@$(PY) -m krama.evals.scorecard /tmp/gg-eval.json --baseline evals/baseline.json
 
 tf-bootstrap:  ## Plan the one-time bootstrap stack (OIDC, roles, registry, state)
 	terraform -chdir=infra/bootstrap init -input=false
@@ -94,32 +94,32 @@ web-check:  ## Type-check the board
 	cd web && npm run typecheck
 
 api:  ## Run the API (serves the built board at http://127.0.0.1:8000)
-	GLASS_GURU_TRAVEL=$${GLASS_GURU_TRAVEL:-frozen} $(VENV)/bin/glass-guru-api
+	KRAMA_TRAVEL=$${KRAMA_TRAVEL:-frozen} $(VENV)/bin/krama-api
 
 dev:  ## Run the API and the board's dev server together, with hot reload
 	@echo "API   http://127.0.0.1:8000"
 	@echo "Board http://127.0.0.1:5173  (proxies /api to the API)"
-	@( GLASS_GURU_TRAVEL=$${GLASS_GURU_TRAVEL:-frozen} \
-	   $(PY) -m uvicorn glass_guru.api.main:app --reload --port 8000 & \
+	@( KRAMA_TRAVEL=$${KRAMA_TRAVEL:-frozen} \
+	   $(PY) -m uvicorn krama.api.main:app --reload --port 8000 & \
 	   cd web && npm run dev; kill %1 )
 
 mcp:  ## Run the MCP server over stdio
-	$(VENV)/bin/glass-guru-mcp
+	$(VENV)/bin/krama-mcp
 
 trace:  ## Run a command with spans printed to the console, e.g. make trace CMD=commit
-	GLASS_GURU_TRACE_CONSOLE=1 $(GG) $(CMD)
+	KRAMA_TRACE_CONSOLE=1 $(GG) $(CMD)
 
 demo:  ## End-to-end Gate 3 walkthrough in a throwaway workspace
-	@rm -rf /tmp/glass-guru-demo
-	$(GG) --workspace /tmp/glass-guru-demo init
-	$(GG) --workspace /tmp/glass-guru-demo commit
-	$(GG) --workspace /tmp/glass-guru-demo event job-confirmed j-402 \
+	@rm -rf /tmp/krama-demo
+	$(GG) --workspace /tmp/krama-demo init
+	$(GG) --workspace /tmp/krama-demo commit
+	$(GG) --workspace /tmp/krama-demo event job-confirmed j-402 \
 	  --window-start 09:00 --window-end 15:00 --commitment-cost 250
-	$(GG) --workspace /tmp/glass-guru-demo event job-dispatched j-401 --at 06:05
-	$(GG) --workspace /tmp/glass-guru-demo event van-unavailable van-1 --at 10:40 --reason "wont start"
-	$(GG) --workspace /tmp/glass-guru-demo repair
-	$(GG) --workspace /tmp/glass-guru-demo repair --apply
-	$(GG) --workspace /tmp/glass-guru-demo diff
+	$(GG) --workspace /tmp/krama-demo event job-dispatched j-401 --at 06:05
+	$(GG) --workspace /tmp/krama-demo event van-unavailable van-1 --at 10:40 --reason "wont start"
+	$(GG) --workspace /tmp/krama-demo repair
+	$(GG) --workspace /tmp/krama-demo repair --apply
+	$(GG) --workspace /tmp/krama-demo diff
 
 board:  ## Render a day's schedule, e.g. make board DATE=2026-09-21
 	$(GG) solve $(if $(DATE),--date $(DATE),)

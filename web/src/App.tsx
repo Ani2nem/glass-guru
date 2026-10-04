@@ -80,7 +80,7 @@ export default function App() {
       <header className="topbar">
         <span className="brand">
           <Logo size={30} />
-          <h1>Glass Guru</h1>
+          <h1>Krama</h1>
         </span>
         {plan ? (
           <div
@@ -405,7 +405,7 @@ export default function App() {
       )}
 
       <footer className="footer">
-        <span className="footer__brand">Glass Guru</span>
+        <span className="footer__brand">Krama</span>
         {world?.depot_address && <span>routes start and end at {world.depot_address}</span>}
         <div className="footer__legend">
           <span>

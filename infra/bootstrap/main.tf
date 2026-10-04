@@ -27,7 +27,7 @@ provider "aws" {
   region = var.region
   default_tags {
     tags = {
-      Project   = "glass-guru"
+      Project   = "krama"
       ManagedBy = "terraform"
       Stack     = "bootstrap"
     }
@@ -100,7 +100,7 @@ resource "aws_s3_bucket_public_access_block" "state" {
 # ------------------------------------------------------------------------ registry
 
 resource "aws_ecr_repository" "app" {
-  name                 = "glass-guru"
+  name                 = "krama"
   image_tag_mutability = "IMMUTABLE"
 
   # Images are deployed by digest, but a scan result is worth having anyway.

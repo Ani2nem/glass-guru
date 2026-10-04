@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from glass_guru.fixtures.sample_business import seed_events
-from glass_guru.persistence.log import Workspace
+from krama.fixtures.sample_business import seed_events
+from krama.persistence.log import Workspace
 
 pytestmark = pytest.mark.anyio
 
@@ -28,10 +28,10 @@ def anyio_backend() -> str:
 def mcp_workspace(tmp_path, monkeypatch):
     workspace = Workspace(tmp_path / "ws")
     workspace.seed(seed_events())
-    monkeypatch.setenv("GLASS_GURU_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KRAMA_WORKSPACE", str(tmp_path / "ws"))
     # Real road distances from the committed snapshot: offline, and identical here to
     # what a deployment would compute.
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "frozen")
+    monkeypatch.setenv("KRAMA_TRAVEL", "frozen")
     return workspace
 
 
@@ -44,7 +44,7 @@ async def call(name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     from mcp.types import CallToolResult
 
-    from glass_guru.mcp_server.server import mcp
+    from krama.mcp_server.server import mcp
 
     result = await mcp.call_tool(name, args or {})
     assert isinstance(result, CallToolResult), f"{name} asked for input unexpectedly"
@@ -57,7 +57,7 @@ async def call(name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
 
 
 async def test_tools_are_exposed_with_closed_schemas(mcp_workspace):
-    from glass_guru.mcp_server.server import mcp
+    from krama.mcp_server.server import mcp
 
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
@@ -76,7 +76,7 @@ async def test_tools_are_exposed_with_closed_schemas(mcp_workspace):
 async def test_no_tool_can_assert_a_schedule(mcp_workspace):
     """The whole point. There is no way in through this surface to declare an arrival
     time, override feasibility, or force a plan past its invariants."""
-    from glass_guru.mcp_server.server import mcp
+    from krama.mcp_server.server import mcp
 
     names = {t.name for t in await mcp.list_tools()}
     forbidden = {"set_arrival", "force_commit", "override_invariants", "set_plan"}
@@ -133,7 +133,7 @@ async def test_unserved_jobs_come_with_reasons_already_computed(mcp_workspace):
 async def test_booking_slots_are_priced_and_explained(mcp_workspace):
     # Quote the exact site of an existing job so the frozen snapshot covers every leg.
     # Geohash-7 cells are about 150m, so an approximated coordinate lands elsewhere.
-    from glass_guru.fixtures.sample_business import JOBS
+    from krama.fixtures.sample_business import JOBS
 
     chen = next(j for j in JOBS if j.id == "j-402").location
 

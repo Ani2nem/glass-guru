@@ -18,9 +18,9 @@ from pathlib import Path
 
 import pytest
 
-from glass_guru.cli.main import _render_horizon, _render_solve
-from glass_guru.config import BusinessParams
-from glass_guru.fixtures import scenarios
+from krama.cli.main import _render_horizon, _render_solve
+from krama.config import BusinessParams
+from krama.fixtures import scenarios
 
 SNAPSHOT_DIR = Path(__file__).resolve().parents[1] / "snapshots"
 UPDATE = os.environ.get("UPDATE_SNAPSHOTS") == "1"

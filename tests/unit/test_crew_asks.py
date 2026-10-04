@@ -5,15 +5,15 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from glass_guru.domain.events import (
+from krama.domain.events import (
     CrewAskClosed,
     CrewAskOpened,
     ShiftExtended,
     VanRemoved,
     WorkerRemoved,
 )
-from glass_guru.domain.state import fold
-from glass_guru.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, seed_events
+from krama.domain.state import fold
+from krama.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, seed_events
 
 
 def _extend(worker: str, hour: int, event_id: str = "e-ext") -> ShiftExtended:
@@ -95,13 +95,13 @@ def test_removing_a_worker_takes_them_off_the_roster():
 def test_an_extension_makes_impossible_evening_hours_bookable():
     """Three hours of residential work starting at five: beyond everyone's standard
     reach (Dan caps at 7 PM), so no slot exists - until Dan says yes to 8:30."""
-    from glass_guru.domain.enums import Certification, ServiceType
-    from glass_guru.domain.models import GlassSpec, Job, TimeWindow
-    from glass_guru.domain.state import WorldState
-    from glass_guru.scheduler.booking import BookingOptions, suggest_booking_slots
-    from glass_guru.scheduler.day_planner import SolveParams
-    from glass_guru.scheduler.travel.cache import CachingTravelProvider
-    from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+    from krama.domain.enums import Certification, ServiceType
+    from krama.domain.models import GlassSpec, Job, TimeWindow
+    from krama.domain.state import WorldState
+    from krama.scheduler.booking import BookingOptions, suggest_booking_slots
+    from krama.scheduler.day_planner import SolveParams
+    from krama.scheduler.travel.cache import CachingTravelProvider
+    from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 
     def quote(world: WorldState) -> BookingOptions:
         draft = Job(
@@ -124,9 +124,7 @@ def test_an_extension_makes_impossible_evening_hours_bookable():
             draft=draft,
             horizon=[WEEK_START],
             params=SolveParams(business_tz=BUSINESS_TZ, max_solve_seconds=20.0),
-            business=__import__(
-                "glass_guru.config", fromlist=["BusinessParams"]
-            ).BusinessParams.load(),
+            business=__import__("krama.config", fromlist=["BusinessParams"]).BusinessParams.load(),
             earliest_hour=17,
         )
 
@@ -147,13 +145,13 @@ def test_a_booked_extended_evening_survives_the_weekly_plan():
     """The quote said yes, the booking confirmed - then the HORIZON stage dropped the
     job as "no day had enough crew-hours", because its capacity arithmetic did not
     know about the agreement. Every layer must see the same yes."""
-    from glass_guru.config import BusinessParams
-    from glass_guru.domain.enums import Certification, CommitmentState, ServiceType
-    from glass_guru.domain.models import GlassSpec, Job, TimeWindow
-    from glass_guru.scheduler.day_planner import SolveParams
-    from glass_guru.scheduler.horizon import HorizonParams, plan_horizon
-    from glass_guru.scheduler.travel.cache import CachingTravelProvider
-    from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+    from krama.config import BusinessParams
+    from krama.domain.enums import Certification, CommitmentState, ServiceType
+    from krama.domain.models import GlassSpec, Job, TimeWindow
+    from krama.scheduler.day_planner import SolveParams
+    from krama.scheduler.horizon import HorizonParams, plan_horizon
+    from krama.scheduler.travel.cache import CachingTravelProvider
+    from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 
     business = BusinessParams.load()
     world = fold(

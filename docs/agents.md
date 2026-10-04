@@ -111,4 +111,4 @@ The Converse request and response shapes were read from botocore's own service m
 rather than recalled, but **this code has not been executed against a live Bedrock
 endpoint** - there are no AWS credentials in the development environment. Every agent
 test runs against a scripted provider. Treat the Bedrock adapter as unverified until
-someone runs `glass-guru triage` with credentials present.
+someone runs `krama triage` with credentials present.

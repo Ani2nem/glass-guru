@@ -23,19 +23,19 @@ resource "aws_lambda_function" "app" {
     variables = {
       # The whole reason the storage layer moved: a Lambda has no disk that outlives an
       # invocation, and two invocations must see the same history.
-      GLASS_GURU_WORKSPACE = "s3://${aws_s3_bucket.workspace.id}/business"
-      GLASS_GURU_TRAVEL    = var.travel_mode
-      GLASS_GURU_OSRM_URL  = var.osrm_url
-      GLASS_GURU_MODEL_ID  = var.model_ids[0]
+      KRAMA_WORKSPACE = "s3://${aws_s3_bucket.workspace.id}/business"
+      KRAMA_TRAVEL    = var.travel_mode
+      KRAMA_OSRM_URL  = var.osrm_url
+      KRAMA_MODEL_ID  = var.model_ids[0]
 
       # Polling, not streaming. An open stream is billed for its whole duration here,
       # which is the single change that makes this cheaper than a container rather than
       # more expensive. See stream_mode() in api/main.py.
-      GLASS_GURU_STREAM = "poll"
+      KRAMA_STREAM = "poll"
 
       # Empty means the application authenticates nobody, which terraform refuses to
       # combine with a public URL. See the precondition in main.tf.
-      GLASS_GURU_API_KEY = var.api_key
+      KRAMA_API_KEY = var.api_key
     }
   }
 

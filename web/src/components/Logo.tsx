@@ -17,7 +17,7 @@ export function Logo({ size = 30 }: { size?: number }) {
       height={size}
       viewBox="0 0 64 64"
       role="img"
-      aria-label="Glass Guru"
+      aria-label="Krama"
     >
       <rect width="64" height="64" rx="14" fill="#09091A" />
       <path d="M21 9 L53 17 L45 55 L11 46 Z" fill="#1FBAD6" opacity="0.22" />

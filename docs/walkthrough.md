@@ -16,7 +16,7 @@ Only the two agent steps need AWS credentials; everything else runs in a fresh c
 
 ```bash
 export AWS_PROFILE=glass-guru AWS_REGION=us-east-1   # for the agent steps only
-export GLASS_GURU_TRAVEL=warm                        # see below
+export KRAMA_TRAVEL=warm                        # see below
 docker compose up -d osrm                            # the routing backend warm mode uses
 ```
 
@@ -28,7 +28,7 @@ The committed snapshot covers the fixture's geography and refuses to invent a le
 ## In the browser
 
 ```bash
-.venv/bin/glass-guru init     # seed the sample business
+.venv/bin/krama init     # seed the sample business
 make dev                      # board on :5173, API on :8000
 ```
 
@@ -60,7 +60,7 @@ Review the typed events before recording them; nothing an agent extracts is stor
 The plan banner goes stale the moment the outage is recorded.
 Press "Rebuild around it" in the red banner: the solver rebuilds the week around the problem, keeping every confirmed window it can and reassigning crews where it must.
 If someone is out for a whole day rather than from a phone call, click their day in the crew rota instead - same event, one click.
-The richer repair flow (several priced candidates, blast radius, an autonomy verdict per option) still exists in the terminal as `glass-guru repair`; it came off the board because one well-explained button beats three unexplained ones.
+The richer repair flow (several priced candidates, blast radius, an autonomy verdict per option) still exists in the terminal as `krama repair`; it came off the board because one well-explained button beats three unexplained ones.
 
 ## The same loop, in the terminal
 
@@ -68,10 +68,10 @@ Faster to poke at, and it needs no board build.
 
 ```bash
 W=/tmp/gg-demo
-.venv/bin/glass-guru --workspace $W init
+.venv/bin/krama --workspace $W init
 #  seeded /tmp/gg-demo with 20 events
 
-.venv/bin/glass-guru --workspace $W commit
+.venv/bin/krama --workspace $W commit
 #  committed v001 (aa2732bfd9090d3b), 10 jobs
 ```
 
@@ -79,7 +79,7 @@ W=/tmp/gg-demo
 This is the headline feature, and the clearest illustration of the split the project rests on: the solver computes the money, the agent runs the conversation.
 
 ```bash
-.venv/bin/glass-guru --workspace $W slots \
+.venv/bin/krama --workspace $W slots \
   --service storefront_glass --address "1520 2nd Ave, Seattle, WA" --customer "Nguyen Glass"
 ```
 
@@ -96,10 +96,10 @@ This is the headline feature, and the clearest illustration of the split the pro
 **Promise one of them, dispatch a crew, then lose a van.**
 
 ```bash
-.venv/bin/glass-guru --workspace $W event job-confirmed j-402 \
+.venv/bin/krama --workspace $W event job-confirmed j-402 \
   --window-start 09:00 --window-end 15:00 --commitment-cost 250
-.venv/bin/glass-guru --workspace $W event job-dispatched j-401 --at 06:05
-.venv/bin/glass-guru --workspace $W event van-unavailable van-1 --at 10:40 --reason "wont start"
+.venv/bin/krama --workspace $W event job-dispatched j-401 --at 06:05
+.venv/bin/krama --workspace $W event van-unavailable van-1 --at 10:40 --reason "wont start"
 ```
 
 The `--at 10:40` matters.
@@ -108,7 +108,7 @@ An unstated time used to default to the start of the day, so a van reported off 
 **Repair, and look at the choices rather than at an answer.**
 
 ```bash
-.venv/bin/glass-guru --workspace $W repair
+.venv/bin/krama --workspace $W repair
 ```
 
 ```
@@ -126,7 +126,7 @@ Add `--apply` to commit a candidate, then `diff` to see exactly what moved.
 **The agent path.**
 
 ```bash
-.venv/bin/glass-guru --workspace $W triage \
+.venv/bin/krama --workspace $W triage \
   "Dan called, van 3 won't start, he's stuck at the Henderson site"
 ```
 
@@ -152,4 +152,4 @@ make scorecard                 # the comment CI posts on a pull request
 make image && make image-run   # the container as it is deployed
 ```
 
-`glass-guru explain j-407` says why a job is scheduled where it is, or why it is not scheduled at all, which is the question a dispatcher actually asks.
+`krama explain j-407` says why a job is scheduled where it is, or why it is not scheduled at all, which is the question a dispatcher actually asks.

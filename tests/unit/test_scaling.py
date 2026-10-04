@@ -16,15 +16,15 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from glass_guru.config import BusinessParams
-from glass_guru.domain.catalog import CATALOG
-from glass_guru.domain.enums import Certification, ServiceType
-from glass_guru.domain.models import Job, Location, TimeWindow
-from glass_guru.evals.load import synthetic_world
-from glass_guru.fixtures.sample_business import DEPOT, WEEK_START, _at
-from glass_guru.scheduler.booking import BaselineCache, suggest_booking_slots
-from glass_guru.scheduler.day_planner import SolveParams, plan_day
-from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+from krama.config import BusinessParams
+from krama.domain.catalog import CATALOG
+from krama.domain.enums import Certification, ServiceType
+from krama.domain.models import Job, Location, TimeWindow
+from krama.evals.load import synthetic_world
+from krama.fixtures.sample_business import DEPOT, WEEK_START, _at
+from krama.scheduler.booking import BaselineCache, suggest_booking_slots
+from krama.scheduler.day_planner import SolveParams, plan_day
+from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 
 TRAVEL = SyntheticTravelProvider()
 
@@ -79,7 +79,7 @@ def test_a_large_day_prunes(tz: ZoneInfo):
 def test_pruning_keeps_every_depot_arc(tz: ZoneInfo):
     """A crew must be able to start and finish anywhere. Dropping depot arcs is how
     pruning turns a feasible day infeasible."""
-    from glass_guru.scheduler.day_planner import _prunable_arcs
+    from krama.scheduler.day_planner import _prunable_arcs
 
     size = 30
     matrix = [[abs(i - j) * 5 for j in range(size)] for i in range(size)]
@@ -94,7 +94,7 @@ def test_pruning_keeps_every_depot_arc(tz: ZoneInfo):
 def test_pruning_is_symmetric_where_it_needs_to_be(tz: ZoneInfo):
     """A is among B's nearest without B being among A's. Keeping only mutual pairs
     would strand the outlying stop, so the union is taken."""
-    from glass_guru.scheduler.day_planner import _prunable_arcs
+    from krama.scheduler.day_planner import _prunable_arcs
 
     matrix = [[abs(i - j) for j in range(20)] for i in range(20)]
     params = SolveParams(business_tz=tz, k_nearest=3, prune_above=5)
@@ -235,9 +235,9 @@ def test_a_changed_day_invalidates_the_cache(business: BusinessParams, tz: ZoneI
 def test_the_fixture_still_plans_in_well_under_a_second(business: BusinessParams, tz: ZoneInfo):
     """The demo has to feel instant. A loose bound: this measures about 0.05s, so an
     order of magnitude of headroom before it fails."""
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import sample_world_at
-    from glass_guru.scheduler.horizon import HorizonParams, plan_horizon
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import sample_world_at
+    from krama.scheduler.horizon import HorizonParams, plan_horizon
 
     events, now = sample_world_at()
     world = fold(events, as_of=now)

@@ -59,8 +59,8 @@ Two roles, and the split is enforced twice - in the trust policy by which ref ma
 This repository has GitHub's **immutable subject claims** enabled, so the `sub` in the token is not what the documentation examples show:
 
 ```
-repo:Ani2nem@96967353/glass-guru@1377693884:ref:refs/heads/main     actual
-repo:Ani2nem/glass-guru:ref:refs/heads/main                         what a trust policy usually says
+repo:Ani2nem@96967353/krama@1377693884:ref:refs/heads/main     actual
+repo:Ani2nem/krama:ref:refs/heads/main                         what a trust policy usually says
 ```
 
 The owner and repository are identified by numeric id, so a repository that is renamed, transferred, or deleted and recreated does not inherit the trust its name used to carry.

@@ -8,14 +8,14 @@ from datetime import date, datetime
 
 import pytest
 
-from glass_guru.config import BusinessParams
-from glass_guru.domain.invariants import ValidationConfig
-from glass_guru.domain.models import CrewRoute, JobId, PlanVersion, VanId, WorkerId
-from glass_guru.domain.state import WorldState, fold
-from glass_guru.domain.travel import TravelOracle
-from glass_guru.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, sample_world_at
-from glass_guru.scheduler.routing import materialize_route
-from glass_guru.scheduler.travel.factory import TravelMode, build_travel
+from krama.config import BusinessParams
+from krama.domain.invariants import ValidationConfig
+from krama.domain.models import CrewRoute, JobId, PlanVersion, VanId, WorkerId
+from krama.domain.state import WorldState, fold
+from krama.domain.travel import TravelOracle
+from krama.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, sample_world_at
+from krama.scheduler.routing import materialize_route
+from krama.scheduler.travel.factory import TravelMode, build_travel
 
 
 @pytest.fixture

@@ -13,23 +13,23 @@ from datetime import UTC, date, timedelta
 
 import pytest
 
-from glass_guru.config import BusinessParams
-from glass_guru.domain.autonomy import AutonomyPolicy, Decision, decide
-from glass_guru.domain.diff import BlastRadius, ChangeKind, diff_plans
-from glass_guru.domain.enums import CommitmentState
-from glass_guru.domain.invariants import (
+from krama.config import BusinessParams
+from krama.domain.autonomy import AutonomyPolicy, Decision, decide
+from krama.domain.diff import BlastRadius, ChangeKind, diff_plans
+from krama.domain.enums import CommitmentState
+from krama.domain.invariants import (
     ValidationConfig,
     summarize,
     validate_against_baseline,
     validate_plan,
 )
-from glass_guru.domain.models import PlanVersion, TimeWindow
-from glass_guru.domain.state import Unavailability, fold
-from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
-from glass_guru.persistence.log import PlanConflict, Workspace
-from glass_guru.scheduler.day_planner import SolveParams
-from glass_guru.scheduler.horizon import HorizonParams, plan_horizon
-from glass_guru.scheduler.repair import (
+from krama.domain.models import PlanVersion, TimeWindow
+from krama.domain.state import Unavailability, fold
+from krama.fixtures.sample_business import WEEK_START, _at, seed_events
+from krama.persistence.log import PlanConflict, Workspace
+from krama.scheduler.day_planner import SolveParams
+from krama.scheduler.horizon import HorizonParams, plan_horizon
+from krama.scheduler.repair import (
     RepairOptions,
     carve_out_locked,
     locked_jobs,
@@ -426,9 +426,9 @@ def test_a_retime_that_overruns_the_promised_end_is_customer_visible():
     """
     from datetime import datetime
 
-    from glass_guru.domain.diff import ChangeKind, JobChange, Placement
-    from glass_guru.domain.enums import CommitmentState
-    from glass_guru.domain.models import TimeWindow
+    from krama.domain.diff import ChangeKind, JobChange, Placement
+    from krama.domain.enums import CommitmentState
+    from krama.domain.models import TimeWindow
 
     tz = UTC
     window = TimeWindow(

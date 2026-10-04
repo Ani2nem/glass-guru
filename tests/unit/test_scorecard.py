@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from glass_guru.evals.core import REGRESSION_TOLERANCE
-from glass_guru.evals.scorecard import merge, render
+from krama.evals.core import REGRESSION_TOLERANCE
+from krama.evals.scorecard import merge, render
 
 
 def report(

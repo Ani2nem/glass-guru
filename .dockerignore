@@ -8,7 +8,7 @@ docs/
 infra/
 docker/
 scripts/
-.glass-guru/
+.krama/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/

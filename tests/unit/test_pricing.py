@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from glass_guru.config import BusinessParams
-from glass_guru.domain.enums import Priority, ServiceType
-from glass_guru.domain.models import GlassSpec, Job, Location
-from glass_guru.fixtures.sample_business import _at
-from glass_guru.scheduler.pricing import quote_for
+from krama.config import BusinessParams
+from krama.domain.enums import Priority, ServiceType
+from krama.domain.models import GlassSpec, Job, Location
+from krama.fixtures.sample_business import _at
+from krama.scheduler.pricing import quote_for
 
 WHEN = _at(0, 8)
 

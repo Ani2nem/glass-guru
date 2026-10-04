@@ -45,7 +45,7 @@ provider "aws" {
   region = var.region
   default_tags {
     tags = {
-      Project   = "glass-guru"
+      Project   = "krama"
       ManagedBy = "terraform"
       Stack     = "app"
     }
@@ -55,7 +55,7 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  name       = "glass-guru"
+  name       = "krama"
   account_id = data.aws_caller_identity.current.account_id
 }
 

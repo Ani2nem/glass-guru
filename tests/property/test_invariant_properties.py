@@ -16,15 +16,15 @@ from zoneinfo import ZoneInfo
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from glass_guru.domain.enums import CommitmentState, ViolationCode
-from glass_guru.domain.events import Event, JobCancelled, VanUnavailable, WorkerUnavailable
-from glass_guru.domain.invariants import ValidationConfig, summarize, validate_plan
-from glass_guru.domain.models import CrewRoute, PlanVersion
-from glass_guru.domain.state import WorldState, fold
-from glass_guru.fixtures.sample_business import seed_events
-from glass_guru.scheduler.day_planner import SolveParams, plan_day
-from glass_guru.scheduler.travel.base import TimeBucket
-from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+from krama.domain.enums import CommitmentState, ViolationCode
+from krama.domain.events import Event, JobCancelled, VanUnavailable, WorkerUnavailable
+from krama.domain.invariants import ValidationConfig, summarize, validate_plan
+from krama.domain.models import CrewRoute, PlanVersion
+from krama.domain.state import WorldState, fold
+from krama.fixtures.sample_business import seed_events
+from krama.scheduler.day_planner import SolveParams, plan_day
+from krama.scheduler.travel.base import TimeBucket
+from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 from tests.property.strategies import DAY, TZ, at, worlds
 
 TRAVEL = SyntheticTravelProvider()
@@ -148,7 +148,7 @@ def test_losing_a_worker_never_makes_the_day_cheaper(world: WorldState) -> None:
     were then costs under different assumptions. Pinning the bucket holds the matrix
     still so the comparison means something.
     """
-    from glass_guru.domain.state import Unavailability
+    from krama.domain.state import Unavailability
 
     before = solve(world, travel_bucket=TimeBucket.PM_PEAK)
     victim = sorted(world.workers)[0]

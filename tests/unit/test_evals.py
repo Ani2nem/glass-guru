@@ -15,15 +15,15 @@ from typing import Any
 
 import pytest
 
-from glass_guru.agents.llm.base import LLMRequest, LLMResponse
-from glass_guru.evals.core import (
+from krama.agents.llm.base import LLMRequest, LLMResponse
+from krama.evals.core import (
     CaseResult,
     Tier,
     build_report,
     compare,
 )
-from glass_guru.evals.runners import _load, run_extraction, run_invariants, run_scenarios
-from glass_guru.evals.scoring import (
+from krama.evals.runners import _load, run_extraction, run_invariants, run_scenarios
+from krama.evals.scoring import (
     CALL_FIELDS,
     FieldSpec,
     Match,
@@ -239,7 +239,7 @@ def _as_triage(expect: dict[str, Any]) -> dict[str, Any]:
 
 @pytest.fixture
 def frozen_travel(monkeypatch):
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "frozen")
+    monkeypatch.setenv("KRAMA_TRAVEL", "frozen")
 
 
 def test_a_correct_model_scores_near_the_top(frozen_travel):
@@ -280,7 +280,7 @@ def test_scenarios_assert_outcomes_and_pass(frozen_travel):
 
 def test_every_scenario_in_the_library_has_an_envelope():
     """A scenario nobody asserted anything about is a scenario that cannot fail."""
-    from glass_guru.fixtures import scenarios as library
+    from krama.fixtures import scenarios as library
 
     covered = {c["scenario"] for c in _load("scenarios")["cases"]}
     assert covered == set(library.SCENARIOS)
@@ -297,7 +297,7 @@ def test_the_datasets_say_they_are_synthetic():
 
 
 def test_the_checker_still_catches_every_mutation(frozen_travel):
-    from glass_guru.evals.runners import run_checker_detection
+    from krama.evals.runners import run_checker_detection
 
     results = run_checker_detection()
     assert results
@@ -313,8 +313,8 @@ def test_removing_a_check_fails_the_gate(frozen_travel, monkeypatch):
     violations at all scored a hundred percent. Deleting the certification check and
     watching the gate pass is what surfaced this.
     """
-    from glass_guru.domain import invariants
-    from glass_guru.evals.runners import run_checker_detection
+    from krama.domain import invariants
+    from krama.evals.runners import run_checker_detection
 
     original = invariants._check_crew_fitness
     monkeypatch.setattr(invariants, "_check_crew_fitness", lambda plan, world: [])
@@ -329,7 +329,7 @@ def test_removing_a_check_fails_the_gate(frozen_travel, monkeypatch):
 
 def test_every_mutation_names_a_distinct_defect():
     """A mutation whose expected code another already covers adds nothing."""
-    from glass_guru.evals.runners import MUTATIONS
+    from krama.evals.runners import MUTATIONS
 
     assert len({m.name for m in MUTATIONS}) == len(MUTATIONS)
     assert all(m.why for m in MUTATIONS)
@@ -338,7 +338,7 @@ def test_every_mutation_names_a_distinct_defect():
 def test_mutations_do_not_leak_state_between_cases(frozen_travel):
     """Some mutations alter the world. A leaked change would silently weaken the next
     case, and a weakened case is one that cannot fail."""
-    from glass_guru.evals.runners import run_checker_detection
+    from krama.evals.runners import run_checker_detection
 
     first = run_checker_detection()
     second = run_checker_detection()

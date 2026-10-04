@@ -12,11 +12,11 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from glass_guru.config import BusinessParams
-from glass_guru.domain.models import Location
-from glass_guru.domain.travel import TravelLeg
-from glass_guru.fixtures.sample_business import BUSINESS_TZ, DEPOT, JOBS, _at
-from glass_guru.scheduler.travel.cache import (
+from krama.config import BusinessParams
+from krama.domain.models import Location
+from krama.domain.travel import TravelLeg
+from krama.fixtures.sample_business import BUSINESS_TZ, DEPOT, JOBS, _at
+from krama.scheduler.travel.cache import (
     CacheMiss,
     CachingTravelProvider,
     JsonLegStore,
@@ -24,8 +24,8 @@ from glass_guru.scheduler.travel.cache import (
     MemoryLegStore,
     MissPolicy,
 )
-from glass_guru.scheduler.travel.factory import TravelMode, build_travel
-from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+from krama.scheduler.travel.factory import TravelMode, build_travel
+from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 
 
 class CountingProvider:
@@ -195,7 +195,7 @@ def test_missing_snapshot_explains_how_to_build_one(tmp_path):
 def test_bucket_boundaries_are_stable_across_a_day():
     """Sanity on the bucket function itself: a working day touches every bucket
     exactly where expected, which is what the snapshot's probe times rely on."""
-    from glass_guru.scheduler.travel.base import TimeBucket, bucket_for
+    from krama.scheduler.travel.base import TimeBucket, bucket_for
 
     day = datetime(2026, 9, 21, 0, 0, tzinfo=BUSINESS_TZ)
     seen = [bucket_for(day + timedelta(hours=h)) for h in (6, 8, 12, 16, 19)]

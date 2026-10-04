@@ -14,14 +14,14 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from glass_guru.config import BusinessParams
-from glass_guru.domain.enums import UnservedReason
-from glass_guru.domain.invariants import ValidationConfig, summarize, validate_plan
-from glass_guru.domain.models import PlanVersion
-from glass_guru.domain.state import Unavailability, WorldState
-from glass_guru.fixtures.sample_business import WEEK_START, _at
-from glass_guru.scheduler.day_planner import SolveParams
-from glass_guru.scheduler.horizon import (
+from krama.config import BusinessParams
+from krama.domain.enums import UnservedReason
+from krama.domain.invariants import ValidationConfig, summarize, validate_plan
+from krama.domain.models import PlanVersion
+from krama.domain.state import Unavailability, WorldState
+from krama.fixtures.sample_business import WEEK_START, _at
+from krama.scheduler.day_planner import SolveParams
+from krama.scheduler.horizon import (
     HorizonParams,
     HorizonResult,
     _sector_of,
@@ -161,7 +161,7 @@ def test_day_capacity_counts_only_available_certified_time(world, tz, business):
 
     assert after.total_person_minutes < before.total_person_minutes
     assert after.worker_count == before.worker_count - 1
-    from glass_guru.domain.enums import Certification
+    from krama.domain.enums import Certification
 
     assert (
         after.by_certification[Certification.COMMERCIAL_STOREFRONT]
@@ -259,7 +259,7 @@ def test_waiting_for_a_window_reprices_travel_at_the_real_departure(world, trave
     """
     from datetime import timedelta
 
-    from glass_guru.scheduler.routing import materialize_route
+    from krama.scheduler.routing import materialize_route
 
     # Chen opens at 09:00; leaving the depot at 06:00 arrives far too early.
     route = materialize_route(

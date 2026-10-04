@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from glass_guru.agents.comms import DraftMessage, verify_house_style
-from glass_guru.evals.judge import MIN_AGREEMENT, Calibration, load_labels
+from krama.agents.comms import DraftMessage, verify_house_style
+from krama.evals.judge import MIN_AGREEMENT, Calibration, load_labels
 
 
 def draft(body: str, channel: str = "sms") -> DraftMessage:

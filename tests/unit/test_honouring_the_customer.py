@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from glass_guru.agents.intake import (
+from krama.agents.intake import (
     CallExtraction,
     _distrust_a_size_read_as_a_count,
     _fix_the_direction,
@@ -22,14 +22,14 @@ def test_a_town_is_refused_as_an_address():
     """ "Haslet" matches an administrative boundary covering the whole town, and
     quoting against its centroid is a real-looking price for a journey to nowhere in
     particular."""
-    from glass_guru.geocoding import AddressTooVague, Geocoder
+    from krama.geocoding import AddressTooVague, Geocoder
 
     with pytest.raises(AddressTooVague):
         Geocoder._refuse_an_area("Haslet", {"precision": "area", "display_name": "Haslet, Texas"})
 
 
 def test_a_street_or_a_house_is_accepted():
-    from glass_guru.geocoding import Geocoder
+    from krama.geocoding import Geocoder
 
     Geocoder._refuse_an_area("2nd Ave", {"precision": "road"})
     Geocoder._refuse_an_area("420 Main St", {"precision": "house"})
@@ -140,8 +140,8 @@ def test_a_contradictory_pair_drops_the_upper_bound():
 def test_work_past_the_shift_is_charged_at_the_rate_it_is_paid():
     """A four-o'clock start on a two-hour job keeps a fitter an hour late. We pay time
     and a half for that hour; if we do not bill it, the margin quietly absorbs it."""
-    from glass_guru.config import BusinessParams
-    from glass_guru.scheduler.pricing import quote_for
+    from krama.config import BusinessParams
+    from krama.scheduler.pricing import quote_for
     from tests.unit.test_pricing import job
 
     business = BusinessParams.load()
@@ -161,7 +161,7 @@ def test_an_invented_commitment_is_not_priced():
     """ "fixed on monday morning" came back with time_off_work and the quote "time off
     work" - words James never said. The model was asked to price goodwill and invented
     the receipt. Every quote must appear in the transcript."""
-    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+    from krama.agents.intake import CommitmentSignal, grounded_commitments
 
     call = CallExtraction(
         commitment_signals=[CommitmentSignal.TIME_OFF_WORK],
@@ -173,7 +173,7 @@ def test_an_invented_commitment_is_not_priced():
 
 
 def test_a_commitment_the_caller_voiced_survives_punctuation():
-    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+    from krama.agents.intake import CommitmentSignal, grounded_commitments
 
     call = CallExtraction(
         commitment_signals=[CommitmentSignal.TIME_OFF_WORK],
@@ -186,8 +186,8 @@ def test_a_commitment_the_caller_voiced_survives_punctuation():
 def test_a_street_the_caller_never_said_is_challenged():
     """ "16 Haslet, Texas" resolves cleanly to 16 Avondale Haslet Road - a real front
     door nobody asked for a van at. Nominatim is helpful to a fault."""
-    from glass_guru.agents.intake import _the_map_guessed
-    from glass_guru.domain.models import Location
+    from krama.agents.intake import _the_map_guessed
+    from krama.domain.models import Location
 
     guessed = _the_map_guessed(
         "16 Haslet, Texas", Location(lat=33.0, lon=-97.3, matched_road="Avondale Haslet Road")
@@ -196,8 +196,8 @@ def test_a_street_the_caller_never_said_is_challenged():
 
 
 def test_a_street_the_caller_did_say_is_not():
-    from glass_guru.agents.intake import _the_map_guessed
-    from glass_guru.domain.models import Location
+    from krama.agents.intake import _the_map_guessed
+    from krama.domain.models import Location
 
     spoken = "300 W Byron Nelson Blvd, Roanoke TX"
     matched = Location(lat=33.0, lon=-97.2, matched_road="West Byron Nelson Boulevard")
@@ -208,7 +208,7 @@ def test_nobody_is_offered_the_crack_of_dawn_they_did_not_ask_for():
     """ "The morning" made the model guess earliest_hour 6, and the search offered
     every customer the start of Marcus's shift. Below eight stands only when the
     caller typed the early hour themselves."""
-    from glass_guru.agents.intake import _civil_floor
+    from krama.agents.intake import _civil_floor
 
     assert _civil_floor(CallExtraction(earliest_hour=6), "the morning please").earliest_hour == 8
     assert _civil_floor(CallExtraction(earliest_hour=6), "after 6am works").earliest_hour == 6
@@ -231,7 +231,7 @@ def test_urgency_and_availability_price_nothing(quote: str):
     the transcript, so grounding passed - but wanting it soon, or saying when you are
     free, is not arranging your day around us. A priced quote must name something
     given up or organised."""
-    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+    from krama.agents.intake import CommitmentSignal, grounded_commitments
 
     call = CallExtraction(
         commitment_signals=[CommitmentSignal.WAITING_IN], commitment_quotes=[quote]
@@ -249,7 +249,7 @@ def test_urgency_and_availability_price_nothing(quote: str):
     ],
 )
 def test_a_real_arrangement_is_still_priced(quote: str):
-    from glass_guru.agents.intake import CommitmentSignal, grounded_commitments
+    from krama.agents.intake import CommitmentSignal, grounded_commitments
 
     call = CallExtraction(
         commitment_signals=[CommitmentSignal.WAITING_IN], commitment_quotes=[quote]
@@ -259,7 +259,7 @@ def test_a_real_arrangement_is_still_priced(quote: str):
 
 def test_a_size_by_comparison_answers_the_size_question():
     """ "About the size of a door" tells a glazier more than most numbers would."""
-    from glass_guru.agents.intake import _still_unanswered
+    from krama.agents.intake import _still_unanswered
 
     asks = ("rough size", "ground floor or upstairs")
     left = _still_unanswered(asks, CallExtraction(), "ground floor, about the size of a door")
@@ -269,7 +269,7 @@ def test_a_size_by_comparison_answers_the_size_question():
 def test_a_refused_number_is_asked_about_differently():
     """ "His number is 894892894" and silence are different situations, and "Ask for a
     callback number" answers only the second."""
-    from glass_guru.agents.intake import _a_number_was_attempted
+    from krama.agents.intake import _a_number_was_attempted
 
     assert _a_number_was_attempted("his number is 894892894")
     assert _a_number_was_attempted("call 913 295 23 48")
@@ -284,11 +284,11 @@ def test_the_evening_rolls_the_window_to_tomorrow(monkeypatch):
     gone - because the search never knew the time of day."""
     from datetime import date, datetime
 
-    import glass_guru.api.main as api_main
-    from glass_guru.api.main import _booking_clock
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import BUSINESS_TZ, seed_events
-    from glass_guru.service import DispatchService
+    import krama.api.main as api_main
+    from krama.api.main import _booking_clock
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import BUSINESS_TZ, seed_events
+    from krama.service import DispatchService
 
     world = fold(seed_events(with_jobs=False))
 
@@ -301,7 +301,7 @@ def test_the_evening_rolls_the_window_to_tomorrow(monkeypatch):
 
     svc = DispatchService.__new__(DispatchService)
     svc.tz = BUSINESS_TZ  # type: ignore[assignment]  # a fixed-offset tz is a tz
-    from glass_guru.config import BusinessParams
+    from krama.config import BusinessParams
 
     svc.business = BusinessParams.load()
     start, _not_before = _booking_clock(svc, world, duration_min=120)
@@ -323,18 +323,18 @@ def test_the_horizon_is_working_days_not_calendar_days():
     import tempfile
     from datetime import date
 
-    from glass_guru.fixtures.sample_business import seed_events
-    from glass_guru.persistence.log import Workspace
-    from glass_guru.service import DispatchService
+    from krama.fixtures.sample_business import seed_events
+    from krama.persistence.log import Workspace
+    from krama.service import DispatchService
 
     tmp = pathlib.Path(tempfile.mkdtemp())
     ws = Workspace(tmp / "ws")
     ws.seed(seed_events(with_jobs=False))
     svc = DispatchService(ws, travel_mode="synthetic")
 
-    from glass_guru.domain.enums import Certification, ServiceType
-    from glass_guru.domain.models import GlassSpec, Job, Location
-    from glass_guru.fixtures.sample_business import _at
+    from krama.domain.enums import Certification, ServiceType
+    from krama.domain.models import GlassSpec, Job, Location
+    from krama.fixtures.sample_business import _at
 
     draft = Job(
         id="draft",
@@ -359,11 +359,11 @@ def test_only_thursdays_means_thursdays():
     import tempfile
     from datetime import date
 
-    from glass_guru.domain.enums import Certification, ServiceType
-    from glass_guru.domain.models import GlassSpec, Job, Location
-    from glass_guru.fixtures.sample_business import _at, seed_events
-    from glass_guru.persistence.log import Workspace
-    from glass_guru.service import DispatchService
+    from krama.domain.enums import Certification, ServiceType
+    from krama.domain.models import GlassSpec, Job, Location
+    from krama.fixtures.sample_business import _at, seed_events
+    from krama.persistence.log import Workspace
+    from krama.service import DispatchService
 
     tmp = pathlib.Path(tempfile.mkdtemp())
     ws = Workspace(tmp / "ws")
@@ -389,11 +389,11 @@ def test_only_thursdays_means_thursdays():
 def test_one_qualified_name_is_called_a_single_point_of_failure():
     """Dan is literally the only person who can do after-four residential work.
     The system knew and never said; now every slot says it."""
-    from glass_guru.api.main import _capable_then
-    from glass_guru.domain.enums import Certification, ServiceType
-    from glass_guru.domain.models import GlassSpec, Job, Location
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
+    from krama.api.main import _capable_then
+    from krama.domain.enums import Certification, ServiceType
+    from krama.domain.models import GlassSpec, Job, Location
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import WEEK_START, _at, seed_events
 
     world = fold(seed_events(with_jobs=False))
     draft = Job(
@@ -426,9 +426,9 @@ def test_already_booked_is_claimed_only_from_the_committed_plan():
     no look at who is routed; a message the calendar can contradict is worse than
     no message."""
 
-    from glass_guru.api.main import _bottleneck_or
-    from glass_guru.domain.enums import Certification, CommitmentState, ServiceType
-    from glass_guru.domain.models import (
+    from krama.api.main import _bottleneck_or
+    from krama.domain.enums import Certification, CommitmentState, ServiceType
+    from krama.domain.models import (
         CrewRoute,
         GlassSpec,
         Job,
@@ -436,8 +436,8 @@ def test_already_booked_is_claimed_only_from_the_committed_plan():
         Stop,
         TimeWindow,
     )
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, seed_events
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, seed_events
 
     world = fold(seed_events(with_jobs=False))
     # Ani: residential, CONFIRMED 8-12, and in the committed plan she is MARCUS's.
@@ -515,11 +515,11 @@ def test_no_crew_ask_when_hours_are_not_the_blocker():
     8-to-5 - went on a real screen. The ask may only fire when the wanted span runs
     past every candidate's standard reach, because that is the one thing a yes can
     change; a van stock problem is not solved by anybody staying late."""
-    from glass_guru.api.main import _suggest_crew_ask, service
-    from glass_guru.domain.enums import Certification, ServiceType
-    from glass_guru.domain.models import GlassSpec, Job
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
+    from krama.api.main import _suggest_crew_ask, service
+    from krama.domain.enums import Certification, ServiceType
+    from krama.domain.models import GlassSpec, Job
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import WEEK_START, _at, seed_events
 
     svc = service()
     world = fold(seed_events(with_jobs=False))
