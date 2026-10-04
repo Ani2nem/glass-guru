@@ -8,7 +8,7 @@ import { TodayPanel } from "./components/TodayPanel";
 import { RouteMap } from "./components/RouteMap";
 import type { Plan, Week, World } from "./types";
 
-type View = "board" | "map";
+type View = "board" | "map" | "crew";
 
 /**
  * A violation as a dispatcher would say it.
@@ -252,6 +252,9 @@ export default function App() {
             <button className={view === "map" ? "on" : ""} onClick={() => setView("map")}>
               Map
             </button>
+            <button className={view === "crew" ? "on" : ""} onClick={() => setView("crew")}>
+              Crew
+            </button>
             {view === "map" && (
               <select value={day ?? ""} onChange={(e) => setDay(e.target.value || null)}>
                 <option value="">all days</option>
@@ -369,6 +372,9 @@ export default function App() {
             </>
           )}
           {plan && view === "map" && <RouteMap plan={plan} day={day} />}
+          {world && view === "crew" && (
+            <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />
+          )}
 
           {plan && plan.unserved.length > 0 && (
             <section className="unserved">
@@ -389,7 +395,6 @@ export default function App() {
           )}
         </main>
 
-        {world && <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />}
         </div>
       </div>
 

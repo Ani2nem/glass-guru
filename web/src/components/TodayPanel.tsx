@@ -97,7 +97,7 @@ export function TodayPanel({
   }
 
   return (
-    <section className="panel panel--today">
+    <section className="crewcard">
       <div className="rota__split">
       <div className="rota__left">
       <h2>Crew availability</h2>
