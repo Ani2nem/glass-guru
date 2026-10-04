@@ -590,9 +590,15 @@ _AFTER = re.compile(
 #: "before 9", "by 9", "until 9" - an upper bound.
 _BEFORE = re.compile(
     # "not before 8" is a lower bound wearing an upper bound's words, so the negated
-    # forms are excluded here and caught by _AFTER instead.
+    # forms are excluded here and caught by _AFTER instead. The number must not wear
+    # a unit: "8ft by 8ft" put "before 8:00 AM" on a caller who never mentioned the
+    # clock, because "by 8" is both a deadline and half of a measurement.
     r"(?<!not )(?<!no )(?<!earlier than )"
+    # A digit or unit right before the keyword means a measurement ("3 by 4",
+    # "8ft by 8ft"), not a deadline.
+    r"(?<![0-9] )(?<![0-9])(?<!ft )(?<!feet )(?<!inch )(?<!inches )"
     r"\b(?:before|by|until|till|til|no later than)\s+(\d{1,2})\s*"
+    r"(?!\s*(?:ft|feet|foot|in\b|inch|inches|mm|cm|m\b|meter|metre|x\b|by\b|'|\"))"
     r"(?::\s*(\d{2}))?\s*(am|pm|o'?clock)?",
     re.IGNORECASE,
 )

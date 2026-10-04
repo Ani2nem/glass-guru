@@ -91,6 +91,12 @@ def test_a_real_count_survives(text: str, extracted: int):
         ("can you arrive at 10", 10, None),
         ("we open at 9am and the front glass is broken", None, None),
         ("any time that suits", None, None),
+        # Dimensions are not deadlines. "8ft by 8ft" put "before 8:00 AM" on a
+        # caller who never mentioned the clock - "by 8" is both a deadline and
+        # half of a measurement, and only the units and neighbours tell them apart.
+        ("needs her aquarium glass fixed 8ft by 8ft", None, None),
+        ("a pane 3 by 4", None, None),
+        ("two panes, 30 by 40 inches, by 5pm if you can", None, 17),
     ],
 )
 def test_a_stated_bound_lands_on_the_side_it_was_said(

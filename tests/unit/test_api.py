@@ -611,7 +611,14 @@ def test_cancelling_a_job_that_is_not_there_says_so(client: TestClient):
     assert "reload" in response.json()["detail"]["remedy"]
 
 
-def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient):
+def _next_monday() -> str:
+    from datetime import date, timedelta
+
+    today = date.today()
+    return (today + timedelta(days=(7 - today.weekday()) % 7 or 7)).isoformat()
+
+
+def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient, monkeypatch):
     """The order of same-second events was decided by random event ids.
 
     New events were stamped with world.as_of - the fold clock, which is the *last
@@ -620,6 +627,7 @@ def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient):
     confirmation folded after the cancellation and quietly resurrected it. Roughly a
     coin flip, live. Wall-clock stamps make the order the order it happened in.
     """
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
     draft = {
         "customer_name": "Maria",
         "phone": "9132934243",
@@ -633,8 +641,10 @@ def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient):
         "lat": 32.99,
         "lon": -97.36,
     }
+    # A future Monday: the fixture week is behind the real clock, and the API now
+    # (correctly) refuses to book the past.
     booked = client.post(
-        "/api/book", json={"draft": draft, "date": "2026-09-21", "arrival": "16:00"}
+        "/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "16:00"}
     ).json()
     assert booked["status"] in {"scheduled", "booked but not yet scheduled"}
 
@@ -647,9 +657,10 @@ def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient):
     )
 
 
-def test_the_transcript_survives_from_call_to_reschedule(client: TestClient):
+def test_the_transcript_survives_from_call_to_reschedule(client: TestClient, monkeypatch):
     """A reschedule starts from what the caller originally said, not from a
     dispatcher's memory of it. The words ride on the job's provenance."""
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
     said = "Maria needs glass fixed at 4pm monday, took time off, 9132934243, 14400 Artisan Dr"
     draft = {
         "customer_name": "Maria",
@@ -666,7 +677,7 @@ def test_the_transcript_survives_from_call_to_reschedule(client: TestClient):
     }
     booked = client.post(
         "/api/book",
-        json={"draft": draft, "date": "2026-09-21", "arrival": "16:00", "transcript": said},
+        json={"draft": draft, "date": _next_monday(), "arrival": "16:00", "transcript": said},
     ).json()
 
     world = client.get("/api/world").json()
@@ -1149,3 +1160,57 @@ def test_job_ids_never_recount(client: TestClient, monkeypatch):
     client.post(f"/api/jobs/{first}/cancel")
     second = book()
     assert second != first, "a cancelled booking's id must never be reissued"
+
+
+def test_the_last_van_cannot_be_removed(client: TestClient):
+    """The last van carries the only record of the depot - every new van and fitter
+    copies its home from an existing one. A test that emptied the garage found it
+    could never refill it: nothing left to copy from, fleet bricked for good."""
+    for van_id in ("van-2", "van-3", "van-4"):
+        assert client.delete(f"/api/config/van/{van_id}").json()["status"] == "removed"
+    refused = client.delete("/api/config/van/van-1")
+    assert refused.status_code == 409
+    assert "depot" in refused.json()["detail"]["detail"]
+    # the documented way out works: add first, then retire
+    added = client.post("/api/config/van", json={"id": "", "label": ""}).json()
+    assert client.delete("/api/config/van/van-1").json()["status"] == "removed"
+    vans = {v["id"] for v in client.get("/api/world").json()["vans"]}
+    assert vans == {added["van_id"]}
+
+
+def test_the_past_cannot_be_booked_and_cancel_tells_the_truth_twice(
+    client: TestClient, monkeypatch
+):
+    """Two honesty holes from an adversarial pass: the API accepted a booking for a
+    date already behind the clock (a confirmed ghost no plan can serve), and a second
+    cancel of the same job reported "freed" again - a log event and a replan for an
+    action that changed nothing."""
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    draft = {
+        "customer_name": "Ghost",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    past = client.post("/api/book", json={"draft": draft, "date": "2026-09-01", "arrival": "10:00"})
+    assert past.status_code == 422
+    assert "already happened" in past.json()["detail"]["detail"]
+
+    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    booked = client.post(
+        "/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "09:00"}
+    ).json()
+    assert client.post(f"/api/jobs/{booked['job_id']}/cancel").json()["status"] == "freed"
+    second = client.post(f"/api/jobs/{booked['job_id']}/cancel")
+    assert second.status_code == 409
+    assert "already cancelled" in second.json()["detail"]["detail"]

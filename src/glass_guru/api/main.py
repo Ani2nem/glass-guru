@@ -1069,6 +1069,21 @@ def book_slot(request: BookRequest) -> dict[str, str]:
         # book and cancel identical timestamps, where ordering falls to the random
         # event id and a cancellation can fold *before* the confirmation it undoes.
         now = datetime.now(svc.tz)
+        arrival_probe = datetime.fromisoformat(f"{request.date}T{request.arrival}").replace(
+            tzinfo=svc.tz
+        )
+        if arrival_probe < now:
+            # The board can only offer future slots, but the API could be handed
+            # yesterday - and a confirmed promise in the past is a ghost no plan can
+            # ever serve, sitting on the books forever.
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "SlotInThePast",
+                    "detail": f"{request.date} {request.arrival} has already happened",
+                    "remedy": "read the call again for current slots",
+                },
+            )
         # Highest existing suffix plus one, never a recount: len() shrinks if ids
         # ever leave the dict and two same-moment bookings would mint twins.
         taken = [int(jid.split("-")[-1]) for jid in world.jobs if jid.split("-")[-1].isdigit()]
@@ -1387,8 +1402,22 @@ def remove_van(van_id: str) -> dict[str, str]:
 
     svc = service()
     with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.remove_van"):
-        if van_id not in svc.world().vans:
+        world = svc.world()
+        if van_id not in world.vans:
             raise HTTPException(404, detail={"error": "NoSuchVan", "detail": van_id})
+        if len(world.vans) <= 1:
+            # The last van carries the only record of the depot - every new van and
+            # every new fitter copies its home from an existing one. Deleting it
+            # bricked the fleet: nothing left to copy from, nothing addable, found
+            # by a test that emptied the garage and could not refill it.
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "LastVan",
+                    "detail": "the last van carries the depot record and cannot be removed",
+                    "remedy": "add the replacement van first, then retire this one",
+                },
+            )
         now = datetime.now(svc.tz)
         svc.apply_events(
             [
@@ -1727,6 +1756,7 @@ def cancel_job(job_id: str, reason: str = Query(default="customer cancelled")) -
     The re-plan runs immediately, because a cancelled job still sitting on the board is
     a slot a dispatcher will not offer to the next caller.
     """
+    from glass_guru.domain.enums import CommitmentState
     from glass_guru.domain.events import JobCancelled
 
     svc = service()
@@ -1740,6 +1770,18 @@ def cancel_job(job_id: str, reason: str = Query(default="customer cancelled")) -
                     "error": "NoSuchJob",
                     "detail": f"{job_id} is not in the diary",
                     "remedy": "it may already be cancelled; reload the board",
+                },
+            )
+        if job.commitment_state is CommitmentState.CANCELLED:
+            # Cancelling twice used to report "freed" twice - a second event in the
+            # log, a second replan, and a message claiming an action that changed
+            # nothing. Saying so is cheaper than pretending.
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "AlreadyCancelled",
+                    "detail": f"{job.customer_name or job_id} was already cancelled",
+                    "remedy": "nothing to do - reload the board",
                 },
             )
         now = datetime.now(svc.tz)
