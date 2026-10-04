@@ -21,6 +21,11 @@ const ALL_CERTS = [
   "shower_door",
 ];
 
+/** "residential glazing", not "rg". The first version squeezed six checkboxes with
+ * two-letter codes into one table column, which overflowed the sheet and meant
+ * nothing to anyone; the certifications get a wrapping line of named pills now. */
+const certLabel = (cert: string) => cert.replace(/_/g, " ");
+
 interface Row {
   id: string;
   name: string;
@@ -98,35 +103,23 @@ export function ConfigPanel({
           </button>
         </header>
 
-        <table className="config__table">
-          <thead>
-            <tr>
-              <th>name</th>
-              <th>phone</th>
-              <th>shift</th>
-              <th>OT</th>
-              <th>certifications</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.id || `new-${index}`}>
-                <td>
-                  <input
-                    value={row.name}
-                    placeholder="name"
-                    onChange={(e) => edit(index, { name: e.target.value })}
-                  />
-                </td>
-                <td>
-                  <input
-                    value={row.phone}
-                    placeholder="+1…"
-                    onChange={(e) => edit(index, { phone: e.target.value })}
-                  />
-                </td>
-                <td className="config__shift">
+        <div className="config__rows">
+          {rows.map((row, index) => (
+            <div className="cfgrow" key={row.id || `new-${index}`}>
+              <div className="cfgrow__main">
+                <input
+                  className="cfgrow__name"
+                  value={row.name}
+                  placeholder="name"
+                  onChange={(e) => edit(index, { name: e.target.value })}
+                />
+                <input
+                  className="cfgrow__phone"
+                  value={row.phone}
+                  placeholder="+1 817…"
+                  onChange={(e) => edit(index, { phone: e.target.value })}
+                />
+                <span className="cfgrow__shift">
                   <input
                     type="time"
                     value={row.shift_start}
@@ -138,40 +131,21 @@ export function ConfigPanel({
                     value={row.shift_end}
                     onChange={(e) => edit(index, { shift_end: e.target.value })}
                   />
-                </td>
-                <td>
+                </span>
+                <label className="cfgrow__ot" title="may work past shift on overtime">
                   <input
                     type="checkbox"
                     checked={row.overtime_eligible}
-                    title="may work past shift on overtime"
                     onChange={(e) => edit(index, { overtime_eligible: e.target.checked })}
                   />
-                </td>
-                <td className="config__certs">
-                  {ALL_CERTS.map((cert) => (
-                    <label key={cert} title={cert.replace(/_/g, " ")}>
-                      <input
-                        type="checkbox"
-                        checked={row.certifications.includes(cert)}
-                        onChange={(e) =>
-                          edit(index, {
-                            certifications: e.target.checked
-                              ? [...row.certifications, cert]
-                              : row.certifications.filter((c) => c !== cert),
-                          })
-                        }
-                      />
-                      {cert
-                        .split("_")
-                        .map((word) => word[0])
-                        .join("")}
-                    </label>
-                  ))}
-                </td>
-                <td className="config__rowactions">
+                  overtime
+                </label>
+                <span className="cfgrow__actions">
                   <button
                     disabled={busy || !row.name.trim()}
-                    onClick={() => void run(() => api.configWorker({ ...row }), `${row.name} saved`)}
+                    onClick={() =>
+                      void run(() => api.configWorker({ ...row }), `${row.name} saved`)
+                    }
                   >
                     Save
                   </button>
@@ -188,11 +162,32 @@ export function ConfigPanel({
                       Remove
                     </button>
                   )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </span>
+              </div>
+              <div className="cfgrow__certs">
+                {ALL_CERTS.map((cert) => {
+                  const on = row.certifications.includes(cert);
+                  return (
+                    <button
+                      key={cert}
+                      type="button"
+                      className={`certpill${on ? " certpill--on" : ""}`}
+                      onClick={() =>
+                        edit(index, {
+                          certifications: on
+                            ? row.certifications.filter((c) => c !== cert)
+                            : [...row.certifications, cert],
+                        })
+                      }
+                    >
+                      {certLabel(cert)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
         <button
           className="config__add"
           disabled={busy}
