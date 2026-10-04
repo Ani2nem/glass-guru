@@ -22,12 +22,12 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from glass_guru.domain.models import CrewRoute, PlanVersion
-from glass_guru.domain.state import fold
-from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
-from glass_guru.persistence.log import PlanConflict, Workspace
+from krama.domain.models import CrewRoute, PlanVersion
+from krama.domain.state import fold
+from krama.fixtures.sample_business import WEEK_START, _at, seed_events
+from krama.persistence.log import PlanConflict, Workspace
 
-BUCKET = "glass-guru-test"
+BUCKET = "krama-test"
 
 
 @pytest.fixture
@@ -212,7 +212,7 @@ def test_two_appends_from_the_same_read_conflict(aws, monkeypatch):
     and only then does `second` try.
     """
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
-    from glass_guru.persistence.s3 import S3EventLog
+    from krama.persistence.s3 import S3EventLog
 
     events = seed_events()
     key = "business/events.jsonl"

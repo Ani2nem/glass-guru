@@ -7,10 +7,10 @@ extra money, and the customer's promise never waits on the group chat.
 
 from __future__ import annotations
 
-from glass_guru.domain.events import OvertimeClaimed, OvertimeOffered
-from glass_guru.domain.state import fold
-from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
-from glass_guru.notify import LogNotifier, RecordingNotifier, TwilioNotifier, build_notifier
+from krama.domain.events import OvertimeClaimed, OvertimeOffered
+from krama.domain.state import fold
+from krama.fixtures.sample_business import WEEK_START, _at, seed_events
+from krama.notify import LogNotifier, RecordingNotifier, TwilioNotifier, build_notifier
 
 
 def _offer(**overrides: object) -> OvertimeOffered:
@@ -63,7 +63,7 @@ def test_status_tracks_the_clock():
 
 
 def test_cancelling_the_job_withdraws_the_offer():
-    from glass_guru.domain.events import JobCancelled
+    from krama.domain.events import JobCancelled
 
     cancelled = JobCancelled(
         event_id="e-cx",
@@ -78,10 +78,10 @@ def test_cancelling_the_job_withdraws_the_offer():
 
 def test_a_claim_pins_the_fitter_in_the_solver(monkeypatch):
     """Ken says yes to j-402's evening; the next solve puts Ken on j-402."""
-    from glass_guru.fixtures.sample_business import BUSINESS_TZ
-    from glass_guru.scheduler.day_planner import SolveParams, plan_day
-    from glass_guru.scheduler.travel.cache import CachingTravelProvider
-    from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+    from krama.fixtures.sample_business import BUSINESS_TZ
+    from krama.scheduler.day_planner import SolveParams, plan_day
+    from krama.scheduler.travel.cache import CachingTravelProvider
+    from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 
     world = fold([*seed_events(), _offer(), _claim("w-ken")])
     travel = CachingTravelProvider(SyntheticTravelProvider())
@@ -99,11 +99,11 @@ def test_a_claim_pins_the_fitter_in_the_solver(monkeypatch):
 def test_the_pin_dissolves_when_the_claimant_is_marked_out():
     """A claim is not a suicide pact: Ken claims, then calls in sick - the job must
     still be served, by somebody else."""
-    from glass_guru.domain.events import WorkerUnavailable
-    from glass_guru.fixtures.sample_business import BUSINESS_TZ
-    from glass_guru.scheduler.day_planner import SolveParams, plan_day
-    from glass_guru.scheduler.travel.cache import CachingTravelProvider
-    from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+    from krama.domain.events import WorkerUnavailable
+    from krama.fixtures.sample_business import BUSINESS_TZ
+    from krama.scheduler.day_planner import SolveParams, plan_day
+    from krama.scheduler.travel.cache import CachingTravelProvider
+    from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 
     sick = WorkerUnavailable(
         event_id="e-sick",
@@ -138,14 +138,14 @@ def test_the_default_notifier_logs_and_never_networks():
 
 
 def test_build_notifier_defaults_to_log_mode(monkeypatch):
-    monkeypatch.delenv("GLASS_GURU_SMS", raising=False)
+    monkeypatch.delenv("KRAMA_SMS", raising=False)
     assert isinstance(build_notifier(), LogNotifier)
 
 
 def test_twilio_mode_refuses_to_start_half_configured(monkeypatch):
     import pytest
 
-    monkeypatch.setenv("GLASS_GURU_SMS", "twilio")
+    monkeypatch.setenv("KRAMA_SMS", "twilio")
     monkeypatch.delenv("TWILIO_ACCOUNT_SID", raising=False)
     with pytest.raises(ValueError, match="TWILIO_ACCOUNT_SID"):
         build_notifier()

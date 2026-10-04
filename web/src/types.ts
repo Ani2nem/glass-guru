@@ -1,4 +1,4 @@
-// Mirrors glass_guru.api.models. Hand-written rather than generated: the board
+// Mirrors krama.api.models. Hand-written rather than generated: the board
 // consumes a deliberately small slice, and a generated client would pull in the whole
 // surface plus its churn.
 

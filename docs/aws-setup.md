@@ -41,7 +41,7 @@ aws configure sso
 #   SSO start URL   : https://<your-directory>.awsapps.com/start
 #   SSO region      : the region your Identity Center lives in
 #   Default region  : us-east-1        (use the one you enabled above)
-#   Profile name    : glass-guru
+#   Profile name    : krama
 
 export AWS_PROFILE=glass-guru
 aws sso login
@@ -54,7 +54,7 @@ treat the key as perishable: delete it when this project is done, and never past
 into a file inside the repository.
 
 ```bash
-aws configure --profile glass-guru     # prompts for key, secret, region
+aws configure --profile krama     # prompts for key, secret, region
 export AWS_PROFILE=glass-guru
 ```
 
@@ -109,7 +109,7 @@ aws bedrock list-foundation-models --region us-east-1 \
   --query "modelSummaries[?contains(modelId,'nova-lite')].modelId" --output text
 
 export AWS_REGION=us-east-1
-glass-guru triage "Dan called, van 3 won't start"
+krama triage "Dan called, van 3 won't start"
 ```
 
 The last command should extract a `van_unavailable` event for `van-3`.
@@ -143,7 +143,7 @@ everything still works.
 
 ```bash
 export LANGSMITH_API_KEY=...        # free tier at smith.langchain.com
-export LANGSMITH_PROJECT=glass-guru
+export LANGSMITH_PROJECT=krama
 ```
 
 Local spans need no account at all:

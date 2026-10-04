@@ -7,7 +7,7 @@
 #
 # As of this writing everything is `estimated`. That is deliberate and visible:
 # the objective is priced in dollars so its trade-offs are arguable, and that
-# argument is only worth having once these are real. `glass-guru params` prints
+# argument is only worth having once these are real. `krama params` prints
 # this table, and any plan built on estimates is rendered with a warning banner.
 
 meta:

@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from glass_guru.domain.enums import CommitmentState, ViolationCode
-from glass_guru.domain.events import VanUnavailable
-from glass_guru.domain.invariants import (
+from krama.domain.enums import CommitmentState, ViolationCode
+from krama.domain.events import VanUnavailable
+from krama.domain.invariants import (
     validate_against_baseline,
     validate_plan,
 )
-from glass_guru.domain.models import Stop, TimeWindow
-from glass_guru.domain.state import Unavailability
-from glass_guru.fixtures.sample_business import WEEK_START
+from krama.domain.models import Stop, TimeWindow
+from krama.domain.state import Unavailability
+from krama.fixtures.sample_business import WEEK_START
 from tests.conftest import PlanBuilder, moment
 
 MONDAY = WEEK_START
@@ -358,8 +358,8 @@ def test_moving_a_provisional_job_is_allowed(plan_builder: PlanBuilder, world, t
 
 def test_events_drive_the_checks_end_to_end(plan_builder: PlanBuilder, travel, config):
     """A van-breakdown event alone must make a previously valid plan infeasible."""
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import sample_world_at
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import sample_world_at
 
     events, now = sample_world_at()
     clean = fold(events, as_of=now)

@@ -14,21 +14,21 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from glass_guru.api.models import TriageView
-from glass_guru.fixtures.sample_business import WEEK_START, seed_events
-from glass_guru.persistence.log import Workspace
+from krama.api.models import TriageView
+from krama.fixtures.sample_business import WEEK_START, seed_events
+from krama.persistence.log import Workspace
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch) -> TestClient:
     workspace = Workspace(tmp_path / "ws")
     workspace.seed(seed_events())
-    monkeypatch.setenv("GLASS_GURU_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KRAMA_WORKSPACE", str(tmp_path / "ws"))
     # Real road distances from the committed snapshot: offline and identical to what a
     # deployment would compute.
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "frozen")
+    monkeypatch.setenv("KRAMA_TRAVEL", "frozen")
 
-    from glass_guru.api.main import app
+    from krama.api.main import app
 
     return TestClient(app)
 
@@ -172,7 +172,7 @@ def test_a_customer_visible_repair_cannot_be_applied_without_approval(
 ):
     """`force` is what a dispatcher's approval looks like over HTTP. The endpoint
     cannot be talked past, only overridden by a person who saw the diff."""
-    from glass_guru.domain import autonomy as autonomy_module
+    from krama.domain import autonomy as autonomy_module
 
     client.post(COMMIT)
     client.post("/api/events", json={"kind": "van-unavailable", "target": "van-1", "at": "10:40"})
@@ -181,7 +181,7 @@ def test_a_customer_visible_repair_cannot_be_applied_without_approval(
     forced = autonomy_module.AutonomyDecision(
         autonomy_module.Decision.ESCALATE, ("a customer would need telling",)
     )
-    monkeypatch.setattr("glass_guru.service.decide", lambda *a, **k: forced)
+    monkeypatch.setattr("krama.service.decide", lambda *a, **k: forced)
 
     response = client.post("/api/repair/apply", params={"strategy": repair["recommended"]})
     assert response.status_code == 412
@@ -259,7 +259,7 @@ def test_readiness_is_ready_when_the_board_is_there(client: TestClient, monkeypa
     that runs the tests has no reason to build it. The check was right and the test was
     reading the developer's working tree.
     """
-    from glass_guru.api import main
+    from krama.api import main
 
     monkeypatch.setattr(main, "WEB_DIST", tmp_path)
     response = client.get("/api/ready")
@@ -270,7 +270,7 @@ def test_readiness_is_ready_when_the_board_is_there(client: TestClient, monkeypa
 def test_readiness_is_degraded_without_the_built_board(client: TestClient, monkeypatch, tmp_path):
     """An image that shipped no board serves a blank page and answers 200 on every API
     route. The load balancer should not call that a healthy target."""
-    from glass_guru.api import main
+    from krama.api import main
 
     monkeypatch.setattr(main, "WEB_DIST", tmp_path / "never-built")
     response = client.get("/api/ready")
@@ -285,8 +285,8 @@ def test_readiness_fails_loudly_when_travel_cannot_answer(client: TestClient, mo
     backend that is not there would serve errors for every solve while the load
     balancer kept sending it traffic.
     """
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "osrm")
-    monkeypatch.setenv("GLASS_GURU_OSRM_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("KRAMA_TRAVEL", "osrm")
+    monkeypatch.setenv("KRAMA_OSRM_URL", "http://127.0.0.1:1")
 
     response = client.get("/api/ready")
     assert response.status_code == 503
@@ -307,10 +307,10 @@ def test_the_readiness_probe_asks_for_a_leg_the_snapshot_holds():
     Asserted against the snapshot directly rather than through the endpoint, because
     the endpoint answers correctly on six days out of seven either way.
     """
-    from glass_guru.api.main import _PROBE_AT
-    from glass_guru.config import BusinessParams
-    from glass_guru.fixtures.sample_business import DEPOT, PROBE_STOP
-    from glass_guru.scheduler.travel.factory import TravelMode, build_travel
+    from krama.api.main import _PROBE_AT
+    from krama.config import BusinessParams
+    from krama.fixtures.sample_business import DEPOT, PROBE_STOP
+    from krama.scheduler.travel.factory import TravelMode, build_travel
 
     assert _PROBE_AT.weekday() < 5, "the business does not run weekends"
 
@@ -322,10 +322,10 @@ def test_the_readiness_probe_asks_for_a_leg_the_snapshot_holds():
 
 def test_the_osrm_url_is_configurable(monkeypatch):
     """Deployed, the routing backend is another host. localhost is a laptop default."""
-    from glass_guru.config import BusinessParams
-    from glass_guru.scheduler.travel.factory import TravelMode, build_travel
+    from krama.config import BusinessParams
+    from krama.scheduler.travel.factory import TravelMode, build_travel
 
-    monkeypatch.setenv("GLASS_GURU_OSRM_URL", "http://osrm.internal:5000")
+    monkeypatch.setenv("KRAMA_OSRM_URL", "http://osrm.internal:5000")
     provider = build_travel(BusinessParams.load(), TravelMode.OSRM)
     assert "osrm.internal" in repr(provider.__dict__), "the env var was not honoured"
 
@@ -339,14 +339,14 @@ def test_the_board_is_told_how_to_watch_for_changes(client: TestClient, monkeypa
     """
     assert client.get("/api/health").json()["stream"] == "sse"
 
-    monkeypatch.setenv("GLASS_GURU_STREAM", "poll")
+    monkeypatch.setenv("KRAMA_STREAM", "poll")
     assert client.get("/api/health").json()["stream"] == "poll"
 
 
 def test_streaming_is_refused_when_it_is_billed_by_the_second(client: TestClient, monkeypatch):
     """An old tab that kept its connection would go on costing money, and a bill is a
     bad way to find out. Refused with a remedy rather than quietly served."""
-    monkeypatch.setenv("GLASS_GURU_STREAM", "poll")
+    monkeypatch.setenv("KRAMA_STREAM", "poll")
     response = client.get("/api/stream")
     assert response.status_code == 409
     assert "poll" in response.json()["detail"]["remedy"]
@@ -360,8 +360,8 @@ def test_an_address_on_the_wrong_coast_is_refused_not_crashed(client: TestClient
     asked the travel snapshot for a leg to New York, 2,403 miles away, and the cache
     miss surfaced as Internal Server Error.
     """
-    from glass_guru.domain.models import Location
-    from glass_guru.geocoding import OutsideServiceArea, for_service_area
+    from krama.domain.models import Location
+    from krama.geocoding import OutsideServiceArea, for_service_area
 
     geocoder = for_service_area()
     manhattan = Location(lat=40.7589, lon=-73.9668, address="2nd Ave, Manhattan")
@@ -376,7 +376,7 @@ def test_an_address_on_the_wrong_coast_is_refused_not_crashed(client: TestClient
 def test_the_search_is_bounded_to_the_service_area():
     """A bias that merely prefers nearby results still returns the far one when nothing
     closer matches, which is exactly the failing case. It has to be a hard bound."""
-    from glass_guru.geocoding import for_service_area
+    from krama.geocoding import for_service_area
 
     box = for_service_area()._viewbox()
     assert box is not None
@@ -392,8 +392,8 @@ def test_the_search_is_bounded_to_the_service_area():
 def test_a_new_address_explains_itself_rather_than_failing(client: TestClient):
     """The frozen snapshot refuses to invent a leg, which is right for tests and wrong
     mid-call. The answer is a remedy, not a stack trace."""
-    from glass_guru.api.main import _travel_cache_miss
-    from glass_guru.scheduler.travel.cache import CacheMiss
+    from krama.api.main import _travel_cache_miss
+    from krama.scheduler.travel.cache import CacheMiss
 
     # The handler ignores the request; typing it honestly beats a None the checker
     # has to be told to overlook.
@@ -409,16 +409,16 @@ def test_a_new_address_explains_itself_rather_than_failing(client: TestClient):
 def test_a_note_is_routed_to_the_right_agent(client: TestClient, monkeypatch):
     """The board used to ask the dispatcher which box to type into, and they got it
     wrong on the first try. The classifier answers instead."""
-    from glass_guru.agents.router import NoteRouting
+    from krama.agents.router import NoteRouting
 
     monkeypatch.setattr(
-        "glass_guru.agents.router.route_note",
+        "krama.agents.router.route_note",
         lambda *_a, **_k: type(
             "E", (), {"value": NoteRouting(kind="disruption", why="a van is off the road")}
         )(),
     )
     monkeypatch.setattr(
-        "glass_guru.api.main.run_triage",
+        "krama.api.main.run_triage",
         lambda request: TriageView(state="ok", summary=request.text),
     )
 
@@ -442,9 +442,9 @@ def test_the_dispatcher_can_overrule_the_classifier(client: TestClient, monkeypa
         called = True
         raise AssertionError("the classifier ran despite an explicit kind")
 
-    monkeypatch.setattr("glass_guru.agents.router.route_note", should_not_run)
+    monkeypatch.setattr("krama.agents.router.route_note", should_not_run)
     monkeypatch.setattr(
-        "glass_guru.api.main.run_triage", lambda request: TriageView(state="ok", summary="")
+        "krama.api.main.run_triage", lambda request: TriageView(state="ok", summary="")
     )
 
     body = client.post("/api/note?kind=disruption", json={"text": "anything"}).json()
@@ -463,7 +463,7 @@ def test_without_a_key_configured_everything_is_open(client: TestClient):
 
 
 def test_with_a_key_configured_an_unauthenticated_call_is_refused(client: TestClient, monkeypatch):
-    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    monkeypatch.setenv("KRAMA_API_KEY", "s3cret")
     response = client.get("/api/world")
     assert response.status_code == 401
     assert "X-API-Key" in response.json()["remedy"]
@@ -478,12 +478,12 @@ def test_with_a_key_configured_an_unauthenticated_call_is_refused(client: TestCl
     ],
 )
 def test_either_header_carries_the_key(client: TestClient, monkeypatch, headers: dict[str, str]):
-    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    monkeypatch.setenv("KRAMA_API_KEY", "s3cret")
     assert client.get("/api/world", headers=headers).status_code == 200
 
 
 def test_a_wrong_key_is_refused(client: TestClient, monkeypatch):
-    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    monkeypatch.setenv("KRAMA_API_KEY", "s3cret")
     assert client.get("/api/world", headers={"X-API-Key": "s3cre"}).status_code == 401
     assert client.get("/api/world", headers={"X-API-Key": "s3cretx"}).status_code == 401
 
@@ -491,7 +491,7 @@ def test_a_wrong_key_is_refused(client: TestClient, monkeypatch):
 def test_health_and_readiness_stay_open(client: TestClient, monkeypatch):
     """A load balancer and a deploy smoke test decide whether this container works,
     and neither can hold a secret."""
-    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    monkeypatch.setenv("KRAMA_API_KEY", "s3cret")
     assert client.get("/api/health").status_code == 200
     # Not asserted as 200: readiness answers 503 wherever the board has not been
     # built, which is every CI run. The property here is that the key does not stand
@@ -502,7 +502,7 @@ def test_health_and_readiness_stay_open(client: TestClient, monkeypatch):
 def test_readiness_says_whether_anything_is_guarding_the_door(client: TestClient, monkeypatch):
     """Running open is a legitimate local choice. Running open without knowing is not."""
     assert "open" in client.get("/api/ready").json()["checks"]["auth"]
-    monkeypatch.setenv("GLASS_GURU_API_KEY", "s3cret")
+    monkeypatch.setenv("KRAMA_API_KEY", "s3cret")
     assert client.get("/api/ready").json()["checks"]["auth"] == "api key required"
 
 
@@ -512,8 +512,8 @@ def test_readiness_says_whether_anything_is_guarding_the_door(client: TestClient
 def test_a_fresh_workspace_has_no_work_in_it():
     """A business has staff and vans on day one and no jobs until somebody rings.
     Pre-booked work nobody booked is confusing on a board somebody is trying to use."""
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import seed_events
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import seed_events
 
     empty = fold(seed_events(with_jobs=False))
     assert empty.workers and empty.vans
@@ -527,9 +527,9 @@ def test_the_horizon_starts_from_the_next_working_day():
     of 21 September 2026 the board showed a week that had already happened."""
     from datetime import date
 
-    from glass_guru.api.main import next_working_day
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import seed_events
+    from krama.api.main import next_working_day
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import seed_events
 
     world = fold(seed_events(with_jobs=False))
     saturday = date(2026, 9, 26)
@@ -541,10 +541,10 @@ def test_working_days_come_from_the_roster_not_from_an_assumption():
     """A business that starts opening Saturdays should not need a code change."""
     from datetime import date, time
 
-    from glass_guru.api.main import next_working_day
-    from glass_guru.domain.models import DayHours
-    from glass_guru.domain.state import fold
-    from glass_guru.fixtures.sample_business import seed_events
+    from krama.api.main import next_working_day
+    from krama.domain.models import DayHours
+    from krama.domain.state import fold
+    from krama.fixtures.sample_business import seed_events
 
     world = fold(seed_events(with_jobs=False))
     only = next(iter(world.workers.values()))
@@ -561,7 +561,7 @@ def test_a_quoted_window_opens_at_the_estimate_rather_than_straddling_it():
     down a phone, and promising half an hour earlier than the crew could manage."""
     from datetime import datetime, timedelta
 
-    from glass_guru.domain.models import TimeWindow
+    from krama.domain.models import TimeWindow
 
     arrival = datetime.fromisoformat("2026-09-28T06:27:00-05:00")
     opens = arrival.replace(minute=arrival.minute // 15 * 15, second=0, microsecond=0)
@@ -574,7 +574,7 @@ def test_a_quoted_window_opens_at_the_estimate_rather_than_straddling_it():
 def test_times_a_person_reads_are_twelve_hour():
     from datetime import time
 
-    from glass_guru.formatting import clock, clock_range
+    from krama.formatting import clock, clock_range
 
     assert clock(time(8, 0)) == "8:00 AM"
     assert clock(time(17, 5)) == "5:05 PM"
@@ -627,7 +627,7 @@ def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient, m
     confirmation folded after the cancellation and quietly resurrected it. Roughly a
     coin flip, live. Wall-clock stamps make the order the order it happened in.
     """
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     draft = {
         "customer_name": "Maria",
         "phone": "9132934243",
@@ -660,7 +660,7 @@ def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient, m
 def test_the_transcript_survives_from_call_to_reschedule(client: TestClient, monkeypatch):
     """A reschedule starts from what the caller originally said, not from a
     dispatcher's memory of it. The words ride on the job's provenance."""
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     said = "Maria needs glass fixed at 4pm monday, took time off, 9132934243, 14400 Artisan Dr"
     draft = {
         "customer_name": "Maria",
@@ -863,14 +863,14 @@ def test_booking_overtime_floats_an_offer_and_a_claim_moves_the_crew(
     past five floats an offer to every qualified fitter (texted, in log mode), the
     rota shows it, a relayed "yes" pins the claimant, and the re-plan puts them on
     the route without the customer's window moving."""
-    from glass_guru.api import main as api_main
-    from glass_guru.notify import RecordingNotifier
+    from krama.api import main as api_main
+    from krama.notify import RecordingNotifier
 
     recorder = RecordingNotifier()
     monkeypatch.setattr(api_main, "notifier", lambda: recorder)
     # Synthetic travel: this booking lands on a REAL future Monday, and the frozen
     # snapshot only holds the legs and buckets the fixture week exercises.
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
 
     draft = {
         "customer_name": "Evening caller",
@@ -957,11 +957,11 @@ def test_hours_are_only_offered_to_fitters_who_can_actually_reach_them(
     from datetime import date as _date
     from datetime import timedelta as _timedelta
 
-    from glass_guru.api import main as api_main
-    from glass_guru.notify import RecordingNotifier
+    from krama.api import main as api_main
+    from krama.notify import RecordingNotifier
 
     monkeypatch.setattr(api_main, "notifier", lambda: RecordingNotifier())
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
 
     draft = {
         "customer_name": "Evening caller",
@@ -1086,7 +1086,7 @@ def test_the_accepted_price_is_a_fact_everywhere(client: TestClient, monkeypatch
     from datetime import date as _date
     from datetime import timedelta as _timedelta
 
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     draft = {
         "customer_name": "Priced caller",
         "phone": "9132934243",
@@ -1115,7 +1115,7 @@ def test_the_accepted_price_is_a_fact_everywhere(client: TestClient, monkeypatch
     assert job["quoted_total"] == 578.50, "the spoken price is on the job"
 
     # The scheduling weight is the pre-tax share - tax was never ours to keep.
-    from glass_guru.api.main import service
+    from krama.api.main import service
 
     stored = service().world().jobs[booked["job_id"]]
     assert stored.quoted_total == 578.50
@@ -1134,7 +1134,7 @@ def test_job_ids_never_recount(client: TestClient, monkeypatch):
     from datetime import date as _date
     from datetime import timedelta as _timedelta
 
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     draft = {
         "customer_name": "A",
         "phone": "9132934243",
@@ -1188,7 +1188,7 @@ def test_the_past_cannot_be_booked_and_cancel_tells_the_truth_twice(
     from datetime import date as _date
     from datetime import timedelta as _timedelta
 
-    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     draft = {
         "customer_name": "Ghost",
         "phone": "9132934243",

@@ -18,15 +18,15 @@ from zoneinfo import ZoneInfo
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
-from glass_guru.agents.coordinator import choose_repair
-from glass_guru.agents.llm.base import LLMError, LLMResponse, LLMUsage
-from glass_guru.agents.llm.scripted import CallbackLLMProvider, ScriptedLLMProvider
-from glass_guru.agents.structured import Example, extract, json_schema_for
-from glass_guru.agents.triage import TriageOutcome, TriageResult, triage
-from glass_guru.domain.autonomy import AutonomyPolicy
-from glass_guru.domain.state import Unavailability
-from glass_guru.fixtures.sample_business import WEEK_START, _at
-from glass_guru.obs.correlation import dispatch
+from krama.agents.coordinator import choose_repair
+from krama.agents.llm.base import LLMError, LLMResponse, LLMUsage
+from krama.agents.llm.scripted import CallbackLLMProvider, ScriptedLLMProvider
+from krama.agents.structured import Example, extract, json_schema_for
+from krama.agents.triage import TriageOutcome, TriageResult, triage
+from krama.domain.autonomy import AutonomyPolicy
+from krama.domain.state import Unavailability
+from krama.fixtures.sample_business import WEEK_START, _at
+from krama.obs.correlation import dispatch
 
 TZ = ZoneInfo("America/Chicago")
 
@@ -267,10 +267,10 @@ def test_triage_events_carry_the_dispatch_id(world):
 
 @pytest.fixture
 def repair_options(world, travel, business_params):
-    from glass_guru.domain.models import PlanVersion
-    from glass_guru.scheduler.day_planner import SolveParams
-    from glass_guru.scheduler.horizon import HorizonParams, plan_horizon
-    from glass_guru.scheduler.repair import repair_plan
+    from krama.domain.models import PlanVersion
+    from krama.scheduler.day_planner import SolveParams
+    from krama.scheduler.horizon import HorizonParams, plan_horizon
+    from krama.scheduler.repair import repair_plan
 
     params = SolveParams.from_business(business_params, TZ)
     horizon_params = HorizonParams.from_business(business_params)
@@ -303,7 +303,7 @@ def repair_options(world, travel, business_params):
 
 @pytest.fixture
 def business_params():
-    from glass_guru.config import BusinessParams
+    from krama.config import BusinessParams
 
     return BusinessParams.load()
 
@@ -351,13 +351,13 @@ def test_the_model_cannot_talk_its_way_past_the_autonomy_policy(
 ):
     """The deterministic rules decide. A model able to authorise a customer-visible
     change silently would make the whole autonomy layer decorative."""
-    from glass_guru.domain import autonomy as autonomy_module
+    from krama.domain import autonomy as autonomy_module
 
     forced = autonomy_module.AutonomyDecision(
         autonomy_module.Decision.ESCALATE, ("customer would need telling",)
     )
     monkeypatch.setattr(autonomy_module, "decide", lambda *a, **k: forced)
-    monkeypatch.setattr("glass_guru.agents.coordinator.decide", lambda *a, **k: forced)
+    monkeypatch.setattr("krama.agents.coordinator.decide", lambda *a, **k: forced)
 
     provider = ScriptedLLMProvider.returning(
         {

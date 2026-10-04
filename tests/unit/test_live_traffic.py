@@ -14,8 +14,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from glass_guru.domain.models import Location
-from glass_guru.scheduler.travel.incidents import (
+from krama.domain.models import Location
+from krama.scheduler.travel.incidents import (
     Incident,
     NoIncidentFeed,
     ScriptedIncidentFeed,
@@ -143,9 +143,9 @@ def test_a_live_incident_slows_the_matrix_the_same_way_an_event_does(tmp_path):
     A reported incident and a dispatcher's typed one end up as the same kind of object
     and are applied by the same provider wrapper.
     """
-    from glass_guru.fixtures.sample_business import DEPOT, seed_events
-    from glass_guru.persistence.log import Workspace
-    from glass_guru.service import DispatchService
+    from krama.fixtures.sample_business import DEPOT, seed_events
+    from krama.persistence.log import Workspace
+    from krama.service import DispatchService
 
     workspace = Workspace(tmp_path / "ws")
     workspace.seed(seed_events())
@@ -167,9 +167,9 @@ def test_a_live_incident_slows_the_matrix_the_same_way_an_event_does(tmp_path):
 def test_a_feed_that_is_down_does_not_stop_a_booking(tmp_path):
     """A third party being unreachable must not fail a quote. Planning on last week's
     congestion is what the system did before this existed."""
-    from glass_guru.fixtures.sample_business import seed_events
-    from glass_guru.persistence.log import Workspace
-    from glass_guru.service import DispatchService
+    from krama.fixtures.sample_business import seed_events
+    from krama.persistence.log import Workspace
+    from krama.service import DispatchService
 
     class Broken:
         def fetch(self, centre, radius_miles, now):

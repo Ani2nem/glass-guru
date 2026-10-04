@@ -13,13 +13,13 @@ from datetime import date
 
 import pytest
 
-from glass_guru.config import BusinessParams
-from glass_guru.domain.enums import Certification, ServiceType
-from glass_guru.domain.models import Job, TimeWindow
-from glass_guru.domain.state import WorldState
-from glass_guru.fixtures.sample_business import WEEK_START, _at
-from glass_guru.scheduler.booking import BookingOptions, suggest_booking_slots
-from glass_guru.scheduler.day_planner import SolveParams
+from krama.config import BusinessParams
+from krama.domain.enums import Certification, ServiceType
+from krama.domain.models import Job, TimeWindow
+from krama.domain.state import WorldState
+from krama.fixtures.sample_business import WEEK_START, _at
+from krama.scheduler.booking import BookingOptions, suggest_booking_slots
+from krama.scheduler.day_planner import SolveParams
 
 
 @pytest.fixture
@@ -129,7 +129,7 @@ def test_a_dedicated_trip_is_explained_as_one(world, travel, params, business):
 def test_quoting_never_displaces_already_placed_work(world, travel, params, business):
     """A quote that looked cheap because it bumped a promised customer would be
     worse than useless. Existing work is locked while the trial insertion runs."""
-    from glass_guru.scheduler.day_planner import plan_day
+    from krama.scheduler.day_planner import plan_day
 
     draft = draft_at(world, "j-402")
     baseline = plan_day(
@@ -193,7 +193,7 @@ def test_a_scarce_certification_gates_every_offered_crew(world, travel, params, 
 
 def test_unbookable_days_are_explained(world, travel, params, business):
     """A job needing a certification nobody has should report why, not go silent."""
-    from glass_guru.domain.state import Unavailability
+    from krama.domain.state import Unavailability
 
     for worker_id in ("w-marcus", "w-priya"):
         world.worker_outages[worker_id] = [
@@ -221,7 +221,7 @@ def test_a_fitter_held_for_a_day_is_not_offered_that_day(world, travel, params, 
     him anyway" - the outage had been recorded against the wrong day, but the planner
     honouring a correctly-scoped day outage is the half worth pinning here.
     """
-    from glass_guru.domain.state import Unavailability
+    from krama.domain.state import Unavailability
 
     world.worker_outages["w-dan"] = [
         Unavailability(from_time=_at(0, 0), until_time=_at(0, 23), reason="busy")

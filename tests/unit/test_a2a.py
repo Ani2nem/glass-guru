@@ -14,12 +14,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from glass_guru.agents.a2a.transport import (
+from krama.agents.a2a.transport import (
     AgentNotFound,
     HttpA2ATransport,
     InProcessTransport,
 )
-from glass_guru.agents.a2a.types import (
+from krama.agents.a2a.types import (
     A2AMessage,
     AgentCard,
     AgentSkill,
@@ -28,19 +28,19 @@ from glass_guru.agents.a2a.types import (
     TaskState,
     submitted,
 )
-from glass_guru.agents.llm.base import LLMError, LLMRequest, LLMResponse
-from glass_guru.agents.llm.factory import UnavailableLLMProvider, build_llm
-from glass_guru.agents.llm.scripted import ScriptedLLMProvider
-from glass_guru.agents.registry import (
+from krama.agents.llm.base import LLMError, LLMRequest, LLMResponse
+from krama.agents.llm.factory import UnavailableLLMProvider, build_llm
+from krama.agents.llm.scripted import ScriptedLLMProvider
+from krama.agents.registry import (
     COORDINATOR_CARD,
     TRIAGE_CARD,
     TRIAGE_SKILL,
     TriageContext,
     build_transport,
 )
-from glass_guru.agents.structured import extract
-from glass_guru.fixtures.sample_business import WEEK_START
-from glass_guru.obs.correlation import dispatch
+from krama.agents.structured import extract
+from krama.fixtures.sample_business import WEEK_START
+from krama.obs.correlation import dispatch
 
 TZ = ZoneInfo("America/Chicago")
 
@@ -209,7 +209,7 @@ def test_an_unreachable_model_is_not_reported_as_a_bad_answer():
     """Different problems need different messages. One is an operator's configuration
     issue, the other is a prompt or schema issue, and reporting them identically sends
     people to debug the wrong thing."""
-    from glass_guru.agents.triage import TriageOutcome
+    from krama.agents.triage import TriageOutcome
 
     result = extract(UnavailableLLMProvider(), TriageOutcome, system="s", text="t", max_attempts=3)
     assert result.provider_failed
@@ -219,7 +219,7 @@ def test_an_unreachable_model_is_not_reported_as_a_bad_answer():
 def test_an_unreachable_model_does_not_inflate_the_repair_count():
     """Retrying an unreachable endpoint will not help, and claiming the full retry
     budget was spent would corrupt the repair-rate health signal."""
-    from glass_guru.agents.triage import TriageOutcome
+    from krama.agents.triage import TriageOutcome
 
     result = extract(UnavailableLLMProvider(), TriageOutcome, system="s", text="t", max_attempts=3)
     assert result.attempts == 1
@@ -227,7 +227,7 @@ def test_an_unreachable_model_does_not_inflate_the_repair_count():
 
 
 def test_a_bad_answer_is_not_reported_as_an_unreachable_model():
-    from glass_guru.agents.triage import TriageOutcome
+    from krama.agents.triage import TriageOutcome
 
     provider = ScriptedLLMProvider.always({"events": [{"kind": "nope"}]})
     result = extract(provider, TriageOutcome, system="s", text="t", max_attempts=2)
@@ -237,7 +237,7 @@ def test_a_bad_answer_is_not_reported_as_an_unreachable_model():
 
 
 def test_triage_surfaces_the_configuration_problem(context):
-    from glass_guru.agents.triage import triage
+    from krama.agents.triage import triage
 
     with dispatch("d-5"):
         result = triage(
@@ -252,7 +252,7 @@ def test_triage_surfaces_the_configuration_problem(context):
 
 
 def test_the_factory_refuses_rather_than_pretending(monkeypatch):
-    monkeypatch.setenv("GLASS_GURU_LLM", "unavailable")
+    monkeypatch.setenv("KRAMA_LLM", "unavailable")
     provider = build_llm()
     with pytest.raises(LLMError, match="no model provider configured"):
         provider.complete(LLMRequest(system="", messages=()))

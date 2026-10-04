@@ -282,15 +282,23 @@ export function Calendar({
 
   return (
     <div className="cal">
-      <div className="cal__nav">
-        <button onClick={() => shift(-1)} title="previous week">{"\u2039"}</button>
+      <div className="cal__bar">
+        <h2 className="cal__month">
+          {anchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+        </h2>
         <button
-          className={monday === initialMonday() ? "on" : ""}
+          className={`cal__today${monday === initialMonday() ? " on" : ""}`}
           onClick={() => setMonday(initialMonday())}
         >
-          This week
+          Today
         </button>
-        <button onClick={() => shift(1)} title="next week">{"\u203A"}</button>
+        <button className="cal__arrow" onClick={() => shift(-1)} title="previous week">
+          {"\u2039"}
+        </button>
+        <button className="cal__arrow" onClick={() => shift(1)} title="next week">
+          {"\u203A"}
+        </button>
+        <span className="cal__pickers">
         <select
           value={monthValue}
           onChange={(e) => {
@@ -318,6 +326,7 @@ export function Calendar({
             },
           )}
         </select>
+        </span>
       </div>
       <div className="cal__days">
         <div className="cal__corner" />

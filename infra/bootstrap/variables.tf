@@ -7,7 +7,7 @@ variable "region" {
 variable "github_repository" {
   description = "owner/name. Every trust policy in this stack is scoped to it."
   type        = string
-  default     = "Ani2nem/glass-guru"
+  default     = "Ani2nem/krama"
 
   validation {
     condition     = can(regex("^[^/]+/[^/]+$", var.github_repository))
@@ -63,11 +63,11 @@ variable "github_owner_id" {
     GitHub can issue OIDC tokens with an *immutable* subject claim, which identifies the
     repository by numeric id rather than by name:
 
-      repo:Ani2nem@96967353/glass-guru@1377693884:ref:refs/heads/main
+      repo:Ani2nem@96967353/krama@1377693884:ref:refs/heads/main
 
     rather than
 
-      repo:Ani2nem/glass-guru:ref:refs/heads/main
+      repo:Ani2nem/krama:ref:refs/heads/main
 
     This is strictly better - a repository that is deleted and recreated, renamed, or
     transferred gets new ids and does not inherit the old one's trust - and it is on for

@@ -80,7 +80,7 @@ export default function App() {
       <header className="topbar">
         <span className="brand">
           <Logo size={30} />
-          <h1>Glass Guru</h1>
+          <h1>Krama</h1>
         </span>
         {plan ? (
           <div
@@ -405,23 +405,21 @@ export default function App() {
       )}
 
       <footer className="footer">
-        <span className="footer__brand">Glass Guru</span>
+        <span className="footer__brand">Krama</span>
         {world?.depot_address && <span>routes start and end at {world.depot_address}</span>}
         <div className="footer__legend">
           <span>
-            <i className="footer__swatch footer__swatch--provisional" /> edge: scheduled, not yet
+            <i className="footer__swatch footer__swatch--provisional" /> scheduled, not yet
             promised
           </span>
           <span>
-            <i className="footer__swatch footer__swatch--confirmed" /> edge: promised to the
-            customer
+            <i className="footer__swatch footer__swatch--confirmed" /> promised to the customer
           </span>
           <span>
-            <i className="footer__swatch footer__swatch--dispatched" /> edge: crew on the way
+            <i className="footer__swatch footer__swatch--dispatched" /> crew on the way
           </span>
           <span>
-            <i className="footer__swatch footer__swatch--ot" /> orange fill: runs past shift
-            (overtime)
+            <i className="footer__swatch footer__swatch--ot" /> runs past shift (overtime)
           </span>
         </div>
         {plan && (

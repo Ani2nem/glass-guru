@@ -255,17 +255,22 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
    look at all day and the only thing on screen with real information density, so it
    gets to be the bright object rather than another dark panel among dark panels. */
 
+/* The calendar, to the owner's reference: a light, airy surface on the dark board,
+   soft pastel job cards, big friendly day chips, a whisper of gradient at the top.
+   It went dark for one day on a misread screenshot; the real reference arrived and
+   it is the bright object again - this time in the pastel language that makes a
+   full week read as calm instead of clinical. */
 .cal {
-  --cal-bg: #f7f7f9;
-  --cal-line: #e4e4ea;
-  --cal-ink: #09091a;
-  /* Measured against the lightest surface it sits on, which is the completed-block
-     grey rather than the calendar background. #6b6b78 was 4.46:1 there - a miss. */
-  --cal-muted: #696976;
+  --cal-bg: #fbfbfd;
+  --cal-line: #e8e8ef;
+  --cal-ink: #16161d;
+  --cal-muted: #6d6d7a;
 
-  background: var(--cal-bg);
-  border-radius: 14px;
-  padding: 14px;
+  background:
+    linear-gradient(160deg, rgb(31 186 214 / 0.10), rgb(6 193 103 / 0.07) 28%, transparent 46%),
+    var(--cal-bg);
+  border-radius: 18px;
+  padding: 18px;
   color: var(--cal-ink);
 }
 
@@ -278,20 +283,28 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 @media (max-width: 900px) { .cal__days { grid-template-columns: 48px repeat(5, minmax(0, 1fr)); } }
 
 .cal__day {
-  background: #ffffff;
-  border: 1px solid var(--cal-line);
-  border-radius: 12px;
-  padding: 10px 12px;
+  background: #ededf3;
+  border: none;
+  border-radius: 14px;
+  padding: 10px 14px;
   display: flex;
-  flex-direction: column;
-  line-height: 1.15;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1.1;
 }
 /* A day with nothing on it is still a day. The old board dropped it entirely, which
    made an empty Friday look like a bug rather than an answer. */
-.cal__day--free { background: transparent; border-style: dashed; }
-.cal__dow { font-size: 12px; color: var(--cal-muted); text-transform: lowercase; }
-.cal__date { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
-.cal__count { font-size: 11px; color: var(--cal-muted); }
+.cal__day--free { background: #f3f3f8; }
+.cal__dow { font-size: 14px; font-weight: 600; color: var(--cal-muted); text-transform: lowercase; }
+.cal__date { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.cal__count { font-size: 11px; color: var(--cal-muted); margin-left: auto; }
+.cal__day--today {
+  background: #ffffff;
+  box-shadow: 0 2px 10px rgb(22 22 29 / 0.10);
+}
+.cal__day--today .cal__dow,
+.cal__day--today .cal__date { color: var(--accent); }
 
 .cal__grid {
   position: relative;
@@ -323,17 +336,16 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .block {
   position: absolute;
   border: none;
-  border-left: 4px solid transparent;
-  border-radius: 10px;
-  padding: 6px 9px;
+  border-radius: 12px;
+  padding: 7px 10px;
   text-align: left;
   display: flex;
   flex-direction: column;
   gap: 1px;
   overflow: hidden;
   cursor: pointer;
-  background: #09091a;
-  color: #ffffff;
+  background: #e4e4ee;
+  color: #16161d;
   font-size: 12px;
   line-height: 1.25;
 }
@@ -341,16 +353,17 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
    narrow sliver with no room for a name; it is now a short block the full width of a
    day, which holds the customer, the time and often the crew. No truncation, and no
    text moving about to be read. */
-.block__what { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
-.block__when { color: #c0c0c8; font-variant-numeric: tabular-nums; }
-.block__who { color: #c0c0c8; overflow-wrap: anywhere; }
+.block__what { font-weight: 700; font-size: 13px; overflow-wrap: anywhere; }
+.block__when { color: #5b5b6b; font-variant-numeric: tabular-nums; }
+.block__who { color: #5b5b6b; overflow-wrap: anywhere; }
 
-/* The edge stripe answers "can this move?" without stealing the fill. */
-.block--provisional { border-left-color: #1fbad6; }
-.block--confirmed   { border-left-color: #06c167; }
-.block--dispatched  { border-left-color: #f0a13a; }
-.block--completed   { border-left-color: #55556a; color: #8a8a99; }
-.block:hover { filter: brightness(1.25); }
+/* Commitment state is the card's pastel. Lavender = promised (the one that costs
+   to move), pale sky = pencilled in, mint = crew on the way, grey = done. */
+.block--provisional { background: #dce9f2; }
+.block--confirmed   { background: #cfc5f6; }
+.block--dispatched  { background: #c9eedd; }
+.block--completed   { background: #ececf1; color: #63636f; }
+.block:hover { filter: brightness(0.96); }
 .block--selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 3; }
 
 .cal__crews {
@@ -637,17 +650,15 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
    slot card - a late booking is visibly a late stay, on the calendar where the
    lateness actually lives. The edge stripe stays, so state still reads. */
 .block--ot {
-  background: var(--warn, #f0a13a);
-  border-top: 1px dashed #7c5312;
-  border-right: 1px dashed #7c5312;
-  border-bottom: 1px dashed #7c5312;
-  color: #141400;
+  background: #fbe3b4;
+  border: 1.5px dashed #d99a2b;
+  color: #3c2d05;
 }
 .block--ot .block__when,
 .block--ot .block__who {
-  color: #4a3a10;
+  color: #6b5416;
 }
-.block--ot:hover { filter: brightness(1.05); }
+.block--ot:hover { filter: brightness(0.97); }
 .block__ot-tag {
   position: absolute;
   top: 2px;
@@ -708,10 +719,10 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 }
 /* Exactly what the calendar blocks wear: black cards, a coloured edge for state,
    orange body for overtime - so the legend is a key and not a theme. */
-.footer__swatch--provisional { background: #09091a; border-left: 4px solid #1fbad6; }
-.footer__swatch--confirmed { background: #09091a; border-left: 4px solid #06c167; }
-.footer__swatch--dispatched { background: #09091a; border-left: 4px solid #f0a13a; }
-.footer__swatch--ot { background: var(--warn); border: 1px dashed #7c5312; }
+.footer__swatch--provisional { background: #dce9f2; }
+.footer__swatch--confirmed { background: #cfc5f6; }
+.footer__swatch--dispatched { background: #c9eedd; }
+.footer__swatch--ot { background: #fbe3b4; border: 1px dashed #d99a2b; }
 .footer__plan { margin-left: auto; font-family: ui-monospace, monospace; font-size: 11px; color: var(--faint); }
 
 /* The one-line receipt for an outage the system absorbed by itself. Green, because
@@ -722,37 +733,52 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   color: var(--ok, #06c167);
 }
 
-/* Week navigation: two arrows, home, then two clicks to anywhere - a month, then
-   one of its weeks. */
-.cal__nav {
+/* The bar: the month in a big friendly hand, a Today pill, two quiet arrows; the
+   month-and-week pickers keep two-clicks-to-anywhere on the right. */
+.cal__bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
-.cal__nav button {
-  background: var(--cal-bg, #f7f7f9);
-  border: 1px solid var(--cal-line, #e4e4ea);
-  border-radius: 8px;
-  padding: 4px 12px;
-  color: var(--cal-ink, #16161d);
+.cal__month {
+  margin: 0 6px 0 2px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--cal-ink);
+}
+.cal__today {
+  background: #16161d;
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 16px;
   font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
 }
-.cal__nav button.on {
-  background: #09091a;
-  color: #ffffff;
-  border-color: #09091a;
+.cal__today.on { background: var(--accent); color: #002b33; }
+.cal__arrow {
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0 6px;
+  color: var(--cal-ink);
+  cursor: pointer;
 }
-.cal__nav select {
+.cal__arrow:hover { color: var(--accent); }
+.cal__pickers { margin-left: auto; display: inline-flex; gap: 8px; }
+.cal__pickers select {
   width: auto;
-  margin: 0 0 0 4px;
-  padding: 4px 8px;
+  margin: 0;
+  padding: 5px 10px;
   font-size: 13px;
-}
-.cal__day--today {
-  outline: 2px solid var(--accent, #1fbad6);
-  outline-offset: -2px;
+  background: #eeeef4;
+  color: var(--cal-ink);
+  border: none;
+  border-radius: 999px;
 }
 
 /* The overtime board: hours past shift, up for grabs. One row per offer; the open

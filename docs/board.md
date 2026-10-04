@@ -3,7 +3,7 @@
 ```bash
 make web-install        # once
 make web-build          # build the bundle
-glass-guru init         # once, if there is no workspace
+krama init         # once, if there is no workspace
 make api                # http://127.0.0.1:8000
 ```
 

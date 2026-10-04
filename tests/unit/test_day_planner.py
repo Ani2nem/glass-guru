@@ -13,13 +13,13 @@ from datetime import date
 
 import pytest
 
-from glass_guru.domain.enums import CommitmentState, UnservedReason
-from glass_guru.domain.invariants import ValidationConfig, summarize, validate_plan
-from glass_guru.domain.models import PlanVersion
-from glass_guru.domain.state import Unavailability, WorldState
-from glass_guru.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at
-from glass_guru.scheduler.day_planner import DayPlanResult, SolveParams, plan_day
-from glass_guru.scheduler.travel.synthetic import SyntheticTravelProvider
+from krama.domain.enums import CommitmentState, UnservedReason
+from krama.domain.invariants import ValidationConfig, summarize, validate_plan
+from krama.domain.models import PlanVersion
+from krama.domain.state import Unavailability, WorldState
+from krama.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at
+from krama.scheduler.day_planner import DayPlanResult, SolveParams, plan_day
+from krama.scheduler.travel.synthetic import SyntheticTravelProvider
 
 MONDAY = WEEK_START
 TUESDAY = date.fromordinal(WEEK_START.toordinal() + 1)

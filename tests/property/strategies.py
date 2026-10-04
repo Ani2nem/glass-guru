@@ -17,8 +17,8 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from hypothesis import strategies as st
 
-from glass_guru.domain.enums import Certification, Priority, ServiceType, WindowHardness
-from glass_guru.domain.models import (
+from krama.domain.enums import Certification, Priority, ServiceType, WindowHardness
+from krama.domain.models import (
     DayHours,
     Job,
     Location,
@@ -27,7 +27,7 @@ from glass_guru.domain.models import (
     Van,
     Worker,
 )
-from glass_guru.domain.state import WorldState
+from krama.domain.state import WorldState
 
 #: Must match the business timezone the solver is given, or every generated
 #: shift is offset by the difference and the checker disagrees for a reason

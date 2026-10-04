@@ -8,13 +8,13 @@ the test suite need network would simply be switched off.
 
 from __future__ import annotations
 
-from glass_guru.obs.correlation import (
+from krama.obs.correlation import (
     current_dispatch_id,
     dispatch,
     new_dispatch_id,
     require_dispatch_id,
 )
-from glass_guru.obs.tracing import langsmith_enabled, record, span
+from krama.obs.tracing import langsmith_enabled, record, span
 
 
 def test_no_dispatch_id_outside_a_block():
@@ -65,14 +65,14 @@ def test_langsmith_is_off_without_an_api_key(monkeypatch):
 def test_span_attributes_flatten_nested_values():
     """Span attributes must be scalars. Solver metrics arrive as a dict, and dropping
     them rather than flattening would lose exactly the numbers worth keeping."""
-    from glass_guru.obs.tracing import _flatten
+    from krama.obs.tracing import _flatten
 
     flat = _flatten("metrics", {"scheduled": 5, "inner": {"gap": 0.1}})
     assert flat == {"metrics.scheduled": 5, "metrics.inner.gap": 0.1}
 
 
 def test_sequences_are_summarised_not_dropped():
-    from glass_guru.obs.tracing import _flatten
+    from krama.obs.tracing import _flatten
 
     flat = _flatten("kinds", ["van_unavailable", "job_confirmed"])
     assert "van_unavailable" in flat["kinds"]

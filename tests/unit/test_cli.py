@@ -6,17 +6,17 @@ from datetime import timedelta
 
 import pytest
 
-from glass_guru.cli.main import main
-from glass_guru.config import BusinessParams, Provenance
-from glass_guru.domain.models import PlanVersion
-from glass_guru.domain.state import Unavailability
-from glass_guru.fixtures.sample_business import _at
-from glass_guru.scheduler.day_planner import (
+from krama.cli.main import main
+from krama.config import BusinessParams, Provenance
+from krama.domain.models import PlanVersion
+from krama.domain.state import Unavailability
+from krama.fixtures.sample_business import _at
+from krama.scheduler.day_planner import (
     MINUTES_PER_DAY,
     _largest_free_interval,
     _probe_times,
 )
-from glass_guru.scheduler.travel.base import TimeBucket
+from krama.scheduler.travel.base import TimeBucket
 
 DAY = _at(0, 0)
 
@@ -101,7 +101,7 @@ def sample(tmp_path):
     """Point the CLI at a workspace that does not exist, so it falls back to the
     fixture week.
 
-    These tests used to run against whatever was in the developer's own .glass-guru,
+    These tests used to run against whatever was in the developer's own .krama,
     which passed for as long as that happened to hold the ten sample jobs and broke
     the moment a fresh workspace started empty. A test that reads the machine it runs
     on is not testing the thing it names.
@@ -172,7 +172,7 @@ def test_init_on_an_existing_workspace_is_not_an_error(tmp_path, capsys):
 
 
 def test_init_force_starts_over(tmp_path):
-    from glass_guru.persistence.log import Workspace
+    from krama.persistence.log import Workspace
 
     ws = str(tmp_path / "ws")
     main(["--workspace", ws, "init"])
@@ -200,9 +200,9 @@ def test_an_s3_workspace_is_not_turned_into_a_directory():
     business into it, and reported success. The deployed log was unreachable from the
     terminal and nothing said so.
     """
-    from glass_guru.persistence.log import Workspace
+    from krama.persistence.log import Workspace
 
-    workspace = Workspace("s3://glass-guru-test/business")
+    workspace = Workspace("s3://krama-test/business")
     assert type(workspace.plans).__name__ == "S3PlanStore"
     assert type(workspace.events).__name__ == "S3EventLog"
 
@@ -214,11 +214,11 @@ def test_force_refuses_to_erase_a_deployed_workspace():
     are immutable - and a `--force` that quietly needed one would be an argument for
     granting it.
     """
-    from glass_guru.cli.main import _discard
-    from glass_guru.persistence.log import Workspace
+    from krama.cli.main import _discard
+    from krama.persistence.log import Workspace
 
     with pytest.raises(SystemExit) as raised:
-        _discard(Workspace("s3://glass-guru-test/business"))
+        _discard(Workspace("s3://krama-test/business"))
     assert "refusing to erase" in str(raised.value)
 
 
@@ -226,7 +226,7 @@ def test_a_missing_credential_gets_a_remedy_rather_than_a_stack_trace():
     """The far more common of the two failures, and the one a trace helps least."""
     from botocore.exceptions import NoCredentialsError
 
-    from glass_guru.cli.main import _remedy_for
+    from krama.cli.main import _remedy_for
 
     remedy = _remedy_for(NoCredentialsError())
     assert remedy is not None and "AWS_PROFILE" in remedy
@@ -234,6 +234,6 @@ def test_a_missing_credential_gets_a_remedy_rather_than_a_stack_trace():
 
 def test_an_unrecognised_failure_still_raises():
     """Swallowing everything would turn a bug into a shrug."""
-    from glass_guru.cli.main import _remedy_for
+    from krama.cli.main import _remedy_for
 
     assert _remedy_for(ValueError("something genuinely unexpected")) is None

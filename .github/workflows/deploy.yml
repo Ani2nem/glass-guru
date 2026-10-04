@@ -69,7 +69,7 @@ jobs:
         id: build
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          REPOSITORY: ${{ vars.ECR_REPOSITORY || 'glass-guru' }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY || 'krama' }}
         run: |
           set -euo pipefail
           tag="${REGISTRY}/${REPOSITORY}:${GITHUB_SHA}"
@@ -86,7 +86,7 @@ jobs:
       - name: point the function at the new image
         env:
           IMAGE: ${{ steps.build.outputs.image }}
-          FUNCTION: glass-guru
+          FUNCTION: krama
         run: |
           set -euo pipefail
           # Code only. This role cannot change the function's configuration, its URL or

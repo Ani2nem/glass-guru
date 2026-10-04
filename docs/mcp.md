@@ -3,8 +3,8 @@
 The server exposes the scheduling engine over stdio.
 
 ```bash
-glass-guru init            # once, to create a workspace
-glass-guru-mcp             # runs the server
+krama init            # once, to create a workspace
+krama-mcp             # runs the server
 ```
 
 Claude Desktop or any MCP client:
@@ -12,18 +12,18 @@ Claude Desktop or any MCP client:
 ```json
 {
   "mcpServers": {
-    "glass-guru": {
-      "command": "glass-guru-mcp",
+    "krama": {
+      "command": "krama-mcp",
       "env": {
-        "GLASS_GURU_WORKSPACE": "/absolute/path/to/.glass-guru",
-        "GLASS_GURU_TRAVEL": "warm"
+        "KRAMA_WORKSPACE": "/absolute/path/to/.krama",
+        "KRAMA_TRAVEL": "warm"
       }
     }
   }
 }
 ```
 
-`GLASS_GURU_TRAVEL` picks the travel source. `frozen` is offline and free but only
+`KRAMA_TRAVEL` picks the travel source. `frozen` is offline and free but only
 covers addresses already on the books; `warm` uses the frozen snapshot and computes
 the few missing legs from a running OSRM, which is what a live quote for a new address
 needs.

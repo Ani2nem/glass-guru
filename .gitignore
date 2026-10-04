@@ -21,7 +21,7 @@ docker/osrm/data/
 *.tfstate.*
 
 # Local CLI workspace: event log and plan history
-.glass-guru/
+.krama/
 web/node_modules/
 
 # Terraform. The bootstrap stack keeps its state locally and it names the account.

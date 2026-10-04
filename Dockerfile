@@ -21,7 +21,7 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 # Dependency metadata alone, so editing source does not reinstall OR-Tools.
 COPY pyproject.toml ./
-RUN mkdir -p src/glass_guru && touch src/glass_guru/__init__.py && pip install .
+RUN mkdir -p src/krama && touch src/krama/__init__.py && pip install .
 
 # --- runtime ------------------------------------------------------------------
 FROM python:3.12-slim AS runtime
@@ -38,16 +38,16 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH" \
     # No OSRM and no Google in a task that has neither. The committed leg snapshot
     # covers the fixture geography; a deployment serving real addresses sets this to
-    # `warm` and points GLASS_GURU_OSRM_URL at the routing service.
-    GLASS_GURU_TRAVEL=frozen \
+    # `warm` and points KRAMA_OSRM_URL at the routing service.
+    KRAMA_TRAVEL=frozen \
     # Bind every interface. The default is loopback so that running the API on a
     # laptop does not expose the board to the local network; in a container loopback
     # means nothing outside can reach it, load balancer included.
-    GLASS_GURU_API_HOST=0.0.0.0 \
+    KRAMA_API_HOST=0.0.0.0 \
     # The adapter reads PORT to know where to forward; the app reads its own variable.
     # Both name the same port, and a mismatch is a request that goes nowhere.
     PORT=8000 \
-    GLASS_GURU_API_PORT=8000 \
+    KRAMA_API_PORT=8000 \
     # Stream responses rather than buffering them, so a long solve does not sit silent
     # and the readiness probe answers immediately.
     AWS_LWA_INVOKE_MODE=RESPONSE_STREAM \
@@ -76,4 +76,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"
 
-CMD ["glass-guru-api"]
+CMD ["krama-api"]
