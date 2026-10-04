@@ -1064,3 +1064,88 @@ def test_the_configure_endpoints_edit_the_roster(client: TestClient):
         json={"name": "X", "shift_start": "18:00", "shift_end": "09:00"},
     )
     assert bad.status_code == 422, "a shift must end after it starts"
+
+
+def test_the_accepted_price_is_a_fact_everywhere(client: TestClient, monkeypatch):
+    """The quote used to evaporate the moment the slot card left the screen: the
+    job booked with revenue 0, the scheduler weighed a nine-hundred-dollar customer
+    like a zero-dollar one, and no surface could ever say what was agreed. The
+    price the dispatcher pressed now lands on the job, the world view, and the
+    scheduling weight - one truth, read from one place."""
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    draft = {
+        "customer_name": "Priced caller",
+        "phone": "9132934243",
+        "address": "somewhere real",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 120,
+        "duration_confidence": 60,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    booked = client.post(
+        "/api/book",
+        json={
+            "draft": draft,
+            "date": monday.isoformat(),
+            "arrival": "10:00",
+            "quoted_total": 578.50,
+        },
+    ).json()
+
+    job = next(j for j in client.get("/api/world").json()["jobs"] if j["id"] == booked["job_id"])
+    assert job["quoted_total"] == 578.50, "the spoken price is on the job"
+
+    # The scheduling weight is the pre-tax share - tax was never ours to keep.
+    from glass_guru.api.main import service
+
+    stored = service().world().jobs[booked["job_id"]]
+    assert stored.quoted_total == 578.50
+    assert 0 < stored.revenue < 578.50, "revenue is the ex-tax share, not zero, not the total"
+
+    # The confirmation echoes the promise the slot card made - an arrival window
+    # that exists elsewhere in the system, not a hybrid of window-open and estimate.
+    assert "arriving" in booked["when"]
+    assert "10:00 AM" in booked["when"]
+
+
+def test_job_ids_never_recount(client: TestClient, monkeypatch):
+    """Ids come from the highest existing suffix, not from len(jobs): a recount
+    mints twins the moment anything ever leaves the dict, and a twin id silently
+    merges two customers' histories."""
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    monkeypatch.setenv("GLASS_GURU_TRAVEL", "synthetic")
+    draft = {
+        "customer_name": "A",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+
+    def book() -> str:
+        reply = client.post(
+            "/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "09:00"}
+        ).json()
+        return str(reply["job_id"])
+
+    first = book()
+    client.post(f"/api/jobs/{first}/cancel")
+    second = book()
+    assert second != first, "a cancelled booking's id must never be reissued"

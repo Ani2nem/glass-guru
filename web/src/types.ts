@@ -95,6 +95,7 @@ export interface Van {
 export interface Job {
   phone: string;
   address: string;
+  quoted_total: number;
   transcript: string;
   id: string;
   customer_name: string;
