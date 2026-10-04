@@ -411,3 +411,128 @@ def test_one_qualified_name_is_called_a_single_point_of_failure():
     assert evening == ["Dan", "Ken"]
     morning = _capable_then(world, draft, thursday, start_hour=8, duration_min=120, overtime=120)
     assert len(morning) > len(evening), "mornings still have more cover than evenings"
+
+
+def test_already_booked_is_claimed_only_from_the_committed_plan():
+    """The board said "Dan is the only fitter qualified ... already booked: Ani
+    8:00 AM - 12:00 PM" while the calendar on the same screen showed MARCUS doing
+    Ani's job and Dan doing nothing. The busy list was built from job windows with
+    no look at who is routed; a message the calendar can contradict is worse than
+    no message."""
+
+    from glass_guru.api.main import _bottleneck_or
+    from glass_guru.domain.enums import Certification, CommitmentState, ServiceType
+    from glass_guru.domain.models import (
+        CrewRoute,
+        GlassSpec,
+        Job,
+        PlanVersion,
+        Stop,
+        TimeWindow,
+    )
+    from glass_guru.domain.state import fold
+    from glass_guru.fixtures.sample_business import BUSINESS_TZ, WEEK_START, _at, seed_events
+
+    world = fold(seed_events(with_jobs=False))
+    # Ani: residential, CONFIRMED 8-12, and in the committed plan she is MARCUS's.
+    ani = Job(
+        id="j-ani",
+        customer_id="c-ani",
+        customer_name="Ani",
+        location=next(iter(world.vans.values())).home_depot,
+        service_type=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
+        glass_spec=GlassSpec(),
+        required_certifications=frozenset({Certification.RESIDENTIAL_GLAZING}),
+        crew_size=1,
+        estimated_duration_min=120,
+        windows=(TimeWindow(start=_at(0, 8), end=_at(0, 12)),),
+        commitment_state=CommitmentState.CONFIRMED,
+        requested_at=_at(0, 7),
+    )
+    world.jobs["j-ani"] = ani
+    plan = PlanVersion(
+        id="p",
+        created_at=_at(0, 7),
+        horizon_start=WEEK_START,
+        horizon_end=WEEK_START,
+        routes=(
+            CrewRoute(
+                crew_id="crew-van-1",
+                date=WEEK_START,
+                worker_ids=("w-marcus",),
+                van_id="van-1",
+                stops=(
+                    Stop(
+                        job_id="j-ani",
+                        arrival=_at(0, 8),
+                        departure=_at(0, 10),
+                        travel_minutes_from_prev=10,
+                        travel_miles_from_prev=3.0,
+                    ),
+                ),
+            ),
+        ),
+    )
+    # Thin the roster until Dan is the only residential name left; the committed
+    # plan may still reference Marcus - a plan is a frozen artifact, not a roster.
+    draft = ani.model_copy(update={"id": "draft"})
+    for wid in ("w-sofia", "w-alex", "w-ken", "w-marcus", "w-priya"):
+        world.workers.pop(wid, None)
+
+    message = _bottleneck_or(
+        "no room at an acceptable cost",
+        world,
+        plan,
+        draft,
+        WEEK_START,
+        8,
+        120,
+        BUSINESS_TZ,
+    )
+    assert "already booked" not in message, message
+    assert message == "no room at an acceptable cost", (
+        "with Dan actually free, the honest vague reason beats a fabricated busy claim"
+    )
+
+    # Put Dan himself on the route and the claim becomes true - and allowed.
+    dan_plan = plan.model_copy(
+        update={"routes": (plan.routes[0].model_copy(update={"worker_ids": ("w-dan",)}),)}
+    )
+    message = _bottleneck_or(
+        "no room at an acceptable cost", world, dan_plan, draft, WEEK_START, 8, 120, BUSINESS_TZ
+    )
+    assert "Dan is the only fitter" in message and "already booked: Ani" in message
+
+
+def test_no_crew_ask_when_hours_are_not_the_blocker():
+    """ "Check with Dan whether they can stay to 10:15 AM" - inside his ordinary
+    8-to-5 - went on a real screen. The ask may only fire when the wanted span runs
+    past every candidate's standard reach, because that is the one thing a yes can
+    change; a van stock problem is not solved by anybody staying late."""
+    from glass_guru.api.main import _suggest_crew_ask, service
+    from glass_guru.domain.enums import Certification, ServiceType
+    from glass_guru.domain.models import GlassSpec, Job
+    from glass_guru.domain.state import fold
+    from glass_guru.fixtures.sample_business import WEEK_START, _at, seed_events
+
+    svc = service()
+    world = fold(seed_events(with_jobs=False))
+    draft = Job(
+        id="draft",
+        customer_id="c",
+        customer_name="James",
+        location=next(iter(world.vans.values())).home_depot,
+        service_type=ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT,
+        glass_spec=GlassSpec(),
+        required_certifications=frozenset({Certification.RESIDENTIAL_GLAZING}),
+        crew_size=1,
+        estimated_duration_min=90,
+        requested_at=_at(0, 7),
+    )
+    # 8 AM start, 90 minutes: well inside everyone's day. Whatever refused this day,
+    # it was not the hours - no ask.
+    assert _suggest_crew_ask(svc, world, draft, WEEK_START, 8) is None
+
+    # 7 PM start runs past every reach: now the ask is the right sentence.
+    evening = _suggest_crew_ask(svc, world, draft, WEEK_START, 19)
+    assert evening is not None and "stay to" in evening.message

@@ -351,6 +351,9 @@ class IntakeView(Api):
     asked_for_speed: bool = False
     #: Present when no day works but an extended shift would make one work.
     crew_ask: CrewAskSuggestion | None = None
+    #: Set when the caller wants something this business does not sell. Red on the
+    #: intake; the right answer is a referral, not a quote.
+    not_offered: str = ""
     repairs: int = 0
     note: str = ""
 

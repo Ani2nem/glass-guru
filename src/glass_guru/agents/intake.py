@@ -398,11 +398,15 @@ class IntakeResult:
     latest_hour: int | None = None
     preferred_weekdays: tuple[int, ...] = ()
     geocode_note: str = ""
+    #: Set when the caller wants something this business does not sell. The call
+    #: still extracts cleanly - the model found "auto glass" correctly - but the
+    #: answer down the phone is a referral, not a quote.
+    not_offered: str = ""
 
     @property
     def bookable(self) -> bool:
         """Whether there is enough to price this into the schedule."""
-        return self.draft is not None and not self.missing_required
+        return self.draft is not None and not self.missing_required and not self.not_offered
 
     @property
     def call(self) -> CallExtraction | None:
@@ -873,6 +877,17 @@ def intake(
         )
         active.set_attribute("outcome", "bookable" if draft is not None else "incomplete")
 
+        # Deterministic, from config: the model's extraction can be perfect and the
+        # answer still be "we don't do that". Checked here so no slot search, no
+        # pricing and no crew ask ever runs for work this business does not sell.
+        not_offered = ""
+        if call.service_type and not business.meta.offers(call.service_type):
+            what = call.service_type.replace("_", " ")
+            not_offered = (
+                f"Not something we do: {what}. Suggest a dedicated {what} shop "
+                "and take their next call."
+            )
+
         return IntakeResult(
             draft=draft,
             extraction=extraction,
@@ -885,6 +900,7 @@ def intake(
             latest_hour=call.latest_hour,
             preferred_weekdays=tuple(call.preferred_weekdays),
             geocode_note=geocode_note,
+            not_offered=not_offered,
         )
 
 

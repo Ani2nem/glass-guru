@@ -55,7 +55,7 @@ from glass_guru.api.models import (
 from glass_guru.cli.events import EventArgumentError, build_event
 from glass_guru.config import BusinessParams
 from glass_guru.domain.invariants import ValidationConfig, validate_plan
-from glass_guru.domain.models import Job, Worker
+from glass_guru.domain.models import Job, PlanVersion, Worker
 from glass_guru.domain.state import WorldState
 from glass_guru.formatting import clock, clock_range
 from glass_guru.geocoding import GeocodeError, OutsideServiceArea
@@ -793,6 +793,7 @@ def _cover_note(capable: list[str], slot: SlotSuggestion) -> str:
 def _bottleneck_or(
     detail: str,
     world: WorldState,
+    plan: PlanVersion | None,
     draft: Job,
     on_date: date,
     start_hour: int,
@@ -805,6 +806,12 @@ def _bottleneck_or(
     said cost. The truth was narrower: the one person certified for the work who can
     stay late enough was already booked then. A dispatcher can act on that - offer
     another day, or ask Dan - but not on "no room".
+
+    "Already booked" comes from the COMMITTED PLAN's routes, never from job windows
+    alone. The first version listed every confirmed window on the date and pinned
+    them all on the bottleneck fitter - "Dan is already booked: Ani 8-12" while the
+    plan on the same screen showed Marcus doing Ani's job and Dan doing nothing.
+    A message the calendar can contradict is worse than no message.
     """
     capable = _capable_then(
         world, draft, on_date, start_hour, draft.estimated_duration_min, overtime
@@ -812,17 +819,21 @@ def _bottleneck_or(
     if not capable:
         needs = ", ".join(sorted(c.value.replace("_", " ") for c in draft.required_certifications))
         return f"nobody certified for {needs} can work these hours on a {on_date:%A}"
-    busy = []
-    for job in world.jobs.values():
-        if job.commitment_state.value not in {"confirmed", "dispatched"} or not job.windows:
-            continue
-        window = job.windows[0]
-        if window.start.astimezone(tz).date() == on_date:
-            opens, closes = window.start.astimezone(tz), window.end.astimezone(tz)
-            busy.append(f"{job.customer_name} {clock_range(opens, closes)}")
-    if len(capable) == 1 and busy:
+    if len(capable) != 1 or plan is None:
+        return detail
+
+    only = capable[0]
+    worker_id = next((w.id for w in world.workers.values() if w.name == only), None)
+    busy = [
+        f"{world.jobs[stop.job_id].customer_name if stop.job_id in world.jobs else stop.job_id}"
+        f" {clock_range(stop.arrival.astimezone(tz), stop.departure.astimezone(tz))}"
+        for route in plan.routes
+        if route.date == on_date and worker_id in route.worker_ids
+        for stop in route.stops
+    ]
+    if busy:
         return (
-            f"{capable[0]} is the only fitter qualified who can work these hours, "
+            f"{only} is the only fitter qualified who can work these hours, "
             f"and is already booked: {'; '.join(busy[:2])}"
         )
     return detail
@@ -984,7 +995,14 @@ def run_intake(request: TextRequest) -> IntakeView:
                 UnavailableDayView(
                     day=f"{u.on_date:%a %d %b}",
                     reason=_bottleneck_or(
-                        u.detail, world, result.draft, u.on_date, earliest or 8, overtime, svc.tz
+                        u.detail,
+                        world,
+                        svc.head(),
+                        result.draft,
+                        u.on_date,
+                        earliest or 8,
+                        overtime,
+                        svc.tz,
                     ),
                 )
                 for u in options.unavailable
@@ -1009,6 +1027,7 @@ def run_intake(request: TextRequest) -> IntakeView:
             # commitment grounding uses to tell urgency from arrangement.
             asked_for_speed=bool(_URGENCY_NOT_ARRANGEMENT.search(request.text)),
             crew_ask=crew_ask,
+            not_offered=result.not_offered,
         )
 
 
@@ -1173,6 +1192,24 @@ def _suggest_crew_ask(
     )
     if len(candidates) < draft.crew_size:
         return None  # not an hours problem; nobody could cover it however late
+
+    # The hours must actually BE the blocker: the wanted span has to run past every
+    # candidate's standard reach. Without this check the suggestion fired on a van
+    # stock problem and asked a dispatcher to check whether Dan - free all day -
+    # could "stay to 10:15 AM", which is the kind of sentence that costs a product
+    # its credibility in one reading.
+    overtime_allowance = timedelta(minutes=int(svc.business.labor.overtime_max_minutes.value))
+
+    def standard_reach(worker: Worker) -> datetime | None:
+        hours = worker.hours_for(on_date.weekday())
+        if hours is None:
+            return None
+        close = datetime.combine(on_date, hours.end, tzinfo=svc.tz)
+        return close + (overtime_allowance if worker.overtime_eligible else timedelta())
+
+    reaches = [r for w in candidates if (r := standard_reach(w)) is not None]
+    if not reaches or until <= max(reaches):
+        return None  # somebody can already reach these hours; the blocker is elsewhere
     names = " and ".join(w.name for w in candidates)
     who = f"{draft.crew_size} of {names}" if draft.crew_size > 1 else names
     return CrewAskSuggestion(

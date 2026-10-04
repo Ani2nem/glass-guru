@@ -129,6 +129,14 @@ class BusinessMeta(Section):
     name: str
     timezone: str
     currency: str = "USD"
+    #: Service types this business actually sells. A fact, not an estimate, so it
+    #: lives here rather than among the provenance-tracked parameters. Empty means
+    #: "everything in the catalogue" - which keeps fixtures and tests that predate
+    #: the field meaning what they always meant.
+    services: list[str] = []
+
+    def offers(self, service_type: str) -> bool:
+        return not self.services or service_type in self.services
 
 
 class BusinessParams(Section):

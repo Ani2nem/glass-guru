@@ -12,10 +12,11 @@ import type { World, Worker } from "../types";
  * does, and the form becomes a viewer with an override.
  */
 
+// No auto_glass: this business fits glass in buildings, never vehicles. The enum
+// survives in the domain for old records; the product stops offering the word.
 const ALL_CERTS = [
   "residential_glazing",
   "commercial_storefront",
-  "auto_glass",
   "tempered_safety",
   "screen_repair",
   "shower_door",
