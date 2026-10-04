@@ -110,7 +110,11 @@ CATALOG: dict[ServiceType, CatalogEntry] = {
         materials_cost_per_extra_pane=18.0,
         typical_duration_min=45,
         duration_range=(25, 90),
-        required_certifications=frozenset({Certification.SCREEN_REPAIR}),
+        # Deliberately ungated. A screen swap is something every fitter on the
+        # roster can do; requiring a badge for it meant the board refused screen
+        # jobs while three capable people sat free - scarcity the business invented
+        # for itself. The SCREEN_REPAIR skill survives in the enum for old records.
+        required_certifications=frozenset(),
         per_extra_pane_min=15,
         typical_parts=("screen_kit",),
         ask_about=("how many screens", "frames intact"),

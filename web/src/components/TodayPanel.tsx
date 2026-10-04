@@ -14,13 +14,14 @@ import type { Plan, World } from "../types";
  * where overflow clipped it invisible. Cells cannot be clipped by their own table.
  */
 
-/** One symbol per certification, readable at a squint. The legend underneath spells
- * them out; the tooltip on each chip repeats it on hover. */
+/** One symbol per SKILL - the three genuine specialties this business gates work
+ * on. Not certifications: the only certifying body in this trade is for auto glass,
+ * which we do not do. Screen repair needs hands, not a badge, so it gates nothing;
+ * "tempered safety" gated nothing and was a phantom chip three fitters wore for no
+ * reason. A skill in the domain but not in this map simply does not render. */
 const CERT_BADGES: Record<string, { icon: string; label: string }> = {
   residential_glazing: { icon: "\u{1F3E0}", label: "residential glazing" },
   commercial_storefront: { icon: "\u{1F3E2}", label: "commercial storefront" },
-  tempered_safety: { icon: "\u{1F6E1}\u{FE0F}", label: "tempered safety" },
-  screen_repair: { icon: "\u{1FA9F}", label: "screen repair" },
   shower_door: { icon: "\u{1F6BF}", label: "shower door" },
 };
 
@@ -123,14 +124,13 @@ export function TodayPanel({
                 <td className="rota__who">
                   <strong>{worker.name}</strong>
                   <span className="rota__certs">
-                    {worker.certifications.map((cert) => {
-                      const badge = CERT_BADGES[cert];
-                      return (
-                        <span key={cert} title={badge?.label ?? cert}>
-                          {badge?.icon ?? "\u2022"}
+                    {worker.certifications
+                      .filter((cert) => CERT_BADGES[cert])
+                      .map((cert) => (
+                        <span key={cert} title={CERT_BADGES[cert]?.label}>
+                          {CERT_BADGES[cert]?.icon}
                         </span>
-                      );
-                    })}
+                      ))}
                   </span>
                 </td>
                 {worker.days.map((d) =>
