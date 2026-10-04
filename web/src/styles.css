@@ -844,33 +844,66 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   padding: 48px 16px;
   overflow-y: auto;
 }
+/* Everything stays inside the sheet: rows wrap instead of widening, and when the
+   roster outgrows the window the sheet scrolls inside itself rather than bleeding
+   its checkboxes over the board behind it. */
 .config__sheet {
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-radius: 14px;
   padding: 20px 24px;
-  width: min(880px, 100%);
+  width: min(760px, 100%);
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.config__rows { display: flex; flex-direction: column; }
+
+/* One fitter: inputs on the first line, named certification pills wrapping on the
+   second. Two-letter cert codes in a table column overflowed the sheet and meant
+   nothing; "residential glazing" in a pill does neither. */
+.cfgrow { padding: 12px 0; border-top: 1px solid var(--line); }
+.cfgrow:first-child { border-top: none; }
+.cfgrow__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cfgrow__name { width: 110px; margin: 0; }
+.cfgrow__phone { width: 140px; margin: 0; }
+.cfgrow__shift { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.cfgrow__shift input { width: auto; margin: 0; }
+.cfgrow__ot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cfgrow__actions { margin-left: auto; display: inline-flex; gap: 6px; }
+.cfgrow__actions button { font-size: 12px; padding: 4px 12px; }
+.cfgrow__certs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+.certpill {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.certpill--on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgb(31 186 214 / 0.12);
 }
 .config__head { position: relative; margin-bottom: 12px; }
 .config__close { position: absolute; top: 0; right: 0; }
-.config__table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.config__table th {
-  text-align: left;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  padding: 4px 8px 6px 0;
-}
-.config__table td { padding: 4px 8px 4px 0; border-top: 1px solid var(--line); }
-.config__table input[type="text"],
-.config__table input:not([type]) { width: 100%; margin: 0; }
-.config__shift { white-space: nowrap; }
-.config__shift input { width: auto; margin: 0 2px; }
-.config__certs { white-space: nowrap; }
-.config__certs label { margin-right: 8px; font-size: 11px; cursor: pointer; }
-.config__rowactions { white-space: nowrap; }
-.config__rowactions button { font-size: 12px; padding: 3px 10px; margin-right: 6px; }
 .config__add { margin-top: 10px; font-size: 13px; }
 .config__vanshead { margin: 18px 0 8px; font-size: 14px; }
 .config__vans { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 13px; }
