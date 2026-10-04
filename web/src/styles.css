@@ -109,8 +109,8 @@ textarea::placeholder { color: var(--faint); }
 
 .app { display: flex; flex-direction: column; min-height: 100%; }
 
-/* Pinned while the page scrolls underneath - the status and the Re-plan button are
-   the two things that must never be somewhere else. */
+/* Pinned while the page scrolls underneath - the schedule status must never be
+   somewhere else. */
 .topbar {
   position: sticky;
   top: 0;
@@ -909,3 +909,5 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .config__vans { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; font-size: 13px; }
 .config__vans button { font-size: 12px; padding: 3px 10px; margin-left: 6px; }
 .config__status { margin-top: 12px; font-size: 13px; color: var(--ok); }
+
+.banner--stale button { margin-top: 8px; }

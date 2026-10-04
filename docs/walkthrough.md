@@ -58,7 +58,7 @@ Review the typed events before recording them; nothing an agent extracts is stor
 
 **Reroute around it.**
 The plan banner goes stale the moment the outage is recorded.
-Press "Re-plan": the solver rebuilds the week around the problem, keeping every confirmed window it can and reassigning crews where it must.
+Press "Rebuild around it" in the red banner: the solver rebuilds the week around the problem, keeping every confirmed window it can and reassigning crews where it must.
 If someone is out for a whole day rather than from a phone call, click their day in the crew rota instead - same event, one click.
 The richer repair flow (several priced candidates, blast radius, an autonomy verdict per option) still exists in the terminal as `glass-guru repair`; it came off the board because one well-explained button beats three unexplained ones.
 

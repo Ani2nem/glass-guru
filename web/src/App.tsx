@@ -109,36 +109,16 @@ export default function App() {
           <button disabled={busy} onClick={() => setConfiguring(true)}>
             Configure
           </button>
-          {/* Bookings, outages and claims all re-plan themselves now, so this
-              button only exists when there is genuinely something for it to do:
-              no schedule yet, or a break the system could not absorb on its own. */}
-          {(!plan || !plan.feasible) && (
-            <button
-              className="primary"
-              disabled={busy}
-              title="Rebuild the whole week's schedule from everything recorded - bookings, absences, breakdowns - and commit it. Promised windows are kept wherever possible."
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  setPlan(await api.commit());
-                } catch (exc) {
-                  setError(exc as ApiError);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {busy ? "Solving…" : plan ? "Re-plan the week" : "Plan the week"}
-            </button>
-          )}
         </div>
       </header>
 
       {plan && !plan.feasible && (
         /* "1 violation(s)" is a true statement that tells a dispatcher nothing. What
-           they need is what broke and what to do about it, which is exactly what
-           recording a disruption produces: the committed plan still sends a van out
-           that is off the road. */
+           they need is what broke and the way out - so the way out lives HERE, not
+           as a standing button in the topbar. Bookings, outages and claims all
+           re-plan themselves; the one moment a human presses anything is the moment
+           this banner is on screen, and a button that exists at any other time is a
+           button someone has to wonder about. */
         <div className="banner banner--stale">
           <strong>The committed plan no longer works.</strong>{" "}
           Something recorded since it was made contradicts it:
@@ -147,7 +127,23 @@ export default function App() {
               <li key={violation}>{readable(violation)}</li>
             ))}
           </ul>
-          Press <strong>Re-plan the week</strong> to rebuild around it.
+          <button
+            className="primary"
+            disabled={busy}
+            title="Rebuild the week around what was recorded. Promised windows are kept wherever possible; one that truly cannot be kept stays visibly broken for a phone call."
+            onClick={async () => {
+              setBusy(true);
+              try {
+                setPlan(await api.commit());
+              } catch (exc) {
+                setError(exc as ApiError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Solving…" : "Rebuild around it"}
+          </button>
         </div>
       )}
       {error && (
