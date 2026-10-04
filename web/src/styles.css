@@ -966,8 +966,13 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  /* The global h2 is a pale grey tuned for dark panels; on this light card it read
+     as washed out. Ink, like the calendar's month heading. */
+  color: var(--cal-ink);
+  text-transform: none;
 }
-.crewcard h3 { color: var(--cal-ink); }
+.crewcard h3,
+.crewcard .workload h3 { color: var(--cal-ink); }
 .crewcard .panel__hint { color: var(--cal-muted); }
 
 .crewcard .rota th { color: var(--cal-muted); }
