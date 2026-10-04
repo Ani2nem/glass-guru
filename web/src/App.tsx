@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api, subscribe } from "./api";
 import { Calendar } from "./components/Calendar";
+import { Logo } from "./components/Logo";
 import { NotePanel } from "./components/NotePanel";
 import { ConfigPanel } from "./components/ConfigPanel";
 import { TodayPanel } from "./components/TodayPanel";
@@ -77,7 +78,10 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>Glass Guru</h1>
+        <span className="brand">
+          <Logo size={30} />
+          <h1>Glass Guru</h1>
+        </span>
         {plan ? (
           <div
             className="topbar__plan"

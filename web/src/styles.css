@@ -911,3 +911,11 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .config__status { margin-top: 12px; font-size: 13px; color: var(--ok); }
 
 .banner--stale button { margin-top: 8px; }
+
+/* The mark and the name travel together. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand svg { display: block; flex: 0 0 auto; }
