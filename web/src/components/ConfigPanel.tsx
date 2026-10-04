@@ -12,15 +12,11 @@ import type { World, Worker } from "../types";
  * does, and the form becomes a viewer with an override.
  */
 
-// No auto_glass: this business fits glass in buildings, never vehicles. The enum
-// survives in the domain for old records; the product stops offering the word.
-const ALL_CERTS = [
-  "residential_glazing",
-  "commercial_storefront",
-  "tempered_safety",
-  "screen_repair",
-  "shower_door",
-];
+// The three skills work is actually gated on. No auto glass (we fit buildings,
+// never vehicles), no screen repair (needs hands, not a badge), no "tempered
+// safety" (gated nothing - a phantom). The enum keeps the old values for old
+// records; the product stops offering the words.
+const ALL_CERTS = ["residential_glazing", "commercial_storefront", "shower_door"];
 
 /** "residential glazing", not "rg". The first version squeezed six checkboxes with
  * two-letter codes into one table column, which overflowed the sheet and meant

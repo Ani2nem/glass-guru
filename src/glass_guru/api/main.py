@@ -818,7 +818,7 @@ def _bottleneck_or(
     )
     if not capable:
         needs = ", ".join(sorted(c.value.replace("_", " ") for c in draft.required_certifications))
-        return f"nobody certified for {needs} can work these hours on a {on_date:%A}"
+        return f"nobody qualified for {needs} can work these hours on a {on_date:%A}"
     if len(capable) != 1 or plan is None:
         return detail
 
@@ -851,7 +851,7 @@ def _crew_reason(draft: Job | None, slot: SlotSuggestion) -> str:
         return ""
     needs = ", ".join(sorted(c.value.replace("_", " ") for c in draft.required_certifications))
     people = "one fitter" if draft.crew_size == 1 else f"{draft.crew_size} fitters"
-    return f"{people} needed" + (f", certified for {needs}" if needs else "")
+    return f"{people} needed" + (f", qualified for {needs}" if needs else "")
 
 
 @app.post("/api/intake", response_model=IntakeView)
