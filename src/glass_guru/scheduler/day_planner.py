@@ -60,6 +60,12 @@ from glass_guru.scheduler.travel.base import TimeBucket
 
 MINUTES_PER_DAY = 24 * 60
 
+#: What an ordinary solve pays to break a confirmed promise. Not a real dollar
+#: amount - a wall. High enough that no sum of fuel, overtime and lateness within a
+#: day can reach it, low enough that two genuinely conflicting promises degrade to
+#: one visible breach instead of an infeasible model.
+PROMISE_BREACH_PENALTY = 25_000.0
+
 
 @dataclass(frozen=True, slots=True)
 class SolveParams:
@@ -416,10 +422,30 @@ def _probe_times(
 
 
 def _shift_window(worker: Worker, on_date: date) -> tuple[int, int] | None:
+    """The ROSTERED day in minutes. Deliberately ignorant of one-day extensions:
+    overtime pay anchors to this end, so it must not move when someone agrees to
+    stay late. Reach questions use :func:`_reach_end` on top of it."""
     hours = worker.hours_for(on_date.weekday())
     if hours is None:
         return None
     return hours.start.hour * 60 + hours.start.minute, hours.end.hour * 60 + hours.end.minute
+
+
+def _reach_end(
+    world: WorldState,
+    worker: Worker,
+    on_date: date,
+    span_end: int,
+    day_start: datetime,
+    tz: tzinfo,
+) -> int:
+    """How late this person may actually be kept that day: the rostered end, raised
+    by a one-day ShiftExtended agreement when one exists."""
+    extension = world.extension_for(worker.id, on_date)
+    if extension is None:
+        return span_end
+    minutes = _clamp_to_day(extension, day_start, tz)
+    return span_end if minutes is None else max(span_end, minutes)
 
 
 # ------------------------------------------------------------------------ diagnosis
@@ -525,7 +551,7 @@ def _diagnose(
                     world.worker_outages.get(worker.id, ()),
                     day_start,
                     span[0],
-                    span[1],
+                    _reach_end(world, worker, on_date, span[1], day_start, params.business_tz),
                 )
                 for worker in certified
                 if (span := _shift_window(worker, on_date)) is not None
@@ -741,10 +767,18 @@ def plan_day(
         model.add(headcount == 0).only_enforce_if(~crew_active[k])
 
         # Crew hours are the intersection of its members' shifts, plus any overtime.
+        # A one-day ShiftExtended agreement raises one member's ceiling further: the
+        # person said yes to a named hour, and that yes outranks the standard
+        # allowance for that date only.
         for worker in workers:
             span_start, span_end = shift_span[worker.id]
             model.add(crew_start[k] >= span_start).only_enforce_if(assign[worker.id, k])
             allowance = overtime if worker.overtime_eligible else 0
+            extended = world.extension_for(worker.id, on_date)
+            if extended is not None:
+                extended_min = _clamp_to_day(extended, day_start, params.business_tz)
+                if extended_min is not None:
+                    allowance = max(allowance, extended_min - span_end)
             model.add(crew_end[k] <= span_end + allowance).only_enforce_if(assign[worker.id, k])
         # The crew cannot start before its van is available or finish after it goes down.
         usable_start, usable_end = van_window[vans[k]]
@@ -753,13 +787,30 @@ def plan_day(
         model.add(crew_end[k] >= crew_start[k])
 
     van_index = {van_id: k for k, van_id in enumerate(vans)}
+    terms_released_penalty: list[cp_model.LinearExpr] = []
     for job in jobs:
         model.add(sum(visit[job.id, k] for k in range(num_crews)) == served[job.id])
         if job.id in locked:
             model.add(served[job.id] == 1)
 
+        # Dropping a promise is a way of breaking it, not a way of avoiding the
+        # cost. This used to apply only to jobs carried in from an incumbent plan,
+        # which meant a freshly CONFIRMED booking - promised on the phone minutes
+        # ago, never yet in any committed plan - could be dropped at the plain
+        # unserved price. The dispatcher read "no room at an acceptable cost" about
+        # a job two fitters had just agreed to stay late for.
+        if job.commitment_state is CommitmentState.CONFIRMED:
+            model.add(released[job.id] >= 1 - served[job.id])
+
         if not params.allow_promise_release:
-            model.add(released[job.id] == 0)
+            # Not forbidden outright - PRICED beyond any economics. released == 0
+            # here turned one unkeepable promise into INFEASIBLE for the whole day,
+            # taking five keepable customers down with it. At a five-figure price
+            # the solver keeps every promise it possibly can, and when one truly
+            # cannot be kept it breaks that one visibly - the checker flags it, the
+            # banner goes red, one customer gets a call - while the rest of the day
+            # stands.
+            terms_released_penalty.append(released[job.id] * _cents(PROMISE_BREACH_PENALTY))
 
         placement = incumbent.get(job.id)
         if placement is None:
@@ -778,10 +829,6 @@ def plan_day(
         # :func:`glass_guru.scheduler.repair.carve_out_locked`.
         model.add(visit[job.id, k0] == 1).only_enforce_if(stay[job.id])
         model.add(start[job.id, k0] >= minutes).only_enforce_if(stay[job.id])
-
-        # Dropping a promise is a way of breaking it, not a way of avoiding the cost.
-        if job.commitment_state is CommitmentState.CONFIRMED:
-            model.add(released[job.id] >= 1 - served[job.id])
 
     # ------------------------------------------------------- crew fitness per job
     # A claimed overtime offer pins its claimant: the fitter who said yes to the
@@ -966,7 +1013,10 @@ def plan_day(
         # is a fitter being paid at six.
         for worker in workers:
             span_close = shift_span[worker.id][1]
-            member_ot = model.new_int_var(0, overtime, f"ot_{worker.id}_{k}")
+            # Ceiling is the whole day, not the standard allowance: an extended
+            # shift can run further than 120 minutes, and a bound tighter than the
+            # crew-end constraints would turn that agreement into INFEASIBLE.
+            member_ot = model.new_int_var(0, MINUTES_PER_DAY, f"ot_{worker.id}_{k}")
             model.add(member_ot >= crew_end[k] - span_close).only_enforce_if(assign[worker.id, k])
             terms.append(member_ot * ot_per_min)
 
@@ -976,6 +1026,8 @@ def plan_day(
     # but it keeps plans stable, which is what a dispatcher notices.
     for k in range(num_crews):
         terms.append(crew_active[k] * k)
+
+    terms.extend(terms_released_penalty)
 
     change_cost = _cents(params.change_penalty)
     if change_cost:

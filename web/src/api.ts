@@ -52,6 +52,27 @@ export const api = {
   week: () => request<Week>("/api/week"),
   plan: () => request<Plan | null>("/api/plan"),
   commit: () => post<Plan>("/api/plan/commit"),
+  openAsk: (ask: Record<string, unknown>) => post<{ ask_id: string }>("/api/asks", ask),
+  extendAsk: (askId: string, workerId: string) =>
+    post<{ worker: string; until: string; status: string }>(
+      `/api/asks/${encodeURIComponent(askId)}/extend?worker_id=${encodeURIComponent(workerId)}`,
+    ),
+  closeAsk: (askId: string, outcome: string) =>
+    post<{ status: string }>(
+      `/api/asks/${encodeURIComponent(askId)}/close?outcome=${encodeURIComponent(outcome)}`,
+    ),
+  configWorker: (worker: Record<string, unknown>) =>
+    post<{ worker_id: string; status: string }>("/api/config/worker", worker),
+  removeWorker: (workerId: string) =>
+    request<{ status: string }>(`/api/config/worker/${encodeURIComponent(workerId)}`, {
+      method: "DELETE",
+    }),
+  configVan: (van: Record<string, unknown>) =>
+    post<{ van_id: string; status: string }>("/api/config/van", van),
+  removeVan: (vanId: string) =>
+    request<{ status: string }>(`/api/config/van/${encodeURIComponent(vanId)}`, {
+      method: "DELETE",
+    }),
   claimOvertime: (jobId: string, workerId: string) =>
     post<{ job_id: string; worker: string; status: string }>(
       `/api/overtime/${encodeURIComponent(jobId)}/claim?worker_id=${encodeURIComponent(workerId)}`,

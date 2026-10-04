@@ -70,8 +70,11 @@ cases:
   - scenario: promise_broken
     why: >-
       The only scenario where a promise cannot be kept, and therefore the only one
-      that exercises the comms agent at all. Without it the quality tier scores
-      nothing, and a tier that never runs is a tier that cannot fail.
+      that exercises the comms agent at all. The expected shape changed when breaking
+      a promise became priced instead of forbidden: the solver now serves Chen LATE -
+      one visible violation that demands a phone call - rather than letting her fall
+      out of the day or taking five other customers down with an infeasible model.
+      "feasible" is deliberately absent: this plan must NOT validate clean.
     expect:
       min_jobs_served: 3
-      feasible: true
+      must_serve: [j-402]

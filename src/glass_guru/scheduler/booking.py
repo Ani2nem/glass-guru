@@ -280,13 +280,19 @@ def suggest_booking_slots(
         # Everything already placed stays placed. A quote must never look cheap
         # because it quietly displaced someone who was already promised a slot.
         candidate_world = _world_with(world, wanted)
+        # The draft is LOCKED, not merely offered. A quote answers "can we serve
+        # this and at what cost", never "is this customer worth serving" - but an
+        # unlocked draft with no revenue on it yet was exactly that second question,
+        # and the solver answered it: a 600-minute overtime evening cost more than
+        # the unserved penalty, so the trial dropped the caller and the board said
+        # "no room" about a slot two fitters had just agreed to work.
         trial = plan_day(
             world=candidate_world,
             travel=travel,
             on_date=on_date,
             candidate_job_ids=[*existing, draft.id],
             params=params,
-            locked_job_ids=sorted(remembered.served),
+            locked_job_ids=sorted({*remembered.served, draft.id}),
         )
 
         placement = next(
