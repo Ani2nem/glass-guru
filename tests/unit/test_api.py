@@ -1238,11 +1238,8 @@ def test_every_stop_says_where_its_drive_began(client: TestClient, monkeypatch):
     """ "Drive there: 15 min" answered the wrong question - the owner wanted to know
     whether the van chained from the previous job or doubled back to the shop. The
     first stop says "the shop"; each later stop names the customer it came from."""
-    from datetime import date as _date
-    from datetime import timedelta as _timedelta
-
     monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
-    monday = (_date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)).isoformat()
+    monday = _next_monday()
 
     def draft(name: str) -> dict[str, object]:
         return {
