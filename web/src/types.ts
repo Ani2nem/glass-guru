@@ -16,6 +16,7 @@ export interface Stop {
   commitment_state: string;
   gap_minutes: number;
   past_shift: boolean;
+  from_label: string;
   lat: number;
   lon: number;
 }

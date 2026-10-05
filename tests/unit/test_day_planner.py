@@ -344,8 +344,9 @@ def test_the_tie_break_never_outweighs_a_cent_of_real_cost(world, travel, params
     assert result.status == "OPTIMAL"
     assert_feasible(result, world, travel)
     # The value this fixture produces. 244.09 -> 374.22 when the business moved from
-    # Seattle to Texas; 374.22 -> 57.14 when the objective became marginal cash -
-    # fuel and overtime instead of wages owed regardless. The point of pinning it is
-    # unchanged: a number that only moves when the economics or the geography do is a
-    # number that would catch a tie-break quietly buying a worse plan.
-    assert round(result.objective_cost, 2) == 57.14
+    # Seattle to Texas; 374.22 -> 57.14 when the objective became marginal cash;
+    # 57.14 -> 55.17 when the depot pin moved ~4 road miles south onto the actual
+    # building. The point of pinning it is unchanged: a number that only moves when
+    # the economics or the geography do is a number that would catch a tie-break
+    # quietly buying a worse plan.
+    assert round(result.objective_cost, 2) == 55.17

@@ -1214,3 +1214,53 @@ def test_the_past_cannot_be_booked_and_cancel_tells_the_truth_twice(
     second = client.post(f"/api/jobs/{booked['job_id']}/cancel")
     assert second.status_code == 409
     assert "already cancelled" in second.json()["detail"]["detail"]
+
+
+def test_the_depot_is_pinned_on_the_actual_building():
+    """The invented depot pin sat ~4 road miles north of the shop, so every first
+    leg of every route carried phantom miles - the owner caught it by comparing the
+    board against Google Maps. 1150 Blue Mound Rd W, per the US Census geocoder."""
+    from krama.fixtures.sample_business import DEPOT
+
+    assert abs(DEPOT.lat - 32.9464) < 0.01, DEPOT.lat
+    assert abs(DEPOT.lon - (-97.3799)) < 0.01, DEPOT.lon
+    assert "1150 Blue Mound" in DEPOT.address
+
+
+def test_every_stop_says_where_its_drive_began(client: TestClient, monkeypatch):
+    """ "Drive there: 15 min" answered the wrong question - the owner wanted to know
+    whether the van chained from the previous job or doubled back to the shop. The
+    first stop says "the shop"; each later stop names the customer it came from."""
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    monday = (_date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)).isoformat()
+
+    def draft(name: str) -> dict:
+        return {
+            "customer_name": name,
+            "phone": "9132934243",
+            "address": "x",
+            "service_type": "residential_window_replacement",
+            "duration_minutes": 60,
+            "duration_confidence": 30,
+            "crew_size": 1,
+            "certifications": ["residential_glazing"],
+            "commitment_cost": 0,
+            "lat": 32.99,
+            "lon": -97.36,
+        }
+
+    client.post("/api/book", json={"draft": draft("First"), "date": monday, "arrival": "09:00"})
+    client.post("/api/book", json={"draft": draft("Second"), "date": monday, "arrival": "11:00"})
+
+    plan = client.get("/api/plan").json()
+    labels = {
+        s["customer_name"]: s["from_label"]
+        for r in plan["routes"]
+        if r["date"] == monday
+        for s in r["stops"]
+    }
+    assert labels.get("First") == "the shop", labels
+    assert labels.get("Second") == "First's", labels

@@ -63,7 +63,10 @@ BUSINESS_TZ = timezone(timedelta(hours=-5))
 #: Monday of the sample week. All scenarios are anchored to this.
 WEEK_START = date(2026, 9, 21)
 
-DEPOT = _geo("depot", 33.0019853, -97.3423728, "150 Blue Mound Rd W #807, Haslet, TX 76052")
+# 1150, not 150: the owner's own Google search surfaced the real building, and the
+# board's mileage was off by the ~4 road miles between the invented pin and the
+# shop. A depot that is wrong poisons the FIRST leg of every route ever planned.
+DEPOT = _geo("depot", 32.946396, -97.379865, "1150 Blue Mound Rd W #807, Haslet, TX 76052")
 
 #: The downtown storefront, exported so the API's readiness probe can ask for a leg
 #: the committed snapshot actually holds. Keyed the same way the job is, so it moves

@@ -167,6 +167,30 @@
   "miles": 11.449,
   "minutes": 19
  },
+ "9vff34v|9vfg2jd|weekday|am_peak": {
+  "miles": 15.683,
+  "minutes": 31
+ },
+ "9vff34v|9vfg2jd|weekday|early": {
+  "miles": 15.683,
+  "minutes": 21
+ },
+ "9vff34v|9vfg2jd|weekday|evening": {
+  "miles": 15.683,
+  "minutes": 20
+ },
+ "9vff34v|9vfg2jd|weekday|midday": {
+  "miles": 15.683,
+  "minutes": 23
+ },
+ "9vff34v|9vfg2jd|weekday|pm_peak": {
+  "miles": 15.683,
+  "minutes": 32
+ },
+ "9vff34v|9vfg2jd|weekend|midday": {
+  "miles": 15.683,
+  "minutes": 23
+ },
  "9vff34v|9vfg4c0|weekday|am_peak": {
   "miles": 10.519,
   "minutes": 28
@@ -550,6 +574,30 @@
  "9vff3tw|9vfg1wf|weekend|midday": {
   "miles": 10.675,
   "minutes": 16
+ },
+ "9vff3tw|9vfg2jd|weekday|am_peak": {
+  "miles": 14.916,
+  "minutes": 28
+ },
+ "9vff3tw|9vfg2jd|weekday|early": {
+  "miles": 14.916,
+  "minutes": 19
+ },
+ "9vff3tw|9vfg2jd|weekday|evening": {
+  "miles": 14.916,
+  "minutes": 18
+ },
+ "9vff3tw|9vfg2jd|weekday|midday": {
+  "miles": 14.916,
+  "minutes": 21
+ },
+ "9vff3tw|9vfg2jd|weekday|pm_peak": {
+  "miles": 14.916,
+  "minutes": 29
+ },
+ "9vff3tw|9vfg2jd|weekend|midday": {
+  "miles": 14.916,
+  "minutes": 21
  },
  "9vff3tw|9vfg4c0|weekday|am_peak": {
   "miles": 8.687,
@@ -935,6 +983,30 @@
   "miles": 9.18,
   "minutes": 15
  },
+ "9vffbe8|9vfg2jd|weekday|am_peak": {
+  "miles": 9.615,
+  "minutes": 26
+ },
+ "9vffbe8|9vfg2jd|weekday|early": {
+  "miles": 9.615,
+  "minutes": 18
+ },
+ "9vffbe8|9vfg2jd|weekday|evening": {
+  "miles": 9.615,
+  "minutes": 17
+ },
+ "9vffbe8|9vfg2jd|weekday|midday": {
+  "miles": 9.615,
+  "minutes": 20
+ },
+ "9vffbe8|9vfg2jd|weekday|pm_peak": {
+  "miles": 9.615,
+  "minutes": 27
+ },
+ "9vffbe8|9vfg2jd|weekend|midday": {
+  "miles": 9.615,
+  "minutes": 20
+ },
  "9vffbe8|9vfg4c0|weekday|am_peak": {
   "miles": 9.689,
   "minutes": 24
@@ -1318,6 +1390,30 @@
  "9vffr32|9vfg1wf|weekend|midday": {
   "miles": 27.013,
   "minutes": 38
+ },
+ "9vffr32|9vfg2jd|weekday|am_peak": {
+  "miles": 30.837,
+  "minutes": 57
+ },
+ "9vffr32|9vfg2jd|weekday|early": {
+  "miles": 30.837,
+  "minutes": 38
+ },
+ "9vffr32|9vfg2jd|weekday|evening": {
+  "miles": 30.837,
+  "minutes": 36
+ },
+ "9vffr32|9vfg2jd|weekday|midday": {
+  "miles": 30.837,
+  "minutes": 42
+ },
+ "9vffr32|9vfg2jd|weekday|pm_peak": {
+  "miles": 30.837,
+  "minutes": 59
+ },
+ "9vffr32|9vfg2jd|weekend|midday": {
+  "miles": 30.837,
+  "minutes": 42
  },
  "9vffr32|9vfg4c0|weekday|am_peak": {
   "miles": 21.437,
@@ -1703,6 +1799,30 @@
   "miles": 13.755,
   "minutes": 23
  },
+ "9vffsz6|9vfg2jd|weekday|am_peak": {
+  "miles": 18.06,
+  "minutes": 37
+ },
+ "9vffsz6|9vfg2jd|weekday|early": {
+  "miles": 18.06,
+  "minutes": 25
+ },
+ "9vffsz6|9vfg2jd|weekday|evening": {
+  "miles": 18.06,
+  "minutes": 24
+ },
+ "9vffsz6|9vfg2jd|weekday|midday": {
+  "miles": 18.06,
+  "minutes": 27
+ },
+ "9vffsz6|9vfg2jd|weekday|pm_peak": {
+  "miles": 18.06,
+  "minutes": 38
+ },
+ "9vffsz6|9vfg2jd|weekend|midday": {
+  "miles": 18.06,
+  "minutes": 27
+ },
  "9vffsz6|9vfg4c0|weekday|am_peak": {
   "miles": 8.66,
   "minutes": 23
@@ -2086,6 +2206,30 @@
  "9vffumn|9vfg1wf|weekend|midday": {
   "miles": 12.859,
   "minutes": 21
+ },
+ "9vffumn|9vfg2jd|weekday|am_peak": {
+  "miles": 17.164,
+  "minutes": 34
+ },
+ "9vffumn|9vfg2jd|weekday|early": {
+  "miles": 17.164,
+  "minutes": 23
+ },
+ "9vffumn|9vfg2jd|weekday|evening": {
+  "miles": 17.164,
+  "minutes": 22
+ },
+ "9vffumn|9vfg2jd|weekday|midday": {
+  "miles": 17.164,
+  "minutes": 25
+ },
+ "9vffumn|9vfg2jd|weekday|pm_peak": {
+  "miles": 17.164,
+  "minutes": 35
+ },
+ "9vffumn|9vfg2jd|weekend|midday": {
+  "miles": 17.164,
+  "minutes": 25
  },
  "9vffumn|9vfg4c0|weekday|am_peak": {
   "miles": 6.252,
@@ -2471,6 +2615,30 @@
   "miles": 1.651,
   "minutes": 6
  },
+ "9vfg1hz|9vfg2jd|weekday|am_peak": {
+  "miles": 5.035,
+  "minutes": 12
+ },
+ "9vfg1hz|9vfg2jd|weekday|early": {
+  "miles": 5.035,
+  "minutes": 9
+ },
+ "9vfg1hz|9vfg2jd|weekday|evening": {
+  "miles": 5.035,
+  "minutes": 8
+ },
+ "9vfg1hz|9vfg2jd|weekday|midday": {
+  "miles": 5.035,
+  "minutes": 9
+ },
+ "9vfg1hz|9vfg2jd|weekday|pm_peak": {
+  "miles": 5.035,
+  "minutes": 12
+ },
+ "9vfg1hz|9vfg2jd|weekend|midday": {
+  "miles": 5.035,
+  "minutes": 9
+ },
  "9vfg1hz|9vfg4c0|weekday|am_peak": {
   "miles": 5.372,
   "minutes": 17
@@ -2855,6 +3023,30 @@
   "miles": 2.261,
   "minutes": 7
  },
+ "9vfg1wf|9vfg2jd|weekday|am_peak": {
+  "miles": 7.296,
+  "minutes": 19
+ },
+ "9vfg1wf|9vfg2jd|weekday|early": {
+  "miles": 7.296,
+  "minutes": 13
+ },
+ "9vfg1wf|9vfg2jd|weekday|evening": {
+  "miles": 7.296,
+  "minutes": 12
+ },
+ "9vfg1wf|9vfg2jd|weekday|midday": {
+  "miles": 7.296,
+  "minutes": 14
+ },
+ "9vfg1wf|9vfg2jd|weekday|pm_peak": {
+  "miles": 7.296,
+  "minutes": 19
+ },
+ "9vfg1wf|9vfg2jd|weekend|midday": {
+  "miles": 7.296,
+  "minutes": 14
+ },
  "9vfg1wf|9vfg4c0|weekday|am_peak": {
   "miles": 5.554,
   "minutes": 18
@@ -3071,6 +3263,390 @@
   "miles": 31.217,
   "minutes": 44
  },
+ "9vfg2jd|9vff34v|weekday|am_peak": {
+  "miles": 15.94,
+  "minutes": 31
+ },
+ "9vfg2jd|9vff34v|weekday|early": {
+  "miles": 15.94,
+  "minutes": 21
+ },
+ "9vfg2jd|9vff34v|weekday|evening": {
+  "miles": 15.94,
+  "minutes": 20
+ },
+ "9vfg2jd|9vff34v|weekday|midday": {
+  "miles": 15.94,
+  "minutes": 23
+ },
+ "9vfg2jd|9vff34v|weekday|pm_peak": {
+  "miles": 15.94,
+  "minutes": 32
+ },
+ "9vfg2jd|9vff34v|weekend|midday": {
+  "miles": 15.94,
+  "minutes": 23
+ },
+ "9vfg2jd|9vff3tw|weekday|am_peak": {
+  "miles": 15.682,
+  "minutes": 30
+ },
+ "9vfg2jd|9vff3tw|weekday|early": {
+  "miles": 15.682,
+  "minutes": 20
+ },
+ "9vfg2jd|9vff3tw|weekday|evening": {
+  "miles": 15.682,
+  "minutes": 19
+ },
+ "9vfg2jd|9vff3tw|weekday|midday": {
+  "miles": 15.682,
+  "minutes": 22
+ },
+ "9vfg2jd|9vff3tw|weekday|pm_peak": {
+  "miles": 15.682,
+  "minutes": 31
+ },
+ "9vfg2jd|9vff3tw|weekend|midday": {
+  "miles": 15.682,
+  "minutes": 22
+ },
+ "9vfg2jd|9vffbe8|weekday|am_peak": {
+  "miles": 9.209,
+  "minutes": 26
+ },
+ "9vfg2jd|9vffbe8|weekday|early": {
+  "miles": 9.209,
+  "minutes": 18
+ },
+ "9vfg2jd|9vffbe8|weekday|evening": {
+  "miles": 9.209,
+  "minutes": 17
+ },
+ "9vfg2jd|9vffbe8|weekday|midday": {
+  "miles": 9.209,
+  "minutes": 19
+ },
+ "9vfg2jd|9vffbe8|weekday|pm_peak": {
+  "miles": 9.209,
+  "minutes": 27
+ },
+ "9vfg2jd|9vffbe8|weekend|midday": {
+  "miles": 9.209,
+  "minutes": 19
+ },
+ "9vfg2jd|9vffr32|weekday|am_peak": {
+  "miles": 30.537,
+  "minutes": 56
+ },
+ "9vfg2jd|9vffr32|weekday|early": {
+  "miles": 30.537,
+  "minutes": 37
+ },
+ "9vfg2jd|9vffr32|weekday|evening": {
+  "miles": 30.537,
+  "minutes": 35
+ },
+ "9vfg2jd|9vffr32|weekday|midday": {
+  "miles": 30.537,
+  "minutes": 41
+ },
+ "9vfg2jd|9vffr32|weekday|pm_peak": {
+  "miles": 30.537,
+  "minutes": 57
+ },
+ "9vfg2jd|9vffr32|weekend|midday": {
+  "miles": 30.537,
+  "minutes": 41
+ },
+ "9vfg2jd|9vffsz6|weekday|am_peak": {
+  "miles": 18.285,
+  "minutes": 37
+ },
+ "9vfg2jd|9vffsz6|weekday|early": {
+  "miles": 18.285,
+  "minutes": 25
+ },
+ "9vfg2jd|9vffsz6|weekday|evening": {
+  "miles": 18.285,
+  "minutes": 24
+ },
+ "9vfg2jd|9vffsz6|weekday|midday": {
+  "miles": 18.285,
+  "minutes": 28
+ },
+ "9vfg2jd|9vffsz6|weekday|pm_peak": {
+  "miles": 18.285,
+  "minutes": 39
+ },
+ "9vfg2jd|9vffsz6|weekend|midday": {
+  "miles": 18.285,
+  "minutes": 28
+ },
+ "9vfg2jd|9vffumn|weekday|am_peak": {
+  "miles": 17.41,
+  "minutes": 35
+ },
+ "9vfg2jd|9vffumn|weekday|early": {
+  "miles": 17.41,
+  "minutes": 23
+ },
+ "9vfg2jd|9vffumn|weekday|evening": {
+  "miles": 17.41,
+  "minutes": 22
+ },
+ "9vfg2jd|9vffumn|weekday|midday": {
+  "miles": 17.41,
+  "minutes": 26
+ },
+ "9vfg2jd|9vffumn|weekday|pm_peak": {
+  "miles": 17.41,
+  "minutes": 36
+ },
+ "9vfg2jd|9vffumn|weekend|midday": {
+  "miles": 17.41,
+  "minutes": 26
+ },
+ "9vfg2jd|9vfg1hz|weekday|am_peak": {
+  "miles": 5.747,
+  "minutes": 16
+ },
+ "9vfg2jd|9vfg1hz|weekday|early": {
+  "miles": 5.747,
+  "minutes": 11
+ },
+ "9vfg2jd|9vfg1hz|weekday|evening": {
+  "miles": 5.747,
+  "minutes": 11
+ },
+ "9vfg2jd|9vfg1hz|weekday|midday": {
+  "miles": 5.747,
+  "minutes": 12
+ },
+ "9vfg2jd|9vfg1hz|weekday|pm_peak": {
+  "miles": 5.747,
+  "minutes": 16
+ },
+ "9vfg2jd|9vfg1hz|weekend|midday": {
+  "miles": 5.747,
+  "minutes": 12
+ },
+ "9vfg2jd|9vfg1wf|weekday|am_peak": {
+  "miles": 6.294,
+  "minutes": 21
+ },
+ "9vfg2jd|9vfg1wf|weekday|early": {
+  "miles": 6.294,
+  "minutes": 14
+ },
+ "9vfg2jd|9vfg1wf|weekday|evening": {
+  "miles": 6.294,
+  "minutes": 14
+ },
+ "9vfg2jd|9vfg1wf|weekday|midday": {
+  "miles": 6.294,
+  "minutes": 15
+ },
+ "9vfg2jd|9vfg1wf|weekday|pm_peak": {
+  "miles": 6.294,
+  "minutes": 21
+ },
+ "9vfg2jd|9vfg1wf|weekend|midday": {
+  "miles": 6.294,
+  "minutes": 15
+ },
+ "9vfg2jd|9vfg4c0|weekday|am_peak": {
+  "miles": 10.651,
+  "minutes": 26
+ },
+ "9vfg2jd|9vfg4c0|weekday|early": {
+  "miles": 10.651,
+  "minutes": 18
+ },
+ "9vfg2jd|9vfg4c0|weekday|evening": {
+  "miles": 10.651,
+  "minutes": 17
+ },
+ "9vfg2jd|9vfg4c0|weekday|midday": {
+  "miles": 10.651,
+  "minutes": 19
+ },
+ "9vfg2jd|9vfg4c0|weekday|pm_peak": {
+  "miles": 10.651,
+  "minutes": 27
+ },
+ "9vfg2jd|9vfg4c0|weekend|midday": {
+  "miles": 10.651,
+  "minutes": 19
+ },
+ "9vfg2jd|9vfg4vg|weekday|am_peak": {
+  "miles": 10.532,
+  "minutes": 30
+ },
+ "9vfg2jd|9vfg4vg|weekday|early": {
+  "miles": 10.532,
+  "minutes": 20
+ },
+ "9vfg2jd|9vfg4vg|weekday|evening": {
+  "miles": 10.532,
+  "minutes": 19
+ },
+ "9vfg2jd|9vfg4vg|weekday|midday": {
+  "miles": 10.532,
+  "minutes": 22
+ },
+ "9vfg2jd|9vfg4vg|weekday|pm_peak": {
+  "miles": 10.532,
+  "minutes": 31
+ },
+ "9vfg2jd|9vfg4vg|weekend|midday": {
+  "miles": 10.532,
+  "minutes": 22
+ },
+ "9vfg2jd|9vfgg3e|weekday|am_peak": {
+  "miles": 12.217,
+  "minutes": 34
+ },
+ "9vfg2jd|9vfgg3e|weekday|early": {
+  "miles": 12.217,
+  "minutes": 23
+ },
+ "9vfg2jd|9vfgg3e|weekday|evening": {
+  "miles": 12.217,
+  "minutes": 22
+ },
+ "9vfg2jd|9vfgg3e|weekday|midday": {
+  "miles": 12.217,
+  "minutes": 25
+ },
+ "9vfg2jd|9vfgg3e|weekday|pm_peak": {
+  "miles": 12.217,
+  "minutes": 35
+ },
+ "9vfg2jd|9vfgg3e|weekend|midday": {
+  "miles": 12.217,
+  "minutes": 25
+ },
+ "9vfg2jd|9vfgmsv|weekday|am_peak": {
+  "miles": 18.163,
+  "minutes": 44
+ },
+ "9vfg2jd|9vfgmsv|weekday|early": {
+  "miles": 18.163,
+  "minutes": 29
+ },
+ "9vfg2jd|9vfgmsv|weekday|evening": {
+  "miles": 18.163,
+  "minutes": 28
+ },
+ "9vfg2jd|9vfgmsv|weekday|midday": {
+  "miles": 18.163,
+  "minutes": 32
+ },
+ "9vfg2jd|9vfgmsv|weekday|pm_peak": {
+  "miles": 18.163,
+  "minutes": 45
+ },
+ "9vfg2jd|9vfgmsv|weekend|midday": {
+  "miles": 18.163,
+  "minutes": 32
+ },
+ "9vfg2jd|9vfgu0g|weekday|am_peak": {
+  "miles": 12.622,
+  "minutes": 35
+ },
+ "9vfg2jd|9vfgu0g|weekday|early": {
+  "miles": 12.622,
+  "minutes": 23
+ },
+ "9vfg2jd|9vfgu0g|weekday|evening": {
+  "miles": 12.622,
+  "minutes": 22
+ },
+ "9vfg2jd|9vfgu0g|weekday|midday": {
+  "miles": 12.622,
+  "minutes": 26
+ },
+ "9vfg2jd|9vfgu0g|weekday|pm_peak": {
+  "miles": 12.622,
+  "minutes": 36
+ },
+ "9vfg2jd|9vfgu0g|weekend|midday": {
+  "miles": 12.622,
+  "minutes": 26
+ },
+ "9vfg2jd|9vfgx9r|weekday|am_peak": {
+  "miles": 24.271,
+  "minutes": 59
+ },
+ "9vfg2jd|9vfgx9r|weekday|early": {
+  "miles": 24.271,
+  "minutes": 39
+ },
+ "9vfg2jd|9vfgx9r|weekday|evening": {
+  "miles": 24.271,
+  "minutes": 37
+ },
+ "9vfg2jd|9vfgx9r|weekday|midday": {
+  "miles": 24.271,
+  "minutes": 43
+ },
+ "9vfg2jd|9vfgx9r|weekday|pm_peak": {
+  "miles": 24.271,
+  "minutes": 60
+ },
+ "9vfg2jd|9vfgx9r|weekend|midday": {
+  "miles": 24.271,
+  "minutes": 43
+ },
+ "9vfg2jd|9vfuv2z|weekday|am_peak": {
+  "miles": 24.893,
+  "minutes": 57
+ },
+ "9vfg2jd|9vfuv2z|weekday|early": {
+  "miles": 24.893,
+  "minutes": 38
+ },
+ "9vfg2jd|9vfuv2z|weekday|evening": {
+  "miles": 24.893,
+  "minutes": 36
+ },
+ "9vfg2jd|9vfuv2z|weekday|midday": {
+  "miles": 24.893,
+  "minutes": 42
+ },
+ "9vfg2jd|9vfuv2z|weekday|pm_peak": {
+  "miles": 24.893,
+  "minutes": 59
+ },
+ "9vfg2jd|9vfuv2z|weekend|midday": {
+  "miles": 24.893,
+  "minutes": 42
+ },
+ "9vfg2jd|9vg5bzf|weekday|am_peak": {
+  "miles": 32.743,
+  "minutes": 70
+ },
+ "9vfg2jd|9vg5bzf|weekday|early": {
+  "miles": 32.743,
+  "minutes": 46
+ },
+ "9vfg2jd|9vg5bzf|weekday|evening": {
+  "miles": 32.743,
+  "minutes": 44
+ },
+ "9vfg2jd|9vg5bzf|weekday|midday": {
+  "miles": 32.743,
+  "minutes": 51
+ },
+ "9vfg2jd|9vg5bzf|weekday|pm_peak": {
+  "miles": 32.743,
+  "minutes": 72
+ },
+ "9vfg2jd|9vg5bzf|weekend|midday": {
+  "miles": 32.743,
+  "minutes": 51
+ },
  "9vfg4c0|9vff34v|weekday|am_peak": {
   "miles": 11.074,
   "minutes": 29
@@ -3262,6 +3838,30 @@
  "9vfg4c0|9vfg1wf|weekend|midday": {
   "miles": 5.611,
   "minutes": 13
+ },
+ "9vfg4c0|9vfg2jd|weekday|am_peak": {
+  "miles": 10.421,
+  "minutes": 24
+ },
+ "9vfg4c0|9vfg2jd|weekday|early": {
+  "miles": 10.421,
+  "minutes": 17
+ },
+ "9vfg4c0|9vfg2jd|weekday|evening": {
+  "miles": 10.421,
+  "minutes": 16
+ },
+ "9vfg4c0|9vfg2jd|weekday|midday": {
+  "miles": 10.421,
+  "minutes": 18
+ },
+ "9vfg4c0|9vfg2jd|weekday|pm_peak": {
+  "miles": 10.421,
+  "minutes": 25
+ },
+ "9vfg4c0|9vfg2jd|weekend|midday": {
+  "miles": 10.421,
+  "minutes": 18
  },
  "9vfg4c0|9vfg4vg|weekday|am_peak": {
   "miles": 1.799,
@@ -3646,6 +4246,30 @@
  "9vfg4vg|9vfg1wf|weekend|midday": {
   "miles": 4.448,
   "minutes": 11
+ },
+ "9vfg4vg|9vfg2jd|weekday|am_peak": {
+  "miles": 9.791,
+  "minutes": 26
+ },
+ "9vfg4vg|9vfg2jd|weekday|early": {
+  "miles": 9.791,
+  "minutes": 17
+ },
+ "9vfg4vg|9vfg2jd|weekday|evening": {
+  "miles": 9.791,
+  "minutes": 17
+ },
+ "9vfg4vg|9vfg2jd|weekday|midday": {
+  "miles": 9.791,
+  "minutes": 19
+ },
+ "9vfg4vg|9vfg2jd|weekday|pm_peak": {
+  "miles": 9.791,
+  "minutes": 26
+ },
+ "9vfg4vg|9vfg2jd|weekend|midday": {
+  "miles": 9.791,
+  "minutes": 19
  },
  "9vfg4vg|9vfg4c0|weekday|am_peak": {
   "miles": 1.799,
@@ -4415,6 +5039,30 @@
   "miles": 10.755,
   "minutes": 20
  },
+ "9vfgg3e|9vfg2jd|weekday|am_peak": {
+  "miles": 12.11,
+  "minutes": 35
+ },
+ "9vfgg3e|9vfg2jd|weekday|early": {
+  "miles": 12.11,
+  "minutes": 23
+ },
+ "9vfgg3e|9vfg2jd|weekday|evening": {
+  "miles": 12.11,
+  "minutes": 22
+ },
+ "9vfgg3e|9vfg2jd|weekday|midday": {
+  "miles": 12.11,
+  "minutes": 26
+ },
+ "9vfgg3e|9vfg2jd|weekday|pm_peak": {
+  "miles": 12.11,
+  "minutes": 36
+ },
+ "9vfgg3e|9vfg2jd|weekend|midday": {
+  "miles": 12.11,
+  "minutes": 26
+ },
  "9vfgg3e|9vfg4c0|weekday|am_peak": {
   "miles": 10.086,
   "minutes": 27
@@ -4798,6 +5446,30 @@
  "9vfgmsv|9vfg1wf|weekend|midday": {
   "miles": 12.418,
   "minutes": 26
+ },
+ "9vfgmsv|9vfg2jd|weekday|am_peak": {
+  "miles": 16.064,
+  "minutes": 45
+ },
+ "9vfgmsv|9vfg2jd|weekday|early": {
+  "miles": 16.064,
+  "minutes": 30
+ },
+ "9vfgmsv|9vfg2jd|weekday|evening": {
+  "miles": 16.064,
+  "minutes": 28
+ },
+ "9vfgmsv|9vfg2jd|weekday|midday": {
+  "miles": 16.064,
+  "minutes": 33
+ },
+ "9vfgmsv|9vfg2jd|weekday|pm_peak": {
+  "miles": 16.064,
+  "minutes": 46
+ },
+ "9vfgmsv|9vfg2jd|weekend|midday": {
+  "miles": 16.064,
+  "minutes": 33
  },
  "9vfgmsv|9vfg4c0|weekday|am_peak": {
   "miles": 10.651,
@@ -5183,6 +5855,30 @@
   "miles": 11.251,
   "minutes": 21
  },
+ "9vfgu0g|9vfg2jd|weekday|am_peak": {
+  "miles": 12.606,
+  "minutes": 35
+ },
+ "9vfgu0g|9vfg2jd|weekday|early": {
+  "miles": 12.606,
+  "minutes": 24
+ },
+ "9vfgu0g|9vfg2jd|weekday|evening": {
+  "miles": 12.606,
+  "minutes": 23
+ },
+ "9vfgu0g|9vfg2jd|weekday|midday": {
+  "miles": 12.606,
+  "minutes": 26
+ },
+ "9vfgu0g|9vfg2jd|weekday|pm_peak": {
+  "miles": 12.606,
+  "minutes": 37
+ },
+ "9vfgu0g|9vfg2jd|weekend|midday": {
+  "miles": 12.606,
+  "minutes": 26
+ },
  "9vfgu0g|9vfg4c0|weekday|am_peak": {
   "miles": 10.563,
   "minutes": 28
@@ -5566,6 +6262,30 @@
  "9vfgx9r|9vfg1wf|weekend|midday": {
   "miles": 22.847,
   "minutes": 37
+ },
+ "9vfgx9r|9vfg2jd|weekday|am_peak": {
+  "miles": 24.202,
+  "minutes": 59
+ },
+ "9vfgx9r|9vfg2jd|weekday|early": {
+  "miles": 24.202,
+  "minutes": 39
+ },
+ "9vfgx9r|9vfg2jd|weekday|evening": {
+  "miles": 24.202,
+  "minutes": 37
+ },
+ "9vfgx9r|9vfg2jd|weekday|midday": {
+  "miles": 24.202,
+  "minutes": 43
+ },
+ "9vfgx9r|9vfg2jd|weekday|pm_peak": {
+  "miles": 24.202,
+  "minutes": 61
+ },
+ "9vfgx9r|9vfg2jd|weekend|midday": {
+  "miles": 24.202,
+  "minutes": 43
  },
  "9vfgx9r|9vfg4c0|weekday|am_peak": {
   "miles": 23.777,
@@ -5951,6 +6671,30 @@
   "miles": 23.861,
   "minutes": 36
  },
+ "9vfuv2z|9vfg2jd|weekday|am_peak": {
+  "miles": 25.013,
+  "minutes": 56
+ },
+ "9vfuv2z|9vfg2jd|weekday|early": {
+  "miles": 25.013,
+  "minutes": 38
+ },
+ "9vfuv2z|9vfg2jd|weekday|evening": {
+  "miles": 25.013,
+  "minutes": 36
+ },
+ "9vfuv2z|9vfg2jd|weekday|midday": {
+  "miles": 25.013,
+  "minutes": 41
+ },
+ "9vfuv2z|9vfg2jd|weekday|pm_peak": {
+  "miles": 25.013,
+  "minutes": 58
+ },
+ "9vfuv2z|9vfg2jd|weekend|midday": {
+  "miles": 25.013,
+  "minutes": 41
+ },
  "9vfuv2z|9vfg4c0|weekday|am_peak": {
   "miles": 22.832,
   "minutes": 53
@@ -6334,6 +7078,30 @@
  "9vg5bzf|9vfg1wf|weekend|midday": {
   "miles": 31.272,
   "minutes": 45
+ },
+ "9vg5bzf|9vfg2jd|weekday|am_peak": {
+  "miles": 38.732,
+  "minutes": 69
+ },
+ "9vg5bzf|9vfg2jd|weekday|early": {
+  "miles": 38.732,
+  "minutes": 46
+ },
+ "9vg5bzf|9vfg2jd|weekday|evening": {
+  "miles": 38.732,
+  "minutes": 43
+ },
+ "9vg5bzf|9vfg2jd|weekday|midday": {
+  "miles": 38.732,
+  "minutes": 50
+ },
+ "9vg5bzf|9vfg2jd|weekday|pm_peak": {
+  "miles": 38.732,
+  "minutes": 71
+ },
+ "9vg5bzf|9vfg2jd|weekend|midday": {
+  "miles": 38.732,
+  "minutes": 50
  },
  "9vg5bzf|9vfg4c0|weekday|am_peak": {
   "miles": 29.332,

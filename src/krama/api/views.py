@@ -58,6 +58,7 @@ def route_view(
             closes.append(hours.end.hour * 60 + hours.end.minute)
     shift_close = min(closes) if closes else 24 * 60
 
+    previous_name = "the shop"
     for stop in route.stops:
         job = world.jobs.get(stop.job_id)
         gap = 0
@@ -83,8 +84,10 @@ def route_view(
                 lat=job.location.lat if job else 0.0,
                 lon=job.location.lon if job else 0.0,
                 past_shift=_minute_of_day(stop.departure, tz) > shift_close,
+                from_label=previous_name,
             )
         )
+        previous_name = f"{job.customer_name}'s" if job else previous_name
 
     return RouteView(
         crew_id=route.crew_id,

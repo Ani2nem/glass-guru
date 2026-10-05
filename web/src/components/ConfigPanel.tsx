@@ -87,7 +87,13 @@ export function ConfigPanel({
   }
 
   return (
-    <div className="config">
+    <div
+      className="config"
+      onMouseDown={(e) => {
+        // The dimmed backdrop is a door, not a wall: clicking it closes the sheet.
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="config__sheet">
         <header className="config__head">
           <h2>Crew and vans</h2>
