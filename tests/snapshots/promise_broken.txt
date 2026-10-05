@@ -3,21 +3,21 @@ Chen was given a nine-to-half-eleven window and arranged her morning around it. 
 
 !  42 of 42 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (933540480bb5ea28)
+PLAN 2026-09-21  (3edb69d3a5827e5a)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      10:45 AM-11:30 AM  Nakamura Screens           screen_repair                   15min drive  
-                   travel 30min / 15.6mi  (30 person-min)   idle 0min   on-site 60%
+      10:55 AM-11:40 AM  Nakamura Screens           screen_repair                   25min drive  
+                   travel 51min / 24.3mi  (51 person-min)   idle 0min   on-site 47%
 
   crew-van-3   Alex + Dan   [van-3]
-      10:59 AM-1:29 PM  Patel Shower Door          shower_door_install             29min drive  
-      1:47 PM-3:47 PM  Chen Residence             residential_window_replacement  18min drive  
-                   travel 70min / 39.3mi  (140 person-min)   idle 0min   on-site 79%
+      10:53 AM-1:23 PM  Patel Shower Door          shower_door_install             23min drive  
+      1:41 PM-3:41 PM  Chen Residence             residential_window_replacement  18min drive  
+                   travel 53min / 32.2mi  (106 person-min)   idle 0min   on-site 84%
 
   crew-van-4   Sofia   [van-4]
-      8:34 AM-10:04 AM  Okonkwo Auto Glass         auto_glass                      34min drive  
-                   travel 60min / 24.6mi  (60 person-min)   idle 0min   on-site 60%
+      8:26 AM-9:56 AM  Okonkwo Auto Glass         auto_glass                      26min drive  
+                   travel 46min / 18.8mi  (46 person-min)   idle 0min   on-site 66%
 
   UNSERVED - could not fit
       j-401  Rodriguez Storefront       no_capacity_in_horizon
@@ -36,9 +36,9 @@ PLAN 2026-09-21  (933540480bb5ea28)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  vehicle $51.70   overtime $0.00   late $514.00
-        unserved $2,650.00   TOTAL $3,215.70
-  solver objective $27,951.75  (+$24,736.05 vs actual)   status OPTIMAL   N.NNNs
+  cost  vehicle $48.98   overtime $0.00   late $502.00
+        unserved $2,650.00   TOTAL $3,200.98
+  solver objective $27,949.03  (+$24,748.05 vs actual)   status OPTIMAL   N.NNNs
 
   INVARIANTS: 1 VIOLATION(S) - plan is not committable
-      [confirmed_window_moved] a promised window was moved: 2026-09-21T13:47:00-05:00..2026-09-21T15:47:00-05:00 against [2026-09-21T09:00:00-05:00..2026-09-21T11:30:00-05:00 (soft)] (job=j-402 crew=crew-van-3)
+      [confirmed_window_moved] a promised window was moved: 2026-09-21T13:41:00-05:00..2026-09-21T15:41:00-05:00 against [2026-09-21T09:00:00-05:00..2026-09-21T11:30:00-05:00 (soft)] (job=j-402 crew=crew-van-3)

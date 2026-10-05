@@ -3,23 +3,23 @@ A corridor-wide slowdown makes every leg 80% longer all morning.
 
 !  42 of 42 business parameters are still estimates. Costs below are internally consistent but not calibrated to this business.
 
-PLAN 2026-09-21  (9010936ac8aede8b)
+PLAN 2026-09-21  (7a1c6663dff47d88)
 ------------------------------------------------------------------------------
 
   crew-van-1   Ken   [van-1]
-      8:34 AM-9:19 AM  Nakamura Screens           screen_repair                   34min drive  
-                   travel 70min / 15.6mi  (70 person-min)   idle 0min   on-site 39%
+      9:01 AM-9:46 AM  Nakamura Screens           screen_repair                   61min drive  
+                   travel 108min / 24.3mi  (108 person-min)   idle 0min   on-site 29%
 
   crew-van-3   Marcus + Priya   [van-3]
-      6:23 AM-8:53 AM  Rodriguez Storefront       storefront_glass                23min drive  needs 2
-                   ..8 min gap, leaves 9:01 AM
+      6:20 AM-8:50 AM  Rodriguez Storefront       storefront_glass                20min drive  needs 2
+                   ..11 min gap, leaves 9:01 AM
       10:00 AM-12:30 PM  Patel Shower Door          shower_door_install             59min drive  
-                   travel 112min / 45.0mi  (224 person-min)   idle 8min   on-site 71%
+                   travel 102min / 39.1mi  (204 person-min)   idle 11min   on-site 73%
 
   crew-van-4   Alex + Dan   [van-4]
-      9:00 AM-11:00 AM  Chen Residence             residential_window_replacement  45min drive  
+      9:00 AM-11:00 AM  Chen Residence             residential_window_replacement  29min drive  
       11:27 AM-12:57 PM  Okonkwo Auto Glass         auto_glass                      27min drive  
-                   travel 98min / 27.2mi  (196 person-min)   idle 0min   on-site 68%
+                   travel 76min / 21.4mi  (152 person-min)   idle 0min   on-site 73%
 
   not in scope for this plan
       j-407  Delgado Storefront         window_on_another_day
@@ -34,8 +34,8 @@ PLAN 2026-09-21  (9010936ac8aede8b)
                    ['tempered_custom'] not available until 2026-09-24
 
 ------------------------------------------------------------------------------
-  cost  vehicle $57.09   overtime $0.00   late $0.00
-        unserved $0.00   TOTAL $57.09
-  solver objective $57.14  (+$0.05 vs actual)   status OPTIMAL   N.NNNs
+  cost  vehicle $55.12   overtime $0.00   late $0.00
+        unserved $0.00   TOTAL $55.12
+  solver objective $55.17  (+$0.05 vs actual)   status OPTIMAL   N.NNNs
 
   invariants: 0 violations

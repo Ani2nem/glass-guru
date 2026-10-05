@@ -177,8 +177,12 @@ def test_real_roads_disagree_with_straight_lines():
 
     real = frozen.leg(DEPOT, chen.location, at)
     approx = synthetic.leg(DEPOT, chen.location, at)
-    assert real.miles < approx.miles
-    assert real.minutes > approx.minutes
+    # The direction of the disagreement is an accident of the pair (the honest
+    # depot pin flipped the minutes inequality); the POINT is that a road network
+    # and a straight-line heuristic must not coincide - if they ever do, the
+    # frozen snapshot is probably not being read at all.
+    assert (real.minutes, real.miles) != (approx.minutes, approx.miles)
+    assert real.miles != approx.miles
 
 
 def test_auto_mode_prefers_the_snapshot():

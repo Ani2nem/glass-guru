@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, subscribe } from "./api";
 import { Calendar } from "./components/Calendar";
 import { Logo } from "./components/Logo";
@@ -48,6 +48,22 @@ export default function App() {
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+
+  // A floating card should yield to a click anywhere else - reaching for its Close
+  // button is a chore the rest of the screen can do for free. Calendar blocks are
+  // excluded: clicking another job means "show me that one", not "dismiss".
+  useEffect(() => {
+    if (!selected) return;
+    function onDown(e: MouseEvent) {
+      const target = e.target as Element;
+      if (detailRef.current?.contains(target)) return;
+      if (target.closest(".block")) return;
+      setSelected(null);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [selected]);
 
   const refresh = useCallback(async () => {
     try {
@@ -268,7 +284,7 @@ export default function App() {
           {week && view === "board" && (
             <>
               {selectedStop && (
-                <div className="detail detail--overlay">
+                <div className="detail detail--overlay" ref={detailRef}>
                   <header>
                     <h3>{selectedStop.customer_name}</h3>
                     <span className={`blast blast--${selectedStop.commitment_state}`}>
@@ -345,6 +361,9 @@ export default function App() {
                     <dt>Drive there</dt>
                     <dd>
                       {selectedStop.travel_minutes} min · {selectedStop.travel_miles} mi
+                      {selectedStop.from_label && (
+                        <span className="muted"> from {selectedStop.from_label}</span>
+                      )}
                     </dd>
                     <dt>Crew</dt>
                     <dd>

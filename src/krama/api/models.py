@@ -37,6 +37,11 @@ class StopView(Api):
     #: True when the work runs past the crew's shift - the overtime portion of the
     #: day. The board draws these dashed so a late booking is visibly a late stay.
     past_shift: bool = False
+    #: Where this drive begins: "the shop", or the previous customer's name. The
+    #: owner read "15 min - 5.83 mi" and could not tell whether the van chained from
+    #: the last job or doubled back to the depot - a question the data always knew
+    #: the answer to and the screen never said.
+    from_label: str = ""
 
 
 class RouteView(Api):
