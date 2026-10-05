@@ -284,57 +284,23 @@ export default function App() {
           {week && view === "board" && (
             <>
               {selectedStop && (
-                <div className="detail detail--overlay" ref={detailRef}>
-                  <header>
+                <div className="jobcard detail--overlay" ref={detailRef}>
+                  {/* The Uber-modal grammar: white card, bold ink title, a quiet x,
+                      clean rows, one black full-width primary at the bottom. The
+                      old version wore three equal pill buttons in the header and
+                      the loudest of them was the destructive one. */}
+                  <header className="jobcard__head">
                     <h3>{selectedStop.customer_name}</h3>
-                    <span className={`blast blast--${selectedStop.commitment_state}`}>
+                    <span className={`jobcard__state jobcard__state--${selectedStop.commitment_state}`}>
                       {selectedStop.commitment_state}
                     </span>
                     <button
-                      style={{ marginLeft: "auto" }}
-                      disabled={busy}
-                      onClick={async () => {
-                        // A reschedule is a cancel that keeps the conversation. The
-                        // original transcript goes back into the box, the dispatcher
-                        // adds what changed, and the whole intake path - pricing,
-                        // grounding, the lot - runs again rather than being edited
-                        // around.
-                        const transcript =
-                          world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ?? "";
-                        setBusy(true);
-                        try {
-                          await api.cancel(selectedStop.job_id);
-                          setPrefill({ text: transcript, nonce: Date.now() });
-                          setSelected(null);
-                          await refresh();
-                        } catch (exc) {
-                          setError(exc as ApiError);
-                        } finally {
-                          setBusy(false);
-                        }
-                      }}
+                      className="jobcard__x"
+                      aria-label="close"
+                      onClick={() => setSelected(null)}
                     >
-                      Edit
+                      {"\u00D7"}
                     </button>
-                    <button
-                      className="danger"
-                      disabled={busy}
-                      onClick={async () => {
-                        setBusy(true);
-                        try {
-                          await api.cancel(selectedStop.job_id);
-                          setSelected(null);
-                          await refresh();
-                        } catch (exc) {
-                          setError(exc as ApiError);
-                        } finally {
-                          setBusy(false);
-                        }
-                      }}
-                    >
-                      Cancel this booking
-                    </button>
-                    <button onClick={() => setSelected(null)}>Close</button>
                   </header>
                   <dl>
                     <dt>Work</dt>
@@ -397,6 +363,50 @@ export default function App() {
                     <dt>Job</dt>
                     <dd><code>{selectedStop.job_id}</code></dd>
                   </dl>
+                  <div className="jobcard__actions">
+                    <button
+                      className="jobcard__primary"
+                      disabled={busy}
+                      onClick={async () => {
+                        // A reschedule is a cancel that keeps the conversation: the
+                        // original transcript goes back into the box and the whole
+                        // intake path - pricing, grounding, the lot - runs again.
+                        const transcript =
+                          world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ?? "";
+                        setBusy(true);
+                        try {
+                          await api.cancel(selectedStop.job_id);
+                          setPrefill({ text: transcript, nonce: Date.now() });
+                          setSelected(null);
+                          await refresh();
+                        } catch (exc) {
+                          setError(exc as ApiError);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Edit booking
+                    </button>
+                    <button
+                      className="jobcard__cancel"
+                      disabled={busy}
+                      onClick={async () => {
+                        setBusy(true);
+                        try {
+                          await api.cancel(selectedStop.job_id);
+                          setSelected(null);
+                          await refresh();
+                        } catch (exc) {
+                          setError(exc as ApiError);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      Cancel this booking
+                    </button>
+                  </div>
                 </div>
               )}
               <Calendar plan={plan} selected={selected} onSelect={setSelected} />
