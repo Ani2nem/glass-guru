@@ -1237,7 +1237,7 @@ def test_every_stop_says_where_its_drive_began(client: TestClient, monkeypatch):
     monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     monday = (_date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)).isoformat()
 
-    def draft(name: str) -> dict:
+    def draft(name: str) -> dict[str, object]:
         return {
             "customer_name": name,
             "phone": "9132934243",
