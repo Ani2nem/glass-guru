@@ -365,6 +365,18 @@ export default function App() {
                         <span className="muted"> from {selectedStop.from_label}</span>
                       )}
                     </dd>
+                    <dt>Why then</dt>
+                    <dd>
+                      {(() => {
+                        const note = world?.jobs.find(
+                          (j) => j.id === selectedStop.job_id,
+                        )?.booking_note;
+                        // Labelled as quote-time truth: a later re-plan may
+                        // legitimately have chosen a different crew than the card
+                        // predicted, and pretending otherwise is how trust dies.
+                        return note ? `${note} (when quoted)` : "-";
+                      })()}
+                    </dd>
                     <dt>Crew</dt>
                     <dd>
                       {(() => {

@@ -67,6 +67,9 @@ export function ConfigPanel({
   const [rows, setRows] = useState<Row[]>([...world.workers.map(rowFrom)]);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
+  const [movingShop, setMovingShop] = useState(false);
+  const [newDepot, setNewDepot] = useState("");
+  const [confirmDepot, setConfirmDepot] = useState("");
 
   function edit(index: number, patch: Partial<Row>) {
     setRows((old) => old.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -220,6 +223,75 @@ export function ConfigPanel({
           >
             + Add a van
           </button>
+        </div>
+
+        <h3 className="config__vanshead">The shop</h3>
+        <div className="config__depot">
+          {/* The single most consequential coordinate in the system - it was once
+              wrong by four road miles and every route carried the error. So this
+              is deliberately the hardest edit on the sheet: the new address must
+              be TYPED twice, and the server then refuses anything that is not an
+              actual building inside the service area. */}
+          <p className="config__depotaddr">
+            Every route starts and ends at <strong>{world.depot_address || "(no depot)"}</strong>
+          </p>
+          {!movingShop ? (
+            <button disabled={busy} onClick={() => setMovingShop(true)}>
+              Move the shop…
+            </button>
+          ) : (
+            <div className="config__depotform">
+              <p className="config__depotwarn">
+                Moving the shop changes every drive on every future plan. Type the
+                new address twice - no pasting the second one.
+              </p>
+              <input
+                value={newDepot}
+                placeholder="new address, with street number"
+                onChange={(e) => setNewDepot(e.target.value)}
+              />
+              <input
+                value={confirmDepot}
+                placeholder="retype it to confirm"
+                onPaste={(e) => e.preventDefault()}
+                onChange={(e) => setConfirmDepot(e.target.value)}
+              />
+              <span className="config__depotactions">
+                <button
+                  className="danger"
+                  disabled={
+                    busy || !newDepot.trim() || newDepot.trim() !== confirmDepot.trim()
+                  }
+                  title={
+                    newDepot.trim() === confirmDepot.trim()
+                      ? "move every van's home to this address"
+                      : "the two entries must match exactly"
+                  }
+                  onClick={() =>
+                    void run(async () => {
+                      const moved = await api.moveDepot(newDepot.trim(), confirmDepot.trim());
+                      setMovingShop(false);
+                      setNewDepot("");
+                      setConfirmDepot("");
+                      return moved;
+                    }, "the shop moved - every van now starts from the new address")
+                  }
+                >
+                  Move it
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    setMovingShop(false);
+                    setNewDepot("");
+                    setConfirmDepot("");
+                  }}
+                >
+                  Never mind
+                </button>
+              </span>
+            </div>
+          )}
         </div>
 
         {status && <p className="config__status">{status}</p>}

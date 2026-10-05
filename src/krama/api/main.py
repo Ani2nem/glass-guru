@@ -37,6 +37,7 @@ from krama.api.models import (
     AskRequest,
     BookRequest,
     CrewAskSuggestion,
+    DepotMoveRequest,
     EventRequest,
     IntakeView,
     MessageView,
@@ -867,11 +868,18 @@ def run_intake(request: TextRequest) -> IntakeView:
         except ServiceError as exc:
             raise _fail(exc, 409) from exc
 
+        from krama.geocoding import for_service_area
+
+        live_depot = next((v.home_depot for v in world.vans.values() if v.home_depot.address), None)
         result = intake(
             build_llm(),
             request.text,
             business=svc.business,
             now=datetime.now(svc.tz),
+            # Bounded around the depot the WORLD knows, not the fixture constant -
+            # otherwise a moved shop would keep geocoding callers around the old
+            # pin, which is exactly the silent drift the depot event exists to kill.
+            geocoder=for_service_area(depot=live_depot),
         )
         call = result.call
         draft = DraftView(
@@ -1116,6 +1124,7 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             commitment_cost=draft.commitment_cost,
             site_notes=draft.site_notes,
             quoted_total=request.quoted_total,
+            booking_note=request.booking_note,
             # The pre-tax share of the accepted price. This is the weight the
             # scheduler gives the job in every unserved penalty from now on.
             revenue=round(
@@ -1394,6 +1403,73 @@ def configure_van(request: VanConfig) -> dict[str, str]:
         )
         broadcaster.publish("world", {"event": "van_registered"})
         return {"van_id": van_id, "status": "saved"}
+
+
+@app.post("/api/config/depot")
+def move_depot(request: DepotMoveRequest) -> dict[str, str]:
+    """Move the shop. Deliberately the hardest edit in the product.
+
+    The depot was once wrong by four road miles and every route ever planned
+    carried the error, so this endpoint refuses everything it possibly can: the
+    address must be typed twice and match exactly, it must geocode to an actual
+    building (not a road, not a town), and it must sit inside the service radius
+    of the current depot - a shop does not teleport across the country by typo.
+    One event rewrites every van's home in the same breath, so no stored record
+    can disagree with another afterwards.
+    """
+    from krama.domain.events import DepotMoved
+    from krama.geocoding import for_service_area
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")) as dispatch_id, span("api.move_depot"):
+        wanted = request.address.strip()
+        if not wanted:
+            raise HTTPException(422, detail={"error": "NoAddress", "detail": "type the address"})
+        if wanted != request.confirm.strip():
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "ConfirmMismatch",
+                    "detail": "the two entries differ - retype the address to confirm",
+                },
+            )
+
+        world = svc.world()
+        current = next((v.home_depot for v in world.vans.values() if v.home_depot.address), None)
+        geocoder = for_service_area(depot=current)
+        located = geocoder.geocode(wanted)  # raises AddressTooVague / OutsideServiceArea
+        if located.precision not in {"house", "poi"}:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "NotABuilding",
+                    "detail": f"'{wanted}' resolved to a {located.precision}, not a building",
+                    "remedy": "include the street number",
+                },
+            )
+
+        moved_miles = current.haversine_miles(located) if current else 0.0
+        now = datetime.now(svc.tz)
+        svc.apply_events(
+            [
+                DepotMoved(
+                    event_id=new_dispatch_id("depot"),
+                    occurred_at=now,
+                    recorded_at=now,
+                    dispatch_id=dispatch_id,
+                    location=located,
+                )
+            ]
+        )
+        broadcaster.publish("world", {"event": "depot_moved"})
+        return {
+            "address": located.address,
+            "moved_miles": f"{moved_miles:.1f}",
+            "status": (
+                "every van now starts here; the committed plan re-validates against "
+                "the new drives on its own"
+            ),
+        }
 
 
 @app.delete("/api/config/van/{van_id}")

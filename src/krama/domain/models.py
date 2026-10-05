@@ -223,6 +223,12 @@ class Job(Frozen):
     #: what the phone call actually said, kept verbatim because a price that exists
     #: only in the moment of quoting is a disconnection waiting for an invoice.
     quoted_total: float = Field(default=0.0, ge=0)
+    #: Why this slot looked the way it did when the dispatcher pressed it - "already
+    #: 3 stops nearby, +8 min detour; one fitter needed, qualified for residential
+    #: glazing". A decision whose reasons evaporate with the slot card cannot be
+    #: audited a week later; this is the quote-time rationale, labelled as such on
+    #: the board because a later re-plan may legitimately choose differently.
+    booking_note: str = ""
 
     commitment_state: CommitmentState = CommitmentState.DRAFT
     #: Dollar weight resisting a reschedule. This is where "I'll take off work that

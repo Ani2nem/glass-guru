@@ -144,6 +144,7 @@ class JobView(Api):
     phone: str = ""
     address: str = ""
     quoted_total: float = 0.0
+    booking_note: str = ""
     transcript: str = ""
 
 
@@ -277,6 +278,9 @@ class BookRequest(Api):
     #: evaporated the moment the quote left the screen, and the scheduler weighed a
     #: nine-hundred-dollar booking exactly like a zero-dollar one.
     quoted_total: float = 0.0
+    #: The pressed slot's own explanation (reason + crew_reason), stored on the job
+    #: so "why Marcus, why Tuesday" survives the slot card it was written on.
+    booking_note: str = ""
 
 
 class UnavailableDayView(Api):
@@ -337,6 +341,13 @@ class WorkerConfig(Api):
     shift_start: str = "08:00"
     shift_end: str = "17:00"
     overtime_eligible: bool = True
+
+
+class DepotMoveRequest(Api):
+    """Both fields must carry the same text, typed - not pasted state, a retype."""
+
+    address: str
+    confirm: str
 
 
 class VanConfig(Api):

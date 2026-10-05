@@ -1268,3 +1268,93 @@ def test_every_stop_says_where_its_drive_began(client: TestClient, monkeypatch):
     }
     assert labels.get("First") == "the shop", labels
     assert labels.get("Second") == "First's", labels
+
+
+def test_moving_the_shop_is_guarded_and_total(client: TestClient, monkeypatch):
+    """The depot is the most consequential coordinate in the system - it was once
+    wrong by four road miles and every route carried the error. Moving it demands
+    the address typed twice; a mismatch is refused; a successful move rewrites
+    EVERY van's home in one event so no record can drift from another."""
+    from krama.domain.models import Location
+    from krama.geocoding import Geocoder
+
+    resolved = Location(
+        lat=32.9300,
+        lon=-97.3660,
+        address="11100 Dunlavin Ct, Haslet, TX 76052",
+        precision="house",
+    )
+    monkeypatch.setattr(Geocoder, "geocode", lambda self, addr: resolved)
+
+    mismatch = client.post(
+        "/api/config/depot",
+        json={"address": "11100 Dunlavin Ct, Haslet, TX", "confirm": "11100 Dunlavin Ct"},
+    )
+    assert mismatch.status_code == 422
+    assert "retype" in mismatch.json()["detail"]["detail"]
+
+    before = client.get("/api/world").json()["depot_address"]
+    moved = client.post(
+        "/api/config/depot",
+        json={
+            "address": "11100 Dunlavin Ct, Haslet, TX",
+            "confirm": "11100 Dunlavin Ct, Haslet, TX",
+        },
+    ).json()
+    assert "Dunlavin" in moved["address"]
+
+    world = client.get("/api/world").json()
+    assert world["depot_address"] == resolved.address != before
+
+    # every van agrees - the fold rewrote them all in the same breath
+    from krama.api.main import service
+
+    vans = service().world().vans.values()
+    assert all(v.home_depot.address == resolved.address for v in vans)
+    assert all(abs(v.home_depot.lat - resolved.lat) < 1e-9 for v in vans)
+
+
+def test_a_depot_that_is_not_a_building_is_refused(client: TestClient, monkeypatch):
+    from krama.domain.models import Location
+    from krama.geocoding import Geocoder
+
+    roadish = Location(lat=32.95, lon=-97.35, address="Blue Mound Rd", precision="road")
+    monkeypatch.setattr(Geocoder, "geocode", lambda self, addr: roadish)
+    refused = client.post(
+        "/api/config/depot",
+        json={"address": "Blue Mound Rd", "confirm": "Blue Mound Rd"},
+    )
+    assert refused.status_code == 422
+    assert "street number" in refused.json()["detail"]["remedy"]
+
+
+def test_the_booking_rationale_survives_the_slot_card(client: TestClient, monkeypatch):
+    """ "Why Marcus, why Tuesday" used to evaporate with the slot card. The pressed
+    slot's own explanation now rides the job and comes back on the world view,
+    labelled quote-time truth for the detail card to show."""
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    draft = {
+        "customer_name": "Why",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    note = "already 2 stops nearby, +6 min detour · one fitter needed"
+    booked = client.post(
+        "/api/book",
+        json={
+            "draft": draft,
+            "date": _next_monday(),
+            "arrival": "09:00",
+            "booking_note": note,
+        },
+    ).json()
+    job = next(j for j in client.get("/api/world").json()["jobs"] if j["id"] == booked["job_id"])
+    assert job["booking_note"] == note

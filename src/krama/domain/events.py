@@ -20,6 +20,7 @@ from krama.domain.models import (
     Frozen,
     Job,
     JobId,
+    Location,
     TimeWindow,
     Van,
     VanId,
@@ -237,6 +238,20 @@ class OvertimeOffered(EventBase):
     claim_deadline: datetime
 
 
+class DepotMoved(EventBase):
+    """The shop's address changed - deliberately, loudly, and in one place.
+
+    The depot was once wrong by four road miles and every route ever planned
+    carried the error, so this is the most consequential coordinate in the system.
+    It is guarded accordingly: the API that emits this requires the new address
+    typed twice and geocoded to a building, and the fold rewrites every van's
+    home in the same breath so no record can disagree with another.
+    """
+
+    type: Literal["depot_moved"] = "depot_moved"
+    location: Location
+
+
 class WorkerRemoved(EventBase):
     """Off the roster - left the company, not merely out sick. The log keeps that
     they existed; the world stops offering them work."""
@@ -333,6 +348,7 @@ Event = Annotated[
     | CrewAskOpened
     | CrewAskClosed
     | WorkerRemoved
-    | VanRemoved,
+    | VanRemoved
+    | DepotMoved,
     Field(discriminator="type"),
 ]

@@ -1034,3 +1034,31 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   color: #6b5416;
 }
 .crewcard .otboard__claim:hover:not(:disabled) { background: #f6d58f; color: #3c2d05; }
+
+/* The visit number, worn on the pin itself. */
+.map__ordernum {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  pointer-events: none;
+}
+.map__ordernum::before { display: none; }
+
+/* Moving the shop: the hardest edit on the sheet, and it should look like one. */
+.config__depot { font-size: 13px; }
+.config__depotaddr { margin: 0 0 10px; }
+.config__depotform {
+  border: 1px solid var(--error, #ff5a5f);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 460px;
+}
+.config__depotwarn { margin: 0; font-size: 12px; color: var(--error, #ff5a5f); }
+.config__depotform input { margin: 0; }
+.config__depotactions { display: flex; gap: 8px; }
