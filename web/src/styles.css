@@ -382,8 +382,105 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .cal__crew .warn { color: #a45f0c; } /* 4.65:1 on the calendar ground */
 
 
-/* The detail that appears when a block is clicked. The calendar answers "what is the
-   shape of the week"; this answers "what is that". */
+/* The job card: the Uber-modal grammar on the calendar's own light surface. Bold
+   ink title, quiet x, hairline rows, one black full-width primary, the destructive
+   action demoted to quiet red text underneath - the old card wore three equal pill
+   buttons in its header and the loudest one was Cancel. */
+.jobcard {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 22px;
+  color: #16161d;
+  margin-bottom: 16px;
+}
+.jobcard__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.jobcard__head h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #16161d;
+}
+.jobcard__state {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  text-transform: lowercase;
+}
+.jobcard__state--provisional { background: #dce9f2; color: #2b5a74; }
+.jobcard__state--confirmed { background: #cfc5f6; color: #43337e; }
+.jobcard__state--dispatched { background: #c9eedd; color: #1d5c42; }
+.jobcard__state--completed { background: #ececf1; color: #63636f; }
+.jobcard__x {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: #8d8d9a;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.jobcard__x:hover { color: #16161d; }
+.jobcard dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 18px;
+  margin: 0;
+  font-size: 13px;
+}
+.jobcard dt {
+  color: #6d6d7a;
+  padding: 7px 0;
+  border-top: 1px solid #efeff4;
+}
+.jobcard dd {
+  margin: 0;
+  color: #16161d;
+  padding: 7px 0;
+  border-top: 1px solid #efeff4;
+}
+.jobcard dl dt:first-of-type,
+.jobcard dl dd:first-of-type { border-top: none; }
+.jobcard dd .muted { color: #6d6d7a; }
+.jobcard code { color: #16161d; background: #f3f3f8; padding: 1px 6px; border-radius: 6px; }
+.jobcard__actions {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.jobcard__primary {
+  width: 100%;
+  background: #16161d;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.jobcard__primary:hover:not(:disabled) { background: #000000; }
+.jobcard__cancel {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #c23b3b;
+  font-size: 13px;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.jobcard__cancel:hover:not(:disabled) { background: #fdebea; }
+
+/* kept for anything else still wearing the old class */
 .detail {
   background: var(--raised);
   border: 1px solid var(--line-strong);
@@ -403,9 +500,9 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   top: 76px;
   right: 22px;
   z-index: 40;
-  width: min(440px, calc(100vw - 44px));
+  width: min(400px, calc(100vw - 44px));
   margin-bottom: 0;
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: 0 16px 44px rgb(10 10 20 / 0.35);
 }
 .detail header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .detail dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
