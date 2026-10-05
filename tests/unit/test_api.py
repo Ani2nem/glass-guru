@@ -8,6 +8,7 @@ the bottom is the one that matters most: it was found by clicking, not by reason
 from __future__ import annotations
 
 import math
+from datetime import date
 from typing import Any
 
 import pytest
@@ -611,10 +612,24 @@ def test_cancelling_a_job_that_is_not_there_says_so(client: TestClient):
     assert "reload" in response.json()["detail"]["remedy"]
 
 
-def _next_monday() -> str:
-    from datetime import date, timedelta
+def _business_today() -> date:
+    """Today in the BUSINESS's timezone, never the machine's.
 
-    today = date.today()
+    CI runs in UTC; at 8 PM on a Chicago Saturday, UTC is already Sunday - and at
+    7 PM on a Chicago Sunday, UTC is already Monday, which made "next Monday" jump
+    a week past the planning horizon and every booking land unscheduled. The server
+    thinks in America/Chicago; tests that date things must think there too.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/Chicago")).date()
+
+
+def _next_monday() -> str:
+    from datetime import timedelta
+
+    today = _business_today()
     return (today + timedelta(days=(7 - today.weekday()) % 7 or 7)).isoformat()
 
 
@@ -888,10 +903,8 @@ def test_booking_overtime_floats_an_offer_and_a_claim_moves_the_crew(
     # A real future Monday: the fixture week is behind the clock by now, and a
     # booking in the past can never be placed on the rolling horizon.
     from datetime import date as _date
-    from datetime import timedelta as _timedelta
 
-    today = _date.today()
-    monday = today + _timedelta(days=(7 - today.weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     booked = client.post(
         "/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "16:00"}
     ).json()
@@ -955,7 +968,6 @@ def test_hours_are_only_offered_to_fitters_who_can_actually_reach_them(
     end at three - people whose yes the solver could never honour. An offer must go
     only to crew whose shift plus overtime covers the job's whole span."""
     from datetime import date as _date
-    from datetime import timedelta as _timedelta
 
     from krama.api import main as api_main
     from krama.notify import RecordingNotifier
@@ -976,8 +988,7 @@ def test_hours_are_only_offered_to_fitters_who_can_actually_reach_them(
         "lat": 32.99,
         "lon": -97.36,
     }
-    today = _date.today()
-    monday = today + _timedelta(days=(7 - today.weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     client.post("/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "16:00"})
 
     offer = client.get("/api/world").json()["overtime_offers"][0]
@@ -990,9 +1001,8 @@ def test_hours_are_only_offered_to_fitters_who_can_actually_reach_them(
 def test_the_ask_endpoints_round_trip(client: TestClient):
     """Open a crew ask, record one yes, close it - the board state follows."""
     from datetime import date as _date
-    from datetime import timedelta as _timedelta
 
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     opened = client.post(
         "/api/asks",
         json={
@@ -1084,7 +1094,6 @@ def test_the_accepted_price_is_a_fact_everywhere(client: TestClient, monkeypatch
     price the dispatcher pressed now lands on the job, the world view, and the
     scheduling weight - one truth, read from one place."""
     from datetime import date as _date
-    from datetime import timedelta as _timedelta
 
     monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     draft = {
@@ -1100,7 +1109,7 @@ def test_the_accepted_price_is_a_fact_everywhere(client: TestClient, monkeypatch
         "lat": 32.99,
         "lon": -97.36,
     }
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     booked = client.post(
         "/api/book",
         json={
@@ -1132,7 +1141,6 @@ def test_job_ids_never_recount(client: TestClient, monkeypatch):
     mints twins the moment anything ever leaves the dict, and a twin id silently
     merges two customers' histories."""
     from datetime import date as _date
-    from datetime import timedelta as _timedelta
 
     monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     draft = {
@@ -1148,7 +1156,7 @@ def test_job_ids_never_recount(client: TestClient, monkeypatch):
         "lat": 32.99,
         "lon": -97.36,
     }
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
 
     def book() -> str:
         reply = client.post(
@@ -1186,7 +1194,6 @@ def test_the_past_cannot_be_booked_and_cancel_tells_the_truth_twice(
     cancel of the same job reported "freed" again - a log event and a replan for an
     action that changed nothing."""
     from datetime import date as _date
-    from datetime import timedelta as _timedelta
 
     monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
     draft = {
@@ -1206,7 +1213,7 @@ def test_the_past_cannot_be_booked_and_cancel_tells_the_truth_twice(
     assert past.status_code == 422
     assert "already happened" in past.json()["detail"]["detail"]
 
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     booked = client.post(
         "/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "09:00"}
     ).json()
