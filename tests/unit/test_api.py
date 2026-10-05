@@ -611,10 +611,24 @@ def test_cancelling_a_job_that_is_not_there_says_so(client: TestClient):
     assert "reload" in response.json()["detail"]["remedy"]
 
 
-def _next_monday() -> str:
-    from datetime import date, timedelta
+def _business_today():
+    """Today in the BUSINESS's timezone, never the machine's.
 
-    today = date.today()
+    CI runs in UTC; at 8 PM on a Chicago Saturday, UTC is already Sunday - and at
+    7 PM on a Chicago Sunday, UTC is already Monday, which made "next Monday" jump
+    a week past the planning horizon and every booking land unscheduled. The server
+    thinks in America/Chicago; tests that date things must think there too.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/Chicago")).date()
+
+
+def _next_monday() -> str:
+    from datetime import timedelta
+
+    today = _business_today()
     return (today + timedelta(days=(7 - today.weekday()) % 7 or 7)).isoformat()
 
 
@@ -890,8 +904,7 @@ def test_booking_overtime_floats_an_offer_and_a_claim_moves_the_crew(
     from datetime import date as _date
     from datetime import timedelta as _timedelta
 
-    today = _date.today()
-    monday = today + _timedelta(days=(7 - today.weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     booked = client.post(
         "/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "16:00"}
     ).json()
@@ -976,8 +989,7 @@ def test_hours_are_only_offered_to_fitters_who_can_actually_reach_them(
         "lat": 32.99,
         "lon": -97.36,
     }
-    today = _date.today()
-    monday = today + _timedelta(days=(7 - today.weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     client.post("/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "16:00"})
 
     offer = client.get("/api/world").json()["overtime_offers"][0]
@@ -992,7 +1004,7 @@ def test_the_ask_endpoints_round_trip(client: TestClient):
     from datetime import date as _date
     from datetime import timedelta as _timedelta
 
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     opened = client.post(
         "/api/asks",
         json={
@@ -1100,7 +1112,7 @@ def test_the_accepted_price_is_a_fact_everywhere(client: TestClient, monkeypatch
         "lat": 32.99,
         "lon": -97.36,
     }
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     booked = client.post(
         "/api/book",
         json={
@@ -1148,7 +1160,7 @@ def test_job_ids_never_recount(client: TestClient, monkeypatch):
         "lat": 32.99,
         "lon": -97.36,
     }
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
 
     def book() -> str:
         reply = client.post(
@@ -1206,7 +1218,7 @@ def test_the_past_cannot_be_booked_and_cancel_tells_the_truth_twice(
     assert past.status_code == 422
     assert "already happened" in past.json()["detail"]["detail"]
 
-    monday = _date.today() + _timedelta(days=(7 - _date.today().weekday()) % 7 or 7)
+    monday = _date.fromisoformat(_next_monday())
     booked = client.post(
         "/api/book", json={"draft": draft, "date": monday.isoformat(), "arrival": "09:00"}
     ).json()
