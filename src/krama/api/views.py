@@ -250,6 +250,7 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 phone=j.phone,
                 address=j.location.address,
                 quoted_total=j.quoted_total,
+                booking_note=j.booking_note,
                 service_type=j.service_type.value,
                 duration_minutes=j.estimated_duration_min,
                 crew_size=j.crew_size,

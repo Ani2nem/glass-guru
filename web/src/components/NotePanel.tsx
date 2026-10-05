@@ -114,11 +114,11 @@ export function NotePanel({
     }
   }
 
-  async function take(date: string, arrival: string, quotedTotal: number) {
+  async function take(date: string, arrival: string, quotedTotal: number, note: string) {
     if (!draft) return;
     setBusy(true);
     try {
-      const result = await api.book(draft, date, to24h(arrival), text, quotedTotal);
+      const result = await api.book(draft, date, to24h(arrival), text, quotedTotal, note);
       // Say so. The button worked before this and looked like it had not, which is
       // the worst thing a button can do: the next thing anybody does is press it again.
       setBooked(`Booked ${result.customer} for ${result.when} - ${result.status}.`);
@@ -418,7 +418,14 @@ export function NotePanel({
                   <button
                     className="primary slot__book"
                     disabled={busy}
-                    onClick={() => void take(slot.date, slot.arrival, slot.quote_total)}
+                    onClick={() =>
+                      void take(
+                        slot.date,
+                        slot.arrival,
+                        slot.quote_total,
+                        [slot.reason, slot.crew_reason].filter(Boolean).join(" \u00B7 "),
+                      )
+                    }
                   >
                     Book it
                   </button>

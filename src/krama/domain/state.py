@@ -16,6 +16,7 @@ from krama.domain.events import (
     CrewAskClosed,
     CrewAskOpened,
     CustomerRescheduled,
+    DepotMoved,
     Event,
     JobCancelled,
     JobCompleted,
@@ -319,6 +320,10 @@ def _apply(state: WorldState, event: Event) -> None:
                 overtime_minutes=event.overtime_minutes,
                 claim_deadline=event.claim_deadline,
             )
+
+        case DepotMoved():
+            for van_id, van in list(state.vans.items()):
+                state.vans[van_id] = van.model_copy(update={"home_depot": event.location})
 
         case WorkerRemoved():
             state.workers.pop(event.worker_id, None)

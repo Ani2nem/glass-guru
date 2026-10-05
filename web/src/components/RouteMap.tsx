@@ -15,8 +15,8 @@ export function RouteMap({ plan, day }: { plan: Plan; day: string | null }) {
   const routes = plan.routes.filter((r) => !day || r.date === day);
   const depot: [number, number] = plan.depot.length === 2
     ? [plan.depot[0]!, plan.depot[1]!]
-    // The depot, for a plan with no stops to centre on. Haslet, Texas.
-    : [33.0020, -97.3424];
+    // The depot, for a plan with no stops to centre on: 1150 Blue Mound Rd W.
+    : [32.946396, -97.379865];
 
   return (
     <MapContainer center={depot} zoom={11} className="map" scrollWheelZoom>
@@ -30,24 +30,46 @@ export function RouteMap({ plan, day }: { plan: Plan; day: string | null }) {
 
       {routes.map((route, index) => {
         const colour = COLOURS[index % COLOURS.length]!;
-        // Out from the depot, through each stop, and home again - the shape of the
-        // day, which is what makes a bad sequence obvious at a glance.
-        const path: [number, number][] = [
-          depot,
-          ...route.stops.map((s) => [s.lat, s.lon] as [number, number]),
-          depot,
-        ];
+        // Out from the depot, through each stop in order, and home again. The
+        // working legs are solid and the final run home is dashed, because two
+        // straight lines from near-collinear points used to read as two separate
+        // from-the-shop trips - the owner asked whether the van ever chained at
+        // all, about a route that was chaining the whole time.
+        const stops = route.stops.map((s) => [s.lat, s.lon] as [number, number]);
+        const working: [number, number][] = [depot, ...stops];
+        const home: [number, number][] = stops.length
+          ? [stops[stops.length - 1]!, depot]
+          : [];
         return (
           <div key={`${route.date}-${route.crew_id}`}>
-            <Polyline positions={path} pathOptions={{ color: colour, weight: 3, opacity: 0.75 }} />
+            <Polyline
+              positions={working}
+              pathOptions={{ color: colour, weight: 4, opacity: 0.85 }}
+            />
+            {home.length > 0 && (
+              <Polyline
+                positions={home}
+                pathOptions={{ color: colour, weight: 2.5, opacity: 0.5, dashArray: "6 8" }}
+              />
+            )}
             {route.stops.map((stop, order) => (
               <CircleMarker
                 key={stop.job_id}
                 center={[stop.lat, stop.lon]}
-                radius={9}
-                pathOptions={{ color: colour, fillColor: colour, fillOpacity: 0.9 }}
+                radius={11}
+                pathOptions={{ color: colour, fillColor: colour, fillOpacity: 0.95 }}
               >
-                <Tooltip>
+                {/* The visit order lives ON the pin, not behind a hover - the
+                    sequence is the whole story the map exists to tell. */}
+                <Tooltip
+                  permanent
+                  direction="center"
+                  className="map__ordernum"
+                  interactive={false}
+                >
+                  {order + 1}
+                </Tooltip>
+                <Tooltip direction="top" offset={[0, -10]}>
                   <strong>{order + 1}. {stop.customer_name}</strong>
                   <br />
                   {route.worker_names.join(" + ")} · {twelveHour(stop.arrival)}

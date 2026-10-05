@@ -97,6 +97,7 @@ export interface Job {
   phone: string;
   address: string;
   quoted_total: number;
+  booking_note: string;
   transcript: string;
   id: string;
   customer_name: string;
