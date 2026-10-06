@@ -15,7 +15,7 @@ exists.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -25,7 +25,15 @@ from krama.domain.autonomy import AutonomyDecision, AutonomyPolicy, decide
 from krama.domain.diff import PlanDiff, diff_plans
 from krama.domain.events import Event
 from krama.domain.invariants import ValidationConfig, Violation, validate_plan
-from krama.domain.models import CostBreakdown, CrewRoute, Job, Location, PlanVersion
+from krama.domain.models import (
+    CostBreakdown,
+    CrewRoute,
+    Job,
+    JobId,
+    Location,
+    PlanVersion,
+    WorkerId,
+)
 from krama.domain.state import TrafficOverride, WorldState, fold
 from krama.obs.correlation import current_dispatch_id, dispatch
 from krama.obs.tracing import record, span
@@ -184,6 +192,7 @@ class DispatchService:
         *,
         allow_overtime: bool = True,
         world: WorldState | None = None,
+        pinned_workers: Mapping[JobId, tuple[WorkerId, ...]] | None = None,
     ) -> PlanResult:
         """Plan the rolling horizon and check it. Does not commit.
 
@@ -213,6 +222,7 @@ class DispatchService:
                 start=start,
                 params=params,
                 horizon_params=horizon_params,
+                pinned_workers=pinned_workers,
             )
             plan = PlanVersion(
                 id=self._next_plan_id(),

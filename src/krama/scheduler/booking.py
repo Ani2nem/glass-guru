@@ -52,6 +52,9 @@ class SlotSuggestion:
     marginal_cost: float
     crew_id: str
     worker_names: tuple[str, ...]
+    #: The same people as ids - what a booking pins so the commit cannot quietly
+    #: swap in an equal-cost somebody else after the card named these names.
+    worker_ids: tuple[str, ...]
     added_travel_minutes: int
     added_travel_miles: float
     reason: str
@@ -349,6 +352,7 @@ def suggest_booking_slots(
                 worker_names=tuple(
                     world.workers[w].name for w in route.worker_ids if w in world.workers
                 ),
+                worker_ids=tuple(route.worker_ids),
                 added_travel_minutes=added_minutes,
                 added_travel_miles=added_miles,
                 reason=_reason_for(added_minutes, added_miles, neighbours, dedicated),

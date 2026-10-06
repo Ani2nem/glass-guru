@@ -105,6 +105,21 @@ export const api = {
       quoted_total: quotedTotal,
       booking_note: bookingNote,
     }),
+  crewOptions: (jobId: string) =>
+    request<{
+      options: {
+        worker_id: string;
+        name: string;
+        feasible: boolean;
+        current?: boolean;
+        cost_delta?: number;
+        note?: string;
+      }[];
+    }>(`/api/jobs/${encodeURIComponent(jobId)}/crew-options`),
+  setCrew: (jobId: string, workerId: string) =>
+    post<{ job_id: string; crew: string; status: string }>(
+      `/api/jobs/${encodeURIComponent(jobId)}/crew?worker_id=${encodeURIComponent(workerId)}`,
+    ),
   moveDepot: (address: string, confirm: string) =>
     post<{ address: string; moved_miles: string; status: string }>("/api/config/depot", {
       address,

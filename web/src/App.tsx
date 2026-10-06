@@ -49,6 +49,26 @@ export default function App() {
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [crewChoices, setCrewChoices] = useState<
+    | {
+        worker_id: string;
+        name: string;
+        feasible: boolean;
+        current?: boolean;
+        cost_delta?: number;
+        note?: string;
+      }[]
+    | null
+  >(null);
+  const [showTranscript, setShowTranscript] = useState(false);
+
+  // A different job means a fresh card: edit state must not leak between jobs.
+  useEffect(() => {
+    setEditing(false);
+    setCrewChoices(null);
+    setShowTranscript(false);
+  }, [selected]);
 
   // A floating card should yield to a click anywhere else - reaching for its Close
   // button is a chore the rest of the screen can do for free. Calendar blocks are
@@ -363,49 +383,124 @@ export default function App() {
                     <dt>Job</dt>
                     <dd><code>{selectedStop.job_id}</code></dd>
                   </dl>
+                  {showTranscript && (
+                    <p className="jobcard__transcript">
+                      {world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ||
+                        "(no transcript stored)"}
+                    </p>
+                  )}
+
+                  {editing && (
+                    <div className="jobcard__edit">
+                      {/* Who else could take it, each one a measured dollar delta
+                          from a real trial solve with every promise still binding.
+                          "Edit" used to cancel the booking before the dispatcher
+                          had decided anything - the job vanished off the calendar
+                          mid-thought. Nothing here destroys anything. */}
+                      <p className="jobcard__editlabel">Change the fitter</p>
+                      {crewChoices === null ? (
+                        <p className="muted">pricing each option…</p>
+                      ) : (
+                        <div className="jobcard__crewlist">
+                          {crewChoices.map((c) => (
+                            <button
+                              key={c.worker_id}
+                              className={`jobcard__crewopt${c.current ? " on" : ""}`}
+                              disabled={busy || !c.feasible || c.current}
+                              title={c.note || ""}
+                              onClick={async () => {
+                                setBusy(true);
+                                try {
+                                  await api.setCrew(selectedStop.job_id, c.worker_id);
+                                  setEditing(false);
+                                  setCrewChoices(null);
+                                  await refresh();
+                                } catch (exc) {
+                                  setError(exc as ApiError);
+                                } finally {
+                                  setBusy(false);
+                                }
+                              }}
+                            >
+                              {c.name}
+                              {c.current
+                                ? " · on it now"
+                                : c.feasible
+                                  ? ` · ${(c.cost_delta ?? 0) >= 0 ? "+" : "-"}$${Math.abs(c.cost_delta ?? 0).toFixed(2)}`
+                                  : ` · ${c.note}`}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        className="jobcard__rebook"
+                        disabled={busy}
+                        title="cancels this booking and puts the original call back in the box to re-quote - time, address, everything"
+                        onClick={async () => {
+                          const transcript =
+                            world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ??
+                            "";
+                          setBusy(true);
+                          try {
+                            await api.cancel(selectedStop.job_id);
+                            setPrefill({ text: transcript, nonce: Date.now() });
+                            setSelected(null);
+                            await refresh();
+                          } catch (exc) {
+                            setError(exc as ApiError);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Rebook from the call… (cancels this booking)
+                      </button>
+                    </div>
+                  )}
+
                   <div className="jobcard__actions">
                     <button
                       className="jobcard__primary"
                       disabled={busy}
-                      onClick={async () => {
-                        // A reschedule is a cancel that keeps the conversation: the
-                        // original transcript goes back into the box and the whole
-                        // intake path - pricing, grounding, the lot - runs again.
-                        const transcript =
-                          world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ?? "";
-                        setBusy(true);
-                        try {
-                          await api.cancel(selectedStop.job_id);
-                          setPrefill({ text: transcript, nonce: Date.now() });
-                          setSelected(null);
-                          await refresh();
-                        } catch (exc) {
-                          setError(exc as ApiError);
-                        } finally {
-                          setBusy(false);
+                      onClick={() => {
+                        const next = !editing;
+                        setEditing(next);
+                        if (next && crewChoices === null) {
+                          void api
+                            .crewOptions(selectedStop.job_id)
+                            .then((r) => setCrewChoices(r.options))
+                            .catch((exc) => setError(exc as ApiError));
                         }
                       }}
                     >
-                      Edit booking
+                      {editing ? "Done editing" : "Edit booking"}
                     </button>
-                    <button
-                      className="jobcard__cancel"
-                      disabled={busy}
-                      onClick={async () => {
-                        setBusy(true);
-                        try {
-                          await api.cancel(selectedStop.job_id);
-                          setSelected(null);
-                          await refresh();
-                        } catch (exc) {
-                          setError(exc as ApiError);
-                        } finally {
-                          setBusy(false);
-                        }
-                      }}
-                    >
-                      Cancel this booking
-                    </button>
+                    <span className="jobcard__quietrow">
+                      <button
+                        className="jobcard__quiet"
+                        onClick={() => setShowTranscript((v) => !v)}
+                      >
+                        {showTranscript ? "Hide the call" : "Show the call"}
+                      </button>
+                      <button
+                        className="jobcard__cancel"
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await api.cancel(selectedStop.job_id);
+                            setSelected(null);
+                            await refresh();
+                          } catch (exc) {
+                            setError(exc as ApiError);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Cancel this booking
+                      </button>
+                    </span>
                   </div>
                 </div>
               )}

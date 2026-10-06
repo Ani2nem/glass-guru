@@ -1159,3 +1159,63 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .config__depotwarn { margin: 0; font-size: 12px; color: var(--error, #ff5a5f); }
 .config__depotform input { margin: 0; }
 .config__depotactions { display: flex; gap: 8px; }
+
+/* In-place editing on the job card: nothing destructive above the fold. */
+.jobcard__transcript {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: #f3f3f8;
+  border-radius: 10px;
+  font-size: 12px;
+  color: #44444f;
+  white-space: pre-wrap;
+}
+.jobcard__edit {
+  margin-top: 12px;
+  border-top: 1px solid #efeff4;
+  padding-top: 10px;
+}
+.jobcard__editlabel {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #16161d;
+}
+.jobcard__crewlist { display: flex; flex-direction: column; gap: 6px; }
+.jobcard__crewopt {
+  text-align: left;
+  background: #f3f3f8;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #16161d;
+  cursor: pointer;
+}
+.jobcard__crewopt:hover:not(:disabled) { border-color: #16161d; }
+.jobcard__crewopt.on { background: #cfc5f6; color: #43337e; cursor: default; }
+.jobcard__crewopt:disabled:not(.on) { color: #a9a9b4; cursor: not-allowed; }
+.jobcard__rebook {
+  margin-top: 10px;
+  width: 100%;
+  background: none;
+  border: 1px dashed #c9c9d4;
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 12px;
+  color: #6d6d7a;
+  cursor: pointer;
+}
+.jobcard__rebook:hover:not(:disabled) { border-color: #16161d; color: #16161d; }
+.jobcard__quietrow { display: flex; gap: 4px; }
+.jobcard__quietrow > * { flex: 1; }
+.jobcard__quiet {
+  background: none;
+  border: none;
+  color: #6d6d7a;
+  font-size: 13px;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.jobcard__quiet:hover { background: #f3f3f8; color: #16161d; }

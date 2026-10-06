@@ -39,6 +39,7 @@ from krama.domain.models import (
     Location,
     UnservedJob,
     Worker,
+    WorkerId,
 )
 from krama.domain.state import WorldState
 from krama.domain.travel import TravelOracle
@@ -419,6 +420,7 @@ def plan_horizon(
     candidate_job_ids: Sequence[JobId] | None = None,
     locked_job_ids: Sequence[JobId] = (),
     pinned_days: Mapping[JobId, date] | None = None,
+    pinned_workers: Mapping[JobId, tuple[WorkerId, ...]] | None = None,
 ) -> HorizonResult:
     """Plan a rolling horizon: assign days, route each day, then correct and repeat."""
     horizon = _dates(start, horizon_params.days)
@@ -468,6 +470,7 @@ def plan_horizon(
                 candidate_job_ids=todays,
                 params=params,
                 locked_job_ids=[j for j in todays if j in locked],
+                pinned_workers=pinned_workers,
             )
             day_results[on_date] = result
             scheduled = {job_id for route in result.routes for job_id in route.job_ids}

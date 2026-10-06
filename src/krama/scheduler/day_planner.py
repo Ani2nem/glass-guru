@@ -607,6 +607,7 @@ def plan_day(
     candidate_job_ids: Sequence[JobId],
     params: SolveParams,
     locked_job_ids: Sequence[JobId] = (),
+    pinned_workers: Mapping[JobId, tuple[WorkerId, ...]] | None = None,
 ) -> DayPlanResult:
     """Build and solve one day.
 
@@ -843,6 +844,15 @@ def plan_day(
         and offer.on_date == on_date
         and offer.claimed_by in available_ids
     }
+    # Transient pins, from the caller: "this job is served by exactly these people
+    # TODAY". The quote's slot card names a crew, and the booking's own commit used
+    # to run a fresh solve free to pick an equal-cost somebody else - so the card
+    # lied the moment the button was pressed. Pins dissolve per-worker if the named
+    # person is unavailable that day, same rule as a claimed overtime offer.
+    pins: dict[str, tuple[str, ...]] = {
+        job_id: tuple(w for w in names if w in available_ids)
+        for job_id, names in (pinned_workers or {}).items()
+    }
 
     for job in jobs:
         for k in range(num_crews):
@@ -850,6 +860,8 @@ def plan_day(
             claimant = claimed_by.get(job.id)
             if claimant is not None:
                 model.add(assign[claimant, k] == 1).only_enforce_if(visit[job.id, k])
+            for pinned in pins.get(job.id, ()):
+                model.add(assign[pinned, k] == 1).only_enforce_if(visit[job.id, k])
             # A crew must be at least as large as the job demands; a two-person crew
             # may do one-person work, never the reverse.
             model.add(sum(assign[w.id, k] for w in workers) >= job.crew_size).only_enforce_if(
