@@ -74,6 +74,10 @@ class CostView(Api):
 
 
 class PlanView(Api):
+    #: True when business-private money was stripped for a dispatcher session. The
+    #: stripping itself happens server-side; this flag just tells the UI not to
+    #: render empty money rows.
+    redacted: bool = False
     plan_id: str
     content_hash: str
     horizon_start: str
@@ -384,6 +388,9 @@ class IntakeView(Api):
     #: Set when the caller wants something this business does not sell. Red on the
     #: intake; the right answer is a referral, not a quote.
     not_offered: str = ""
+    #: Margins stripped for a dispatcher session (quotes stay - the dispatcher
+    #: reads prices aloud; what we KEEP is the owner's business).
+    redacted: bool = False
     repairs: int = 0
     note: str = ""
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, api, subscribe } from "./api";
+import { ApiError, api, setOwnerKey, subscribe } from "./api";
 import { Calendar } from "./components/Calendar";
 import { Logo } from "./components/Logo";
 import { NotePanel } from "./components/NotePanel";
@@ -47,6 +47,9 @@ export default function App() {
   const [week, setWeek] = useState<Week | null>(null);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [configuring, setConfiguring] = useState(false);
+  const [session, setSession] = useState<{ owner_pin_set: boolean; owner: boolean } | null>(null);
+  const [unlocking, setUnlocking] = useState(false);
+  const [pin, setPin] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
@@ -87,14 +90,16 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [nextWorld, nextPlan, nextWeek] = await Promise.all([
+      const [nextWorld, nextPlan, nextWeek, nextSession] = await Promise.all([
         api.world(),
         api.plan(),
         api.week(),
+        api.session(),
       ]);
       setWorld(nextWorld);
       setPlan(nextPlan);
       setWeek(nextWeek);
+      setSession(nextSession);
       setError(null);
     } catch (exc) {
       setError(exc as ApiError);
@@ -126,12 +131,14 @@ export default function App() {
             <span className={plan.feasible ? "ok" : "error"}>
               {plan.feasible ? "schedule holds" : "schedule broken"}
             </span>
-            <span
-              className="muted"
-              title="what the planner expects this week to cost us in wages and driving - not revenue"
-            >
-              runs the week for ~${Math.round(plan.cost.total)}
-            </span>
+            {!plan.redacted && (
+              <span
+                className="muted"
+                title="what the planner expects this week to cost us in fuel and overtime - not revenue"
+              >
+                runs the week for ~${Math.round(plan.cost.total)}
+              </span>
+            )}
           </div>
         ) : (
           <span className="muted">no schedule committed yet</span>
@@ -146,6 +153,53 @@ export default function App() {
               estimated costs
             </span>
           )}
+          {session?.owner_pin_set &&
+            (session.owner ? (
+              <button
+                className="ownerchip"
+                title="lock the owner view - margins and the rate card disappear again"
+                onClick={async () => {
+                  setOwnerKey("");
+                  await refresh();
+                }}
+              >
+                Owner · lock
+              </button>
+            ) : unlocking ? (
+              <span className="ownerunlock">
+                <input
+                  type="password"
+                  autoFocus
+                  placeholder="owner PIN"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Escape") {
+                      setUnlocking(false);
+                      setPin("");
+                    }
+                    if (e.key === "Enter") {
+                      setOwnerKey(pin);
+                      setPin("");
+                      setUnlocking(false);
+                      const who = await api.session();
+                      if (!who.owner) {
+                        setOwnerKey("");
+                        setError(new ApiError("wrong PIN", "owner numbers stay hidden"));
+                      }
+                      await refresh();
+                    }
+                  }}
+                />
+              </span>
+            ) : (
+              <button
+                title="show the owner's numbers - margins, week cost, the rate card"
+                onClick={() => setUnlocking(true)}
+              >
+                Owner
+              </button>
+            ))}
           <button disabled={busy} onClick={() => setConfiguring(true)}>
             Configure
           </button>
@@ -540,6 +594,7 @@ export default function App() {
       {configuring && world && (
         <ConfigPanel
           world={world}
+          owner={session?.owner ?? true}
           onClose={() => setConfiguring(false)}
           onChanged={() => void refresh()}
         />

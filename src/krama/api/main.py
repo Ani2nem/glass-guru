@@ -15,6 +15,7 @@ genuinely waiting rather than working.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 import secrets
@@ -126,6 +127,69 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _owner_pin() -> str:
+    """The owner's PIN from the environment. Empty means single-user mode: the
+    board is the owner's own laptop and everything shows. Set KRAMA_OWNER_PIN and
+    the board becomes dispatcher-safe - margins, week costs and the rate card are
+    stripped SERVER-SIDE, not merely hidden, so an employee's browser never even
+    receives the numbers the owner considers private."""
+    return os.environ.get("KRAMA_OWNER_PIN", "")
+
+
+def _is_owner(request: Request) -> bool:
+    pin = _owner_pin()
+    if not pin:
+        return True
+    supplied = request.headers.get("x-owner-key", "")
+    return bool(supplied) and hmac.compare_digest(supplied, pin)
+
+
+def _strip_money(view: PlanView | None, request: Request) -> PlanView | None:
+    """Zero the business-private money on a plan for non-owner sessions.
+
+    The quote a customer pays is dispatcher-facing by definition - she reads it
+    down the phone. What the week COSTS the business, and what each job's margin
+    is, are the owner's numbers: an employee's browser never receives them.
+    """
+    if view is None or _is_owner(request):
+        return view
+    return view.model_copy(
+        update={
+            "redacted": True,
+            "cost": view.cost.model_copy(update={key: 0.0 for key in view.cost.model_fields}),
+        }
+    )
+
+
+def _strip_margins(view: IntakeView, request: Request) -> IntakeView:
+    """Quotes stay - the dispatcher reads them aloud. What we KEEP does not."""
+    if _is_owner(request):
+        return view
+
+    def scrub(slot: SlotView) -> SlotView:
+        return slot.model_copy(update={"margin": 0.0, "margin_pct": 0.0})
+
+    return view.model_copy(
+        update={
+            "redacted": True,
+            "slots": [scrub(s) for s in view.slots],
+            "flexible_slots": [scrub(s) for s in view.flexible_slots],
+        }
+    )
+
+
+def _owner_only(request: Request) -> None:
+    if not _is_owner(request):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "OwnerOnly",
+                "detail": "this needs the owner's PIN",
+                "remedy": "unlock with the Owner button in the top bar",
+            },
+        )
 
 
 @lru_cache(maxsize=1)
@@ -362,7 +426,7 @@ def get_week() -> dict[str, str]:
 
 
 @app.get("/api/plan", response_model=PlanView | None)
-def get_plan() -> PlanView | None:
+def get_plan(request: Request) -> PlanView | None:
     """The committed plan, or null when nothing is committed yet."""
     svc = service()
     try:
@@ -379,7 +443,8 @@ def get_plan() -> PlanView | None:
     travel = svc.travel(world)
     violations = validate_plan(head, world, travel, ValidationConfig(business_tz=svc.tz))
     cost, route_costs = cost_plan(head, world, svc.business, svc.tz, head.unserved)
-    return views.plan_view(head, world, cost, route_costs, violations, svc.tz)
+    view = views.plan_view(head, world, cost, route_costs, violations, svc.tz)
+    return _strip_money(view, request)
 
 
 @app.get("/api/params", response_model=list[ParamView])
@@ -395,7 +460,7 @@ def get_params() -> list[ParamView]:
 
 
 @app.post("/api/plan/commit", response_model=PlanView)
-def commit_plan(start_date: str | None = Query(default=None)) -> PlanView:
+def commit_plan(request: Request, start_date: str | None = Query(default=None)) -> PlanView:
     svc = service()
     with dispatch(new_dispatch_id("web")), span("api.commit"):
         try:
@@ -409,14 +474,19 @@ def commit_plan(start_date: str | None = Query(default=None)) -> PlanView:
         except (ServiceError, ValueError) as exc:
             raise _fail(exc, 409) from exc
 
-        return views.plan_view(
-            result.plan,
-            world,
-            result.cost,
-            list(result.route_costs),
-            result.violations,
-            svc.tz,
+        stripped = _strip_money(
+            views.plan_view(
+                result.plan,
+                world,
+                result.cost,
+                list(result.route_costs),
+                result.violations,
+                svc.tz,
+            ),
+            request,
         )
+        assert stripped is not None  # the input is never None here
+        return stripped
 
 
 @app.post("/api/repair", response_model=RepairView)
@@ -607,7 +677,9 @@ def _quiet_reroute(svc: DispatchService) -> str:
 
 
 @app.post("/api/note", response_model=NoteView)
-def read_note(request: TextRequest, kind: str | None = Query(default=None)) -> NoteView:
+def read_note(
+    http_request: Request, request: TextRequest, kind: str | None = Query(default=None)
+) -> NoteView:
     """One box. Work out what the note is, then hand it to the right agent.
 
     ``kind`` overrides the classification, which is how the dispatcher corrects it
@@ -625,7 +697,11 @@ def read_note(request: TextRequest, kind: str | None = Query(default=None)) -> N
 
     if kind == NoteKind.DISRUPTION.value:
         return NoteView(kind=kind, why=why, disruption=run_triage(request))
-    return NoteView(kind=NoteKind.BOOKING.value, why=why, booking=run_intake(request))
+    return NoteView(
+        kind=NoteKind.BOOKING.value,
+        why=why,
+        booking=_strip_margins(run_intake(request), http_request),
+    )
 
 
 @app.post("/api/triage", response_model=TriageView)
@@ -856,6 +932,10 @@ def _crew_reason(draft: Job | None, slot: SlotSuggestion) -> str:
 
 
 @app.post("/api/intake", response_model=IntakeView)
+def intake_route(http_request: Request, request: TextRequest) -> IntakeView:
+    return _strip_margins(run_intake(request), http_request)
+
+
 def run_intake(request: TextRequest) -> IntakeView:
     from krama.agents.intake import intake
     from krama.agents.llm.factory import build_llm
@@ -1408,9 +1488,96 @@ def configure_van(request: VanConfig) -> dict[str, str]:
         return {"van_id": van_id, "status": "saved"}
 
 
+@app.get("/api/session")
+def session_info(request: Request) -> dict[str, bool]:
+    """What this browser is allowed to see. The client renders accordingly; the
+    server strips regardless, so the flag is a courtesy, not the security."""
+    return {"owner_pin_set": bool(_owner_pin()), "owner": _is_owner(request)}
+
+
+#: The pricing fields an owner may set, with sanity rails. The rails are generous -
+#: they exist to catch a slipped decimal ("$9500/hour"), not to opine on pricing.
+RATE_FIELDS: dict[str, tuple[float, float]] = {
+    "labour_rate_per_hour": (20.0, 500.0),
+    "call_out_fee": (0.0, 500.0),
+    "materials_markup": (1.0, 4.0),
+    "minimum_charge": (0.0, 1000.0),
+    "after_hours_rate_multiplier": (1.0, 3.0),
+    "emergency_uplift": (1.0, 3.0),
+    "tax_rate": (0.0, 0.2),
+}
+
+
+@app.get("/api/config/pricing")
+def read_pricing(request: Request) -> dict[str, object]:
+    """The rate card, owner's eyes only."""
+    _owner_only(request)
+    svc = service()
+    svc.world()  # absorb any owner-set prices before reading
+    pricing = svc.business.pricing
+    return {
+        "fields": [
+            {
+                "key": key,
+                "value": getattr(pricing, key).value,
+                "source": getattr(pricing, key).source.value,
+                "min": lo,
+                "max": hi,
+            }
+            for key, (lo, hi) in RATE_FIELDS.items()
+        ]
+    }
+
+
+@app.post("/api/config/pricing")
+def set_pricing(request: Request, body: dict[str, float]) -> dict[str, str]:
+    """Set real prices. Each value lands in the event log with an author and a
+    timestamp, flips its parameter to CONFIRMED, and from the next quote onward is
+    simply the price - the "estimated costs" chip retires one number at a time."""
+    from krama.domain.events import RateCardChanged
+
+    _owner_only(request)
+    svc = service()
+    entries: dict[str, float] = {}
+    for key, value in body.items():
+        rails = RATE_FIELDS.get(key)
+        if rails is None:
+            raise HTTPException(
+                422, detail={"error": "UnknownRate", "detail": f"{key!r} is not a rate field"}
+            )
+        lo, hi = rails
+        if not (lo <= float(value) <= hi):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "OutOfRails",
+                    "detail": f"{key} = {value} is outside {lo}..{hi}",
+                    "remedy": "check for a slipped decimal",
+                },
+            )
+        entries[key] = float(value)
+    if not entries:
+        raise HTTPException(422, detail={"error": "Empty", "detail": "nothing to set"})
+
+    now = datetime.now(svc.tz)
+    svc.apply_events(
+        [
+            RateCardChanged(
+                event_id=new_dispatch_id("rate"),
+                occurred_at=now,
+                recorded_at=now,
+                dispatch_id=new_dispatch_id("web"),
+                entries=entries,
+            )
+        ]
+    )
+    broadcaster.publish("world", {"event": "rate_card_changed"})
+    return {"status": f"{len(entries)} price(s) set - quotes use them from the next call"}
+
+
 @app.post("/api/config/depot")
-def move_depot(request: DepotMoveRequest) -> dict[str, str]:
-    """Move the shop. Deliberately the hardest edit in the product.
+def move_depot(http_request: Request, request: DepotMoveRequest) -> dict[str, str]:
+    """Move the shop. Deliberately the hardest edit in the product - and owner-only.
 
     The depot was once wrong by four road miles and every route ever planned
     carried the error, so this endpoint refuses everything it possibly can: the
@@ -1420,6 +1587,7 @@ def move_depot(request: DepotMoveRequest) -> dict[str, str]:
     One event rewrites every van's home in the same breath, so no stored record
     can disagree with another afterwards.
     """
+    _owner_only(http_request)
     from krama.domain.events import DepotMoved
     from krama.geocoding import for_service_area
 

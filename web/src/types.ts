@@ -51,6 +51,7 @@ export interface Cost {
 }
 
 export interface Plan {
+  redacted: boolean;
   plan_id: string;
   content_hash: string;
   horizon_start: string;
@@ -221,6 +222,7 @@ export interface UnavailableDay {
 }
 
 export interface Intake {
+  redacted: boolean;
   draft: Draft;
   bookable: boolean;
   missing: string[];

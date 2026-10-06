@@ -339,8 +339,10 @@ export function NotePanel({
             <div className="slots">
               <h3>Offer them</h3>
               <p className="slots__how">
-                What they asked for, priced. The big number is the quote, tax included;
-                underneath is what we keep once the glass, wages and driving are paid.
+                What they asked for, priced. The big number is the quote, tax included
+                {booking.redacted
+                  ? "."
+                  : "; underneath is what we keep once the glass, wages and driving are paid."}
               </p>
               <div className="slots__tabs">
                 <button
@@ -402,10 +404,15 @@ export function NotePanel({
                     arrive about <strong>{slot.arrival}</strong>
                     <span className="muted"> · promise {slot.window}</span>
                   </div>
-                  <div className="slot__margin">
-                    we keep <strong>${slot.margin.toFixed(2)}</strong>
-                    <span className="muted"> ({slot.margin_pct.toFixed(0)}%) after glass, wages and driving</span>
-                  </div>
+                  {!booking.redacted && (
+                    <div className="slot__margin">
+                      we keep <strong>${slot.margin.toFixed(2)}</strong>
+                      <span className="muted">
+                        {" "}
+                        ({slot.margin_pct.toFixed(0)}%) after glass, wages and driving
+                      </span>
+                    </div>
+                  )}
                   <details className="slot__breakdown">
                     <summary>how that price is built</summary>
                     <pre>{slot.quote_lines.join("\n")}</pre>
@@ -433,7 +440,7 @@ export function NotePanel({
               ))}
               {(() => {
                 const theirs = booking.slots;
-                if (theirs.length < 2 || activeTab === "flexible") return null;
+                if (booking.redacted || theirs.length < 2 || activeTab === "flexible") return null;
                 const spread =
                   Math.max(...theirs.map((s) => s.margin)) -
                   Math.min(...theirs.map((s) => s.margin));

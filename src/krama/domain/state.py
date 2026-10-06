@@ -29,6 +29,7 @@ from krama.domain.events import (
     OvertimeClaimed,
     OvertimeOffered,
     PlanCommitted,
+    RateCardChanged,
     ShiftExtended,
     TrafficDelay,
     VanRegistered,
@@ -134,6 +135,10 @@ class WorldState:
     shift_extensions: dict[tuple[WorkerId, date], datetime] = field(default_factory=dict)
     #: Unresolved crew asks - promises to call a customer back.
     crew_asks: dict[str, CrewAsk] = field(default_factory=dict)
+    #: Owner-set prices, overriding the estimated rate card field by field. The
+    #: config file stays the shipped default; what the business actually charges
+    #: lives here, in the log, where changes have authors and timestamps.
+    rate_card: dict[str, float] = field(default_factory=dict)
     traffic_overrides: list[TrafficOverride] = field(default_factory=list)
     committed_plan_id: str | None = None
     applied_event_count: int = 0
@@ -320,6 +325,9 @@ def _apply(state: WorldState, event: Event) -> None:
                 overtime_minutes=event.overtime_minutes,
                 claim_deadline=event.claim_deadline,
             )
+
+        case RateCardChanged():
+            state.rate_card.update(event.entries)
 
         case DepotMoved():
             for van_id, van in list(state.vans.items()):
