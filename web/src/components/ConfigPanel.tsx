@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api } from "../api";
 import type { World, Worker } from "../types";
@@ -55,12 +55,32 @@ const FRESH: Row = {
   overtime_eligible: true,
 };
 
+interface RateField {
+  key: string;
+  value: number;
+  source: string;
+  min: number;
+  max: number;
+}
+
+const RATE_LABELS: Record<string, string> = {
+  labour_rate_per_hour: "labour, per fitter-hour",
+  call_out_fee: "call-out fee",
+  materials_markup: "materials markup (×)",
+  minimum_charge: "minimum charge",
+  after_hours_rate_multiplier: "after-hours labour (×)",
+  emergency_uplift: "emergency uplift (×)",
+  tax_rate: "sales tax (fraction)",
+};
+
 export function ConfigPanel({
   world,
+  owner,
   onClose,
   onChanged,
 }: {
   world: World;
+  owner: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -68,6 +88,22 @@ export function ConfigPanel({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [movingShop, setMovingShop] = useState(false);
+  const [rates, setRates] = useState<RateField[] | null>(null);
+  const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!owner) return;
+    void api
+      .pricing()
+      .then((r) => {
+        setRates(r.fields);
+        setRateDrafts(
+          Object.fromEntries(r.fields.map((f) => [f.key, String(f.value)])),
+        );
+      })
+      .catch(() => setRates(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [owner]);
   const [newDepot, setNewDepot] = useState("");
   const [confirmDepot, setConfirmDepot] = useState("");
 
@@ -225,6 +261,56 @@ export function ConfigPanel({
           </button>
         </div>
 
+        {owner && rates && (
+          <>
+            <h3 className="config__vanshead">Prices (owner only)</h3>
+            <p className="panel__hint">
+              What every quote is built from. "estimated" means the shipped
+              placeholder is still in force - each number you set here becomes the
+              real price from the next call, and the "estimated costs" warning
+              retires itself as you go.
+            </p>
+            <div className="config__rates">
+              {rates.map((f) => (
+                <label key={f.key} className="config__rate">
+                  <span className="config__ratelabel">
+                    {RATE_LABELS[f.key] ?? f.key}
+                    <em className={f.source === "estimated" ? "warn" : "ok"}>
+                      {f.source === "estimated" ? "estimated" : "set by you"}
+                    </em>
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    value={rateDrafts[f.key] ?? ""}
+                    onChange={(e) =>
+                      setRateDrafts((d) => ({ ...d, [f.key]: e.target.value }))
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            <button
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const entries: Record<string, number> = {};
+                  for (const f of rates) {
+                    const typed = Number(rateDrafts[f.key]);
+                    if (Number.isFinite(typed) && typed !== f.value) entries[f.key] = typed;
+                  }
+                  if (Object.keys(entries).length === 0) return "nothing changed";
+                  await api.setPricing(entries);
+                  const fresh = await api.pricing();
+                  setRates(fresh.fields);
+                  return null;
+                }, "prices set - quotes use them from the next call")
+              }
+            >
+              Save prices
+            </button>
+          </>
+        )}
+
         <h3 className="config__vanshead">The shop</h3>
         <div className="config__depot">
           {/* The single most consequential coordinate in the system - it was once
@@ -235,7 +321,9 @@ export function ConfigPanel({
           <p className="config__depotaddr">
             Every route starts and ends at <strong>{world.depot_address || "(no depot)"}</strong>
           </p>
-          {!movingShop ? (
+          {!owner ? (
+            <p className="muted">moving the shop needs the owner's PIN</p>
+          ) : !movingShop ? (
             <button disabled={busy} onClick={() => setMovingShop(true)}>
               Move the shop…
             </button>

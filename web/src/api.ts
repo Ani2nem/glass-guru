@@ -23,10 +23,22 @@ export class ApiError extends Error {
   }
 }
 
+// The owner's PIN, held in memory only - closing the tab locks the board again.
+// The server strips sensitive money regardless; this header is how the owner asks
+// for it back.
+let ownerKey = "";
+export function setOwnerKey(key: string) {
+  ownerKey = key;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
   if (!response.ok) {
     let detail = response.statusText;
@@ -120,6 +132,13 @@ export const api = {
     post<{ job_id: string; crew: string; status: string }>(
       `/api/jobs/${encodeURIComponent(jobId)}/crew?worker_id=${encodeURIComponent(workerId)}`,
     ),
+  session: () => request<{ owner_pin_set: boolean; owner: boolean }>("/api/session"),
+  pricing: () =>
+    request<{
+      fields: { key: string; value: number; source: string; min: number; max: number }[];
+    }>("/api/config/pricing"),
+  setPricing: (entries: Record<string, number>) =>
+    post<{ status: string }>("/api/config/pricing", entries),
   moveDepot: (address: string, confirm: string) =>
     post<{ address: string; moved_miles: string; status: string }>("/api/config/depot", {
       address,

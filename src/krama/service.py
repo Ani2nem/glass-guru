@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
-from krama.config import BusinessParams
+from krama.config import BusinessParams, Provenance
 from krama.domain.autonomy import AutonomyDecision, AutonomyPolicy, decide
 from krama.domain.diff import PlanDiff, diff_plans
 from krama.domain.events import Event
@@ -110,7 +110,34 @@ class DispatchService:
             raise ServiceError(
                 f"no workspace at {self.workspace.root}; create one with `krama init`"
             )
-        return fold(self.workspace.events.read(), as_of=as_of)
+        state = fold(self.workspace.events.read(), as_of=as_of)
+        self._absorb_rate_card(state)
+        return state
+
+    def _absorb_rate_card(self, state: WorldState) -> None:
+        """Owner-set prices from the log override the config file's estimates.
+
+        The yaml stays the shipped default; what the business actually charges is
+        event-sourced. Each overridden Param flips to CONFIRMED provenance, which is
+        what lets the "estimated costs" chip retire itself one real number at a
+        time. Applied on every fold so the price in force is always the price of
+        record - a service object never quotes from a stale card.
+        """
+        if not state.rate_card:
+            return
+        pricing = self.business.pricing
+        updates = {}
+        for key, value in state.rate_card.items():
+            current = getattr(pricing, key, None)
+            if current is None:
+                continue
+            updates[key] = current.model_copy(
+                update={"value": value, "source": Provenance.CONFIRMED, "note": "set by the owner"}
+            )
+        if updates:
+            self.business = self.business.model_copy(
+                update={"pricing": pricing.model_copy(update=updates)}
+            )
 
     def travel(self, world: WorldState) -> TravelProvider:
         """Travel with recorded traffic delays layered on, and live ones if configured.

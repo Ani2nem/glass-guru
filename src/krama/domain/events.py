@@ -238,6 +238,18 @@ class OvertimeOffered(EventBase):
     claim_deadline: datetime
 
 
+class RateCardChanged(EventBase):
+    """The owner set real prices - the one edit that retires "estimated costs".
+
+    Values land in the event log like every other fact, so the board's prices are
+    auditable ("who changed the labour rate, and when") and survive any redeploy.
+    Keys are PricingParams field names; unknown keys are refused upstream.
+    """
+
+    type: Literal["rate_card_changed"] = "rate_card_changed"
+    entries: dict[str, float]
+
+
 class DepotMoved(EventBase):
     """The shop's address changed - deliberately, loudly, and in one place.
 
@@ -349,6 +361,7 @@ Event = Annotated[
     | CrewAskClosed
     | WorkerRemoved
     | VanRemoved
-    | DepotMoved,
+    | DepotMoved
+    | RateCardChanged,
     Field(discriminator="type"),
 ]

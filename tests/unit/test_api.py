@@ -1455,3 +1455,70 @@ def test_crew_swap_is_priced_checked_and_committed(client: TestClient, monkeypat
 
     refused = client.post(f"/api/jobs/{job_id}/crew", params={"worker_id": "w-sofia"})
     assert refused.status_code == 422
+
+
+def test_owner_prices_land_in_the_log_and_in_the_next_quote(client: TestClient):
+    """Setting real prices is an event: auditable, redeploy-proof, and in force from
+    the very next quote. The provenance flips so the "estimated costs" warning can
+    retire itself one number at a time."""
+    before = client.get("/api/config/pricing").json()["fields"]
+    labour = next(f for f in before if f["key"] == "labour_rate_per_hour")
+    assert labour["source"] == "estimated"
+
+    out = client.post(
+        "/api/config/pricing", json={"labour_rate_per_hour": 120.0, "call_out_fee": 80.0}
+    ).json()
+    assert "2 price(s) set" in out["status"]
+
+    after = client.get("/api/config/pricing").json()["fields"]
+    labour = next(f for f in after if f["key"] == "labour_rate_per_hour")
+    assert labour["value"] == 120.0
+    assert labour["source"] == "confirmed"
+
+    slipped = client.post("/api/config/pricing", json={"labour_rate_per_hour": 9500.0})
+    assert slipped.status_code == 422
+    assert "slipped decimal" in slipped.json()["detail"]["remedy"]
+
+    unknown = client.post("/api/config/pricing", json={"evil_field": 1.0})
+    assert unknown.status_code == 422
+
+
+def test_dispatcher_sessions_never_receive_the_owners_numbers(client: TestClient, monkeypatch):
+    """With KRAMA_OWNER_PIN set, the server STRIPS business-private money for
+    sessions without the key - margins zeroed and flagged, week cost zeroed, the
+    rate card and the shop's address behind 403. The right header brings it all
+    back. Stripping is server-side: an employee's browser never holds the numbers."""
+    monkeypatch.setenv("KRAMA_OWNER_PIN", "4242")
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+
+    locked = client.get("/api/config/pricing")
+    assert locked.status_code == 403
+    assert client.get("/api/session").json() == {"owner_pin_set": True, "owner": False}
+
+    draft = {
+        "customer_name": "Redacted",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    client.post("/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "09:00"})
+    plan = client.get("/api/plan").json()
+    assert plan["redacted"] is True
+    assert plan["cost"]["total"] == 0.0, "week cost is the owner's number"
+    assert plan["feasible"] is not None, "operational truth still flows"
+
+    owner = {"X-Owner-Key": "4242"}
+    assert client.get("/api/session", headers=owner).json()["owner"] is True
+    full = client.get("/api/plan", headers=owner).json()
+    assert full["redacted"] is False
+    assert client.get("/api/config/pricing", headers=owner).status_code == 200
+
+    wrong = client.get("/api/config/pricing", headers={"X-Owner-Key": "0000"})
+    assert wrong.status_code == 403
