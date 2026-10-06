@@ -627,10 +627,18 @@ def _business_today() -> date:
 
 
 def _next_monday() -> str:
+    """The next WEEKDAY strictly after business-today - not literally Monday.
+
+    "Next Monday" from a Monday is seven days out, which falls off the five-working-
+    day rolling horizon and quietly unschedules every test booking - a bug that only
+    fires one day a week, which is the worst kind. Any strictly-future weekday is
+    always inside the horizon; the name stays for the dozens of call sites.
+    """
     from datetime import timedelta
 
     today = _business_today()
-    return (today + timedelta(days=(7 - today.weekday()) % 7 or 7)).isoformat()
+    bump = 1 if today.weekday() < 4 else 7 - today.weekday()
+    return (today + timedelta(days=bump)).isoformat()
 
 
 def test_a_booking_cancelled_moments_later_stays_cancelled(client: TestClient, monkeypatch):
@@ -1358,3 +1366,92 @@ def test_the_booking_rationale_survives_the_slot_card(client: TestClient, monkey
     ).json()
     job = next(j for j in client.get("/api/world").json()["jobs"] if j["id"] == booked["job_id"])
     assert job["booking_note"] == note
+
+
+def test_the_card_and_the_commit_name_the_same_crew(client: TestClient, monkeypatch):
+    """The slot card said Marcus; the committed plan said Priya. Equal-cost crews
+    made the fresh commit free to differ from the card the dispatcher had just read
+    aloud. The quoted crew now rides the booking and pins its own commit - later
+    re-plans stay free to reshuffle, but the plan the confirmation is read against
+    must match the card."""
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    draft = {
+        "customer_name": "Pinned",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    # Priya would not be the tie-break's first pick for a residential solo job, so
+    # a surviving pin is proof the pin did the work.
+    booked = client.post(
+        "/api/book",
+        json={
+            "draft": draft,
+            "date": _next_monday(),
+            "arrival": "09:00",
+            "crew_ids": ["w-priya"],
+        },
+    ).json()
+    assert booked["status"] == "scheduled"
+    plan = client.get("/api/plan").json()
+    crew = next(
+        r["worker_ids"] if "worker_ids" in r else r["worker_names"]
+        for r in plan["routes"]
+        for s in r["stops"]
+        if s["job_id"] == booked["job_id"]
+    )
+    assert "Priya" in " ".join(map(str, crew)) or "w-priya" in crew, crew
+
+
+def test_crew_swap_is_priced_checked_and_committed(client: TestClient, monkeypatch):
+    """The dispatcher asks "who else could take this, and what would it cost" and
+    gets measured answers: a qualified fitter with a dollar delta, an unqualified
+    one refused in words, and an applied swap that re-plans without touching any
+    promised window."""
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    draft = {
+        "customer_name": "Swappable",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    booked = client.post(
+        "/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "09:00"}
+    ).json()
+    job_id = booked["job_id"]
+
+    options = client.get(f"/api/jobs/{job_id}/crew-options").json()["options"]
+    by_id = {o["worker_id"]: o for o in options}
+    assert by_id["w-sofia"]["feasible"] is False, "auto-glass Sofia cannot take residential"
+    assert "not qualified" in by_id["w-sofia"]["note"]
+    current = [o for o in options if o.get("current")]
+    assert current, "somebody is on it now"
+    other = next(o for o in options if o["feasible"] and not o.get("current") and "cost_delta" in o)
+    assert isinstance(other["cost_delta"], float)
+
+    swapped = client.post(
+        f"/api/jobs/{job_id}/crew", params={"worker_id": other["worker_id"]}
+    ).json()
+    assert swapped["status"] == "re-planned around the swap"
+    plan = client.get("/api/plan").json()
+    crew_names = next(
+        r["worker_names"] for r in plan["routes"] for s in r["stops"] if s["job_id"] == job_id
+    )
+    assert other["name"] in crew_names
+
+    refused = client.post(f"/api/jobs/{job_id}/crew", params={"worker_id": "w-sofia"})
+    assert refused.status_code == 422

@@ -949,6 +949,7 @@ def run_intake(request: TextRequest) -> IntakeView:
                     arrival=clock(s.arrival.astimezone(svc.tz)),
                     marginal_cost=round(s.marginal_cost, 2),
                     crew=" + ".join(s.worker_names),
+                    crew_ids=list(s.worker_ids),
                     crew_reason=_crew_reason(result.draft, s) + _cover_note(capable, s),
                     reason=s.reason,
                     needs_overtime=s.overtime_minutes > 0,
@@ -988,6 +989,7 @@ def run_intake(request: TextRequest) -> IntakeView:
                             arrival=clock(best.arrival.astimezone(svc.tz)),
                             marginal_cost=round(best.marginal_cost, 2),
                             crew=" + ".join(best.worker_names),
+                            crew_ids=list(best.worker_ids),
                             crew_reason=_crew_reason(result.draft, best),
                             reason=best.reason,
                             needs_overtime=best.overtime_minutes > 0,
@@ -1165,7 +1167,8 @@ def book_slot(request: BookRequest) -> dict[str, str]:
         # again.
         placed = "unplaced"
         try:
-            plan = svc.plan_week(start=_default_start(svc))
+            pin = {job_id: tuple(request.crew_ids)} if request.crew_ids else None
+            plan = svc.plan_week(start=_default_start(svc), pinned_workers=pin)
             head = svc.head()
             committed = svc.commit(plan.plan, expected_parent=head.id if head else None)
             placed = (
@@ -1818,6 +1821,139 @@ def claim_overtime(job_id: str, worker_id: str = Query(...)) -> dict[str, str]:
             "worker": worker.name if worker else worker_id,
             "status": note,
         }
+
+
+@app.get("/api/jobs/{job_id}/crew-options")
+def crew_options(job_id: str) -> dict[str, list[dict[str, object]]]:
+    """Who else could take this job, and what each swap would really cost.
+
+    One trial solve per qualified fitter, each with the candidate pinned and every
+    promise still binding - so "Dan +$6.40" is a measured number, not a guess, and
+    a candidate whose pin cannot be honoured without breaking a promise comes back
+    infeasible with that said in words. Expensive by design (a solve per name);
+    this is behind a click on one job, not on every render.
+    """
+    from krama.scheduler.costing import cost_plan
+
+    svc = service()
+    with dispatch(new_dispatch_id("web")), span("api.crew_options", job=job_id):
+        world = svc.world()
+        job = world.jobs.get(job_id)
+        if job is None or not job.is_active:
+            raise HTTPException(404, detail={"error": "NoSuchJob", "detail": job_id})
+        head = svc.head()
+        if head is None:
+            raise HTTPException(409, detail={"error": "NoPlan", "detail": "nothing committed"})
+        current = next(
+            (tuple(r.worker_ids) for r in head.routes for st in r.stops if st.job_id == job_id),
+            (),
+        )
+        baseline_cost, _ = cost_plan(head, world, svc.business, svc.tz, head.unserved)
+
+        options: list[dict[str, object]] = []
+        for worker in sorted(world.workers.values(), key=lambda w: w.id):
+            if not worker.is_certified_for(job.required_certifications):
+                options.append(
+                    {
+                        "worker_id": worker.id,
+                        "name": worker.name,
+                        "feasible": False,
+                        "current": worker.id in current,
+                        "note": "not qualified for this work",
+                    }
+                )
+                continue
+            if worker.id in current and len(current) == job.crew_size:
+                options.append(
+                    {
+                        "worker_id": worker.id,
+                        "name": worker.name,
+                        "feasible": True,
+                        "current": True,
+                        "cost_delta": 0.0,
+                        "note": "on it now",
+                    }
+                )
+                continue
+            trial = svc.plan_week(start=_default_start(svc), pinned_workers={job_id: (worker.id,)})
+            if trial.violations or not any(
+                worker.id in r.worker_ids
+                for r in trial.plan.routes
+                for st in r.stops
+                if st.job_id == job_id
+            ):
+                options.append(
+                    {
+                        "worker_id": worker.id,
+                        "name": worker.name,
+                        "feasible": False,
+                        "current": False,
+                        "note": "cannot take it without breaking a promise",
+                    }
+                )
+                continue
+            delta = trial.cost.total - baseline_cost.total
+            options.append(
+                {
+                    "worker_id": worker.id,
+                    "name": worker.name,
+                    "feasible": True,
+                    "current": False,
+                    "cost_delta": round(delta, 2),
+                    "note": "",
+                }
+            )
+        return {"options": options}
+
+
+@app.post("/api/jobs/{job_id}/crew")
+def set_crew(job_id: str, worker_id: str = Query(...)) -> dict[str, str]:
+    """Put a named fitter on this job - the dispatcher's call, priced and checked.
+
+    The swap re-plans the week with the fitter pinned and every promise binding;
+    if honouring the pin would move anybody's window, the whole thing refuses
+    rather than quietly costing a customer their morning.
+    """
+    svc = service()
+    with dispatch(new_dispatch_id("web")), span("api.set_crew", job=job_id):
+        world = svc.world()
+        job = world.jobs.get(job_id)
+        if job is None or not job.is_active:
+            raise HTTPException(404, detail={"error": "NoSuchJob", "detail": job_id})
+        worker = world.workers.get(worker_id)
+        if worker is None:
+            raise HTTPException(404, detail={"error": "NoSuchWorker", "detail": worker_id})
+        if not worker.is_certified_for(job.required_certifications):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "NotQualified",
+                    "detail": f"{worker.name} is not qualified for this work",
+                },
+            )
+        trial = svc.plan_week(start=_default_start(svc), pinned_workers={job_id: (worker_id,)})
+        placed = any(
+            worker_id in r.worker_ids
+            for r in trial.plan.routes
+            for st in r.stops
+            if st.job_id == job_id
+        )
+        if trial.violations or not placed:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "WouldBreakAPromise",
+                    "detail": (
+                        f"putting {worker.name} on this job cannot be done without "
+                        "moving a promised window"
+                    ),
+                    "remedy": "pick another fitter, or edit the booking itself",
+                },
+            )
+        head = svc.head()
+        committed = svc.commit(trial.plan, expected_parent=head.id if head else None)
+        broadcaster.publish("plan", {"plan_id": committed.id})
+        return {"job_id": job_id, "crew": worker.name, "status": "re-planned around the swap"}
 
 
 @app.post("/api/jobs/{job_id}/cancel")

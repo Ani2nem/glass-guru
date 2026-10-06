@@ -242,6 +242,9 @@ class SlotView(Api):
     arrival: str
     marginal_cost: float
     crew: str
+    #: Worker ids behind ``crew`` - the booking pins these so the committed plan
+    #: cannot quietly differ from the card the dispatcher just read aloud.
+    crew_ids: list[str] = Field(default_factory=list)
     crew_reason: str
     reason: str
 
@@ -281,6 +284,11 @@ class BookRequest(Api):
     #: The pressed slot's own explanation (reason + crew_reason), stored on the job
     #: so "why Marcus, why Tuesday" survives the slot card it was written on.
     booking_note: str = ""
+    #: The quoted crew, pinned for THIS booking's own commit only. Later re-plans
+    #: stay free to reshuffle crews inside promises - that flexibility is a feature
+    #: - but the plan the customer's confirmation is read against must match the
+    #: card that was just on screen.
+    crew_ids: list[str] = Field(default_factory=list)
 
 
 class UnavailableDayView(Api):
