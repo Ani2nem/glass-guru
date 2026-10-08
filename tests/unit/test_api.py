@@ -31,7 +31,10 @@ def client(tmp_path, monkeypatch) -> TestClient:
 
     from krama.api.main import app
 
-    return TestClient(app)
+    # The fixture config ships a sample owner PIN, so the suite runs as the owner
+    # by default - tests that probe the dispatcher view override the pin and the
+    # header themselves.
+    return TestClient(app, headers={"X-Owner-Key": "1234"})
 
 
 #: The fixture's jobs live in a fixed week, and the horizon now starts from whatever
@@ -1522,3 +1525,22 @@ def test_dispatcher_sessions_never_receive_the_owners_numbers(client: TestClient
 
     wrong = client.get("/api/config/pricing", headers={"X-Owner-Key": "0000"})
     assert wrong.status_code == 403
+
+
+def test_the_factory_pin_enforces_out_of_the_box(client: TestClient):
+    """The owner split must not be a suggestion that waits for an env var: the
+    shipped config carries a sample PIN, so a fresh board is dispatcher-safe the
+    moment it starts. A bare client - no header - is locked out of the owner
+    surfaces and gets stripped money everywhere else."""
+    from fastapi.testclient import TestClient as Bare
+
+    from krama.api.main import app
+
+    bare = Bare(app)
+    assert bare.get("/api/session").json() == {"owner_pin_set": True, "owner": False}
+    assert bare.get("/api/config/pricing").status_code == 403
+    refused = bare.post("/api/config/depot", json={"address": "x", "confirm": "x"})
+    assert refused.status_code == 403
+
+    # and the owner header opens it, because the pin is config, not code
+    assert client.get("/api/config/pricing").status_code == 200

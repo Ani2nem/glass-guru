@@ -194,10 +194,10 @@ export default function App() {
               </span>
             ) : (
               <button
-                title="show the owner's numbers - margins, week cost, the rate card"
+                title="unlock the owner's numbers - margins, week cost, the rate card, moving the shop"
                 onClick={() => setUnlocking(true)}
               >
-                Owner
+                Owner controls
               </button>
             ))}
           <button disabled={busy} onClick={() => setConfiguring(true)}>

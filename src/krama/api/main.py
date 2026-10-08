@@ -130,12 +130,19 @@ app.add_middleware(
 
 
 def _owner_pin() -> str:
-    """The owner's PIN from the environment. Empty means single-user mode: the
-    board is the owner's own laptop and everything shows. Set KRAMA_OWNER_PIN and
-    the board becomes dispatcher-safe - margins, week costs and the rate card are
-    stripped SERVER-SIDE, not merely hidden, so an employee's browser never even
-    receives the numbers the owner considers private."""
-    return os.environ.get("KRAMA_OWNER_PIN", "")
+    """The owner's PIN: the environment first (deployment override), then the
+    business config (back-office file, where the sample ships as 1234). Empty in
+    both places means single-user mode and everything shows. With a pin set, the
+    board is dispatcher-safe by DEFAULT - margins, week costs and the rate card
+    are stripped SERVER-SIDE, so an employee's browser never even receives the
+    numbers the owner considers private."""
+    from_env = os.environ.get("KRAMA_OWNER_PIN", "")
+    if from_env:
+        return from_env
+    try:
+        return BusinessParams.load().meta.owner_pin
+    except Exception:
+        return ""
 
 
 def _is_owner(request: Request) -> bool:

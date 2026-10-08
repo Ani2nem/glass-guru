@@ -134,6 +134,11 @@ class BusinessMeta(Section):
     #: "everything in the catalogue" - which keeps fixtures and tests that predate
     #: the field meaning what they always meant.
     services: list[str] = []
+    #: The owner's PIN. Back-office configuration, not a UI setting: the person
+    #: who edits this file is by definition the owner. Empty disables the role
+    #: split entirely (single-user mode); the KRAMA_OWNER_PIN environment variable
+    #: overrides it for deployments where the config file is public.
+    owner_pin: str = ""
 
     def offers(self, service_type: str) -> bool:
         return not self.services or service_type in self.services
