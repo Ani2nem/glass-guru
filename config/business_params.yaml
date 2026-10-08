@@ -17,6 +17,10 @@ meta:
   # What this business sells: glass for buildings. Vehicles are deliberately absent
   # - "he needs his car glass repaired" was drafted, priced and nearly booked before
   # the owner pointed out they have never fitted a windscreen in their life.
+  # SAMPLE PIN - change it before handing the board to an employee. Guards the
+  # owner's numbers (margins, week cost, the rate card, moving the shop); the
+  # dispatcher sees everything operational without it.
+  owner_pin: "1234"
   services:
     - storefront_glass
     - residential_window_replacement

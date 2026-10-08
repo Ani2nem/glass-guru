@@ -261,6 +261,15 @@ export function ConfigPanel({
           </button>
         </div>
 
+        {!owner && (
+          <>
+            <h3 className="config__vanshead">Owner controls</h3>
+            <p className="muted">
+              Prices and moving the shop are locked. Unlock with the Owner controls
+              button in the top bar.
+            </p>
+          </>
+        )}
         {owner && rates && (
           <>
             <h3 className="config__vanshead">Prices (owner only)</h3>
