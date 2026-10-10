@@ -112,7 +112,11 @@ def test_made_to_order_glass_becomes_a_lead_time():
     estimate = lookup(ServiceType.RESIDENTIAL_WINDOW_REPLACEMENT, glass_type=GlassType.TEMPERED)
     assert estimate.needs_ordering
     assert estimate.lead_time_days > 0
-    assert Certification.TEMPERED_SAFETY in estimate.required_certifications
+    # And ONLY a lead time. The retired "tempered safety" badge used to ride along
+    # here, which made every made-to-order job unbookable on a roster built in
+    # Configure - the certification no longer exists anywhere a person can grant it.
+    assert Certification.TEMPERED_SAFETY not in estimate.required_certifications
+    assert estimate.required_certifications == frozenset({Certification.RESIDENTIAL_GLAZING})
 
 
 def test_a_big_multi_pane_job_needs_a_second_pair_of_hands():

@@ -186,7 +186,11 @@ def lookup(
     parts = list(entry.typical_parts)
     lead_time = 0
     if glass_type in MADE_TO_ORDER:
-        certifications.add(Certification.TEMPERED_SAFETY)
+        # Lead time only - no extra badge. "Tempered safety" was a phantom
+        # certification the skills cleanup retired: it gated nothing real, the
+        # Configure roster can no longer grant it, and leaving it here made every
+        # made-to-order job permanently unbookable on any roster built in the
+        # product. Handling tempered glass is the trade, not a certificate.
         lead_time = DEFAULT_LEAD_TIME_DAYS
         parts = [f"{glass_type.value}_custom"]
 
