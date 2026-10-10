@@ -78,11 +78,16 @@ export function ConfigPanel({
   owner,
   onClose,
   onChanged,
+  onUnlock,
 }: {
   world: World;
   owner: boolean;
   onClose: () => void;
   onChanged: () => void;
+  /** Try a PIN; resolves true when the server agrees. Lives here as well as the
+   * top bar because "close the sheet, find the Owner button, type, reopen the
+   * sheet" was three errands for one unlock. */
+  onUnlock: (pin: string) => Promise<boolean>;
 }) {
   const [rows, setRows] = useState<Row[]>([...world.workers.map(rowFrom)]);
   const [busy, setBusy] = useState(false);
@@ -90,6 +95,15 @@ export function ConfigPanel({
   const [movingShop, setMovingShop] = useState(false);
   const [rates, setRates] = useState<RateField[] | null>(null);
   const [rateDrafts, setRateDrafts] = useState<Record<string, string>>({});
+  const [unlockPin, setUnlockPin] = useState("");
+  const [unlockFailed, setUnlockFailed] = useState(false);
+
+  async function tryUnlock() {
+    setUnlockFailed(false);
+    const ok = await onUnlock(unlockPin);
+    if (!ok) setUnlockFailed(true);
+    else setUnlockPin("");
+  }
 
   useEffect(() => {
     if (!owner) return;
@@ -264,10 +278,22 @@ export function ConfigPanel({
         {!owner && (
           <>
             <h3 className="config__vanshead">Owner controls</h3>
-            <p className="muted">
-              Prices and moving the shop are locked. Unlock with the Owner controls
-              button in the top bar.
-            </p>
+            <p className="muted">Prices and moving the shop are locked.</p>
+            <span className="config__unlock">
+              <input
+                type="password"
+                placeholder="owner PIN"
+                value={unlockPin}
+                onChange={(e) => setUnlockPin(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void tryUnlock();
+                }}
+              />
+              <button disabled={busy || !unlockPin} onClick={() => void tryUnlock()}>
+                Unlock
+              </button>
+              {unlockFailed && <em className="warn">wrong PIN</em>}
+            </span>
           </>
         )}
         {owner && rates && (

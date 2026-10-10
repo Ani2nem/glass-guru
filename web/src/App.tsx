@@ -602,6 +602,16 @@ export default function App() {
           owner={session?.owner ?? true}
           onClose={() => setConfiguring(false)}
           onChanged={() => void refresh()}
+          onUnlock={async (tryPin) => {
+            setOwnerKey(tryPin);
+            const who = await api.session();
+            if (!who.owner) {
+              setOwnerKey("");
+              return false;
+            }
+            await refresh();
+            return true;
+          }}
         />
       )}
 

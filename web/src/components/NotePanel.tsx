@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { type Dictation, dictationSupported, startDictation } from "../dictation";
 import { ApiError, api } from "../api";
@@ -339,7 +340,7 @@ export function NotePanel({
               <ul>
                 {booking.possible_duplicates.map((d) => (
                   <li key={d.job_id}>
-                    {d.customer} \u00B7 {d.when} \u00B7 {d.what}
+                    {d.customer} · {d.when} · {d.what}
                   </li>
                 ))}
               </ul>
@@ -348,10 +349,13 @@ export function NotePanel({
             </div>
           )}
 
-          {pendingDuplicate && (
-            /* A modal, not a line of red text: the gate fired on a real decision -
-               second job, or an edit of the one that exists - and a decision
-               deserves the centre of the screen. Backdrop click means never mind. */
+          {pendingDuplicate &&
+            /* A modal, not a line of red text - and rendered through a PORTAL to
+               the document body, because inside the rail an ancestor's styles made
+               position:fixed pin to the rail instead of the screen: the "popup"
+               dimmed one column and the user rightly asked where it was. Backdrop
+               click means never mind. */
+            createPortal(
             <div
               className="dupemodal"
               onMouseDown={(e) => {
@@ -365,7 +369,7 @@ export function NotePanel({
                   <ul className="dupemodal__list">
                     {booking.possible_duplicates.map((d) => (
                       <li key={d.job_id}>
-                        <strong>{d.customer}</strong> \u00B7 {d.when} \u00B7 {d.what}
+                        <strong>{d.customer}</strong> · {d.when} · {d.what}
                       </li>
                     ))}
                   </ul>
@@ -398,7 +402,8 @@ export function NotePanel({
                   Never mind
                 </button>
               </div>
-            </div>
+            </div>,
+            document.body,
           )}
 
           {booking.crew_ask && (
