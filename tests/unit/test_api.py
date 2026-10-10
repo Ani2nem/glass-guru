@@ -221,14 +221,20 @@ def test_every_commitment_state_can_reach_the_board(client: TestClient):
     """Each state is a different colour on the Gantt, so a state that never arrives is
     a colour nobody has ever seen."""
     client.post(COMMIT)
-    client.post("/api/events", json={"kind": "job-dispatched", "target": "j-401", "at": "06:05"})
+    # Full ISO days, not bare HH:MM: a bare time lands on the CURRENT week's
+    # rolling anchor (right for a dispatcher typing it live), but this test is
+    # dressing jobs in the fixture's own week.
+    day = WEEK_START.isoformat()
+    client.post(
+        "/api/events", json={"kind": "job-dispatched", "target": "j-401", "at": f"{day}T06:05"}
+    )
     client.post(
         "/api/events",
         json={
             "kind": "job-confirmed",
             "target": "j-402",
-            "window_start": "09:00",
-            "window_end": "15:00",
+            "window_start": f"{day}T09:00",
+            "window_end": f"{day}T15:00",
             "commitment_cost": 250,
         },
     )
@@ -859,10 +865,11 @@ def test_an_absorbable_outage_reroutes_without_a_human(client: TestClient):
         json={
             "kind": "worker-unavailable",
             "target": worker_id,
-            # An explicit "at" anchors the event inside the fixture week; without it
-            # the clamp that forbids backdating (correctly) voids an outage recorded
-            # against a plan whose dates are already behind the real clock.
-            "at": "00:01",
+            # A full-ISO "at" anchors the event inside the fixture week; a bare
+            # HH:MM lands on the current week's rolling anchor, and the clamp that
+            # forbids backdating (correctly) voids an outage recorded against a
+            # plan whose dates are already behind the real clock.
+            "at": f"{route['date']}T00:01",
             "window_start": f"{route['date']}T00:00",
             "until": f"{route['date']}T23:59",
         },
@@ -1544,3 +1551,72 @@ def test_the_factory_pin_enforces_out_of_the_box(client: TestClient):
 
     # and the owner header opens it, because the pin is config, not code
     assert client.get("/api/config/pricing").status_code == 200
+
+
+def test_the_horizon_never_lags_the_calendar(client: TestClient, monkeypatch):
+    """The committed plan's start used to anchor every future solve - so on
+    Thursday the board still planned LAST week, and a booking for next Monday,
+    offered and priced by the quote, fell outside the commit's window and showed
+    on no screen. The anchor now rolls: never behind today's next working day."""
+    from krama.api.main import _default_start, service
+
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    client.post(COMMIT)  # a plan anchored to the fixture's long-gone week
+    svc = service()
+    head = svc.head()
+    assert head is not None and head.horizon_start == WEEK_START, "the stale anchor is real"
+    assert _default_start(svc) >= _business_today(), "and it must not win"
+
+    draft = {
+        "customer_name": "Rolls",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    booked = client.post(
+        "/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "09:00"}
+    ).json()
+    assert booked["status"] == "scheduled", (
+        "a bookable near-future day must land on the plan, stale head or not"
+    )
+
+
+def test_a_promise_beyond_the_horizon_still_has_a_tile_to_draw(client: TestClient, monkeypatch):
+    """A booking ten working days out is legitimate (the quote walks 21) but no
+    committed plan reaches it yet. The world view now carries machine-readable
+    promise bounds so the calendar draws it as a ghost - a promise with no tile
+    is a promise someone will forget."""
+    from datetime import date as _date
+    from datetime import timedelta as _timedelta
+
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    far = _date.fromisoformat(_next_monday()) + _timedelta(days=14)
+    draft = {
+        "customer_name": "Far Out",
+        "phone": "9132934243",
+        "address": "x",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 60,
+        "duration_confidence": 30,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    booked = client.post(
+        "/api/book", json={"draft": draft, "date": far.isoformat(), "arrival": "09:00"}
+    ).json()
+    assert booked["status"] == "booked but not yet scheduled"
+
+    job = next(j for j in client.get("/api/world").json()["jobs"] if j["id"] == booked["job_id"])
+    assert job["window_start"].startswith(far.isoformat())
+    assert job["window_end"] > job["window_start"]
+    assert job["commitment_state"] == "confirmed"

@@ -149,6 +149,11 @@ class JobView(Api):
     address: str = ""
     quoted_total: float = 0.0
     booking_note: str = ""
+    #: Machine-readable promise bounds, so the calendar can draw a confirmed
+    #: booking even when no committed plan has reached its week yet - a promise
+    #: with no tile is a promise someone will forget.
+    window_start: str = ""
+    window_end: str = ""
     transcript: str = ""
 
 

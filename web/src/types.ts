@@ -99,6 +99,8 @@ export interface Job {
   address: string;
   quoted_total: number;
   booking_note: string;
+  window_start: string;
+  window_end: string;
   transcript: string;
   id: string;
   customer_name: string;

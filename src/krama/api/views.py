@@ -258,6 +258,8 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 commitment_state=j.commitment_state.value,
                 commitment_cost=j.commitment_cost,
                 window=(_window_text(j, tz) if j.windows else "any time"),
+                window_start=(j.windows[0].start.astimezone(tz).isoformat() if j.windows else ""),
+                window_end=(j.windows[0].end.astimezone(tz).isoformat() if j.windows else ""),
                 lat=j.location.lat,
                 lon=j.location.lon,
                 transcript=j.provenance.transcript,

@@ -2334,10 +2334,17 @@ def _default_start(svc: DispatchService) -> date:
     This used to return a date written into the fixture, so on any day other than the
     week of 21 September 2026 the board showed a week that had already happened.
     """
+    today_start = next_working_day(svc.world(), datetime.now(svc.tz).date())
     head = svc.head()
     if head is not None:
-        return head.horizon_start
-    return next_working_day(svc.world(), datetime.now(svc.tz).date())
+        # The committed start holds WITHIN its own week, so re-reading the board
+        # does not slide the week under a dispatcher - but it must never lag the
+        # calendar. Pinned forever, the horizon went stale: on Thursday the board
+        # was still planning Monday-to-Friday of LAST week, so a booking for next
+        # Monday - offered and priced by the quote, which walks real future days -
+        # fell outside the commit's window and vanished from every screen.
+        return max(head.horizon_start, today_start)
+    return today_start
 
 
 def _clock(

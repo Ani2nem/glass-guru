@@ -1242,3 +1242,13 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .config__ratelabel { display: flex; justify-content: space-between; color: var(--muted); }
 .config__ratelabel em { font-style: normal; font-size: 11px; }
 .config__rate input { margin: 0; }
+
+/* A promise no committed plan has reached yet: drawn from its own window, dashed
+   and hollow, so a far-out booking is never invisible between "Booked!" and the
+   week its plan finally covers. */
+.block--ghost {
+  background: rgb(207 197 246 / 0.25);
+  border: 1.5px dashed #8f7fd4;
+  color: #43337e;
+}
+.block--ghost .block__when { color: #6a5bab; }
