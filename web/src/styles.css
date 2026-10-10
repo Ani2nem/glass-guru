@@ -1362,3 +1362,14 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 .config__stock { display: inline-flex; gap: 10px; flex-wrap: wrap; }
 .config__part { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
 .config__part input { width: 52px; padding: 3px 6px; }
+
+/* A promise the schedule cannot keep: the loudest row on the board. */
+.asks__row--broken {
+  border-left: 4px solid #c0392b;
+  background: rgb(252 235 233 / 0.9);
+}
+.asks__row--broken strong { color: #8e2418; }
+
+/* The rota wears its dates - "Mon" alone means nothing once the week arrows exist. */
+.rota__date { font-weight: 500; color: #8a8a96; font-size: 11px; }
+.crewcard__range { color: #6a6a76; font-size: 13px; }

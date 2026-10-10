@@ -118,6 +118,19 @@ export default function App() {
   const days = [...new Set(plan?.routes.map((r) => r.date) ?? [])].sort();
   const selectedStop =
     plan?.routes.flatMap((r) => r.stops).find((s) => s.job_id === selected) ?? null;
+  const selectedJob = world?.jobs.find((j) => j.id === selected) ?? null;
+  // Promises the committed plan can no longer keep. These are the board's loudest
+  // fact: a customer was read a window, and the schedule as it stands will not
+  // show up. Each one is a phone call someone owes.
+  const brokenPromises =
+    plan && world
+      ? plan.unserved
+          .filter((u) => u.is_failure)
+          .map((u) => world.jobs.find((j) => j.id === u.job_id))
+          .filter(
+            (j): j is NonNullable<typeof j> => !!j && j.commitment_state === "confirmed",
+          )
+      : [];
 
   return (
     <div className="app">
@@ -230,6 +243,43 @@ export default function App() {
         </aside>
 
         <div className="boardcol">
+        {brokenPromises.length > 0 && (
+          <section className="asks">
+            {brokenPromises.map((j) => (
+              <div key={j.id} className="asks__row asks__row--broken">
+                <div className="asks__what">
+                  <strong>We promised {j.customer_name}</strong>
+                  <span> {j.window || "a window"} and the schedule can no longer make it. </span>
+                  <span className="asks__who">
+                    Call them{j.phone ? ` - ${j.phone} - ` : " "}before they find out the hard
+                    way: offer a new slot, or fix what broke and this clears itself.
+                  </span>
+                </div>
+                <div className="asks__actions">
+                  <button
+                    disabled={busy || !j.transcript}
+                    title="re-price their original call right now - new slots to read them"
+                    onClick={() =>
+                      setPrefill({ text: j.transcript, nonce: Date.now(), run: true })
+                    }
+                  >
+                    Find them a new slot
+                  </button>
+                  <button
+                    disabled={busy}
+                    title="open the promised booking on the calendar"
+                    onClick={() => {
+                      setView("board");
+                      setSelected(j.id);
+                    }}
+                  >
+                    Open the booking
+                  </button>
+                </div>
+              </div>
+            ))}
+          </section>
+        )}
         {world && world.crew_asks.length > 0 && (
           <section className="asks">
             {/* Unresolved promises to call a customer back. Red and persistent on
@@ -333,6 +383,102 @@ export default function App() {
 
           {week && view === "board" && (
             <>
+              {!selectedStop && selectedJob && (
+                /* A promise no plan reaches: same card grammar, honest about the
+                   gap. The dashed tile used to be wallpaper - visible, dead to
+                   clicks - which made the one booking most in need of attention
+                   the only one you could not open. */
+                <div className="jobcard detail--overlay" ref={detailRef}>
+                  <header className="jobcard__head">
+                    <h3>{selectedJob.customer_name}</h3>
+                    <span className="jobcard__state jobcard__state--confirmed">promised</span>
+                    <button
+                      className="jobcard__x"
+                      aria-label="close"
+                      onClick={() => setSelected(null)}
+                    >
+                      {"\u00D7"}
+                    </button>
+                  </header>
+                  <dl>
+                    <dt>Work</dt>
+                    <dd>{selectedJob.service_type.replace(/_/g, " ")}</dd>
+                    <dt>Address</dt>
+                    <dd>{selectedJob.address || "-"}</dd>
+                    <dt>Phone</dt>
+                    <dd>{selectedJob.phone || "-"}</dd>
+                    <dt>Quoted</dt>
+                    <dd>
+                      {selectedJob.quoted_total
+                        ? `$${selectedJob.quoted_total.toFixed(2)} (tax included)`
+                        : "-"}
+                    </dd>
+                    <dt>Promised</dt>
+                    <dd>{selectedJob.window || "-"}</dd>
+                    <dt>The run</dt>
+                    <dd>
+                      {brokenPromises.some((b) => b.id === selectedJob.id)
+                        ? "not on the schedule - the promise stands, the current crew cannot reach it"
+                        : "not scheduled yet - the plan has not reached this week"}
+                    </dd>
+                    <dt>Job</dt>
+                    <dd><code>{selectedJob.id}</code></dd>
+                  </dl>
+                  {showTranscript && (
+                    <div className="jobcard__transcript">
+                      <p>{selectedJob.transcript || "(no transcript stored)"}</p>
+                      {selectedJob.booking_note && (
+                        <p className="jobcard__quotednote">
+                          Quoted as: {selectedJob.booking_note} (as things stood when booked)
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <div className="jobcard__actions">
+                    <button
+                      className="jobcard__primary"
+                      disabled={busy || !selectedJob.transcript}
+                      title="re-price their original call right now - new slots to read them"
+                      onClick={() => {
+                        setPrefill({
+                          text: selectedJob.transcript,
+                          nonce: Date.now(),
+                          run: true,
+                        });
+                        setSelected(null);
+                      }}
+                    >
+                      Find them a new slot
+                    </button>
+                    <span className="jobcard__quietrow">
+                      <button
+                        className="jobcard__quiet"
+                        onClick={() => setShowTranscript((v) => !v)}
+                      >
+                        {showTranscript ? "Hide the call" : "Show the call"}
+                      </button>
+                      <button
+                        className="jobcard__cancel"
+                        disabled={busy}
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await api.cancel(selectedJob.id);
+                            setSelected(null);
+                            await refresh();
+                          } catch (exc) {
+                            setError(exc as ApiError);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        Cancel this booking
+                      </button>
+                    </span>
+                  </div>
+                </div>
+              )}
               {selectedStop && (
                 <div className="jobcard detail--overlay" ref={detailRef}>
                   {/* The Uber-modal grammar: white card, bold ink title, a quiet x,

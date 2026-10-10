@@ -99,8 +99,10 @@ function mondaysOf(year: number, month: number): string[] {
 const GRID_START = 6 * 60;
 const GRID_END = 21 * 60;
 
-/** Clamp the grid to the day's actual work when it spills past the defaults. */
-function gridBounds(routes: Route[]): [number, number] {
+/** Clamp the grid to the day's actual work when it spills past the defaults.
+ * Promised-but-unscheduled windows count as work: a ghost drawn for an evening
+ * promise used to hang past the bottom of a grid sized only by the real stops. */
+function gridBounds(routes: Route[], windows: [number, number][]): [number, number] {
   let start = GRID_START;
   let end = GRID_END;
   for (const route of routes) {
@@ -109,7 +111,16 @@ function gridBounds(routes: Route[]): [number, number] {
       end = Math.max(end, Math.ceil(stop.end_minute / 60) * 60);
     }
   }
+  for (const [open, close] of windows) {
+    start = Math.min(start, Math.floor(open / 60) * 60);
+    end = Math.max(end, Math.ceil(close / 60) * 60);
+  }
   return [start, end];
+}
+
+/** Minutes since midnight from an ISO datetime's clock part. */
+function minutesOf(iso: string): number {
+  return Number(iso.slice(11, 13)) * 60 + Number(iso.slice(14, 16));
 }
 
 interface Placed {
@@ -281,7 +292,10 @@ export function Calendar({
     if (j.commitment_state !== "confirmed" || planned.has(j.id) || !j.window_start) return false;
     return dates.includes(j.window_start.slice(0, 10));
   });
-  const [start, end] = gridBounds(routes);
+  const [start, end] = gridBounds(
+    routes,
+    ghosts.map((g) => [minutesOf(g.window_start), minutesOf(g.window_end)]),
+  );
   const hours: number[] = [];
   for (let h = Math.ceil(start / 60) * 60; h <= end; h += 60) hours.push(h);
 
@@ -380,25 +394,30 @@ export function Calendar({
             {ghosts
               .filter((g) => g.window_start.slice(0, 10) === date)
               .map((g) => {
-                const startMin =
-                  Number(g.window_start.slice(11, 13)) * 60 + Number(g.window_start.slice(14, 16));
-                const endMin =
-                  Number(g.window_end.slice(11, 13)) * 60 + Number(g.window_end.slice(14, 16));
+                const startMin = minutesOf(g.window_start);
+                const endMin = minutesOf(g.window_end);
+                // Belt and braces: never draw outside the column, whatever the data.
+                const top = Math.max(0, (startMin - start) * SCALE);
+                const height = Math.min(
+                  (end - start) * SCALE - top,
+                  Math.max(30, (endMin - startMin) * SCALE),
+                );
                 return (
-                  <div
+                  <button
                     key={g.id}
-                    className="block block--ghost"
+                    className={`block block--ghost${selected === g.id ? " block--selected" : ""}`}
                     style={{
-                      top: `${(startMin - start) * SCALE}px`,
-                      height: `${Math.max(30, (endMin - startMin) * SCALE)}px`,
+                      top: `${top}px`,
+                      height: `${height}px`,
                       left: "2px",
                       width: "calc(100% - 4px)",
                     }}
                     title={`${g.customer_name} - promised, not yet on a committed plan`}
+                    onClick={() => onSelect(g.id)}
                   >
                     <span className="block__what">{g.customer_name}</span>
                     <span className="block__when">promised · awaiting schedule</span>
-                  </div>
+                  </button>
                 );
               })}
             {layout(byDate.get(date) ?? []).map((placed) => (
