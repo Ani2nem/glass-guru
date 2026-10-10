@@ -96,6 +96,14 @@ export function NotePanel({
   }, [prefill]);
   const [busy, setBusy] = useState(false);
   const [held, setHeld] = useState(false);
+  const [pendingDuplicate, setPendingDuplicate] = useState<{
+    date: string;
+    arrival: string;
+    quotedTotal: number;
+    note: string;
+    crewIds: string[];
+    message: string;
+  } | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
   async function run(kind?: "booking" | "disruption") {
@@ -114,11 +122,28 @@ export function NotePanel({
     }
   }
 
-  async function take(date: string, arrival: string, quotedTotal: number, note: string) {
+  async function take(
+    date: string,
+    arrival: string,
+    quotedTotal: number,
+    note: string,
+    crewIds: string[],
+    allowDuplicate = false,
+  ) {
     if (!draft) return;
     setBusy(true);
     try {
-      const result = await api.book(draft, date, to24h(arrival), text, quotedTotal, note);
+      const result = await api.book(
+        draft,
+        date,
+        to24h(arrival),
+        text,
+        quotedTotal,
+        note,
+        crewIds,
+        allowDuplicate,
+      );
+      setPendingDuplicate(null);
       // Say so. The button worked before this and looked like it had not, which is
       // the worst thing a button can do: the next thing anybody does is press it again.
       setBooked(`Booked ${result.customer} for ${result.when} - ${result.status}.`);
@@ -126,7 +151,14 @@ export function NotePanel({
       setText("");
       onChanged();
     } catch (exc) {
-      setError(exc as ApiError);
+      const err = exc as ApiError;
+      if (err.message.includes("already has a booking")) {
+        // The duplicate gate fired. Not an error to bury in red text - a question
+        // for the human: second job, or an edit of the one that exists?
+        setPendingDuplicate({ date, arrival, quotedTotal, note, crewIds, message: err.message });
+      } else {
+        setError(err);
+      }
     } finally {
       setBusy(false);
     }
@@ -301,6 +333,45 @@ export function NotePanel({
             </div>
           )}
 
+          {booking.possible_duplicates.length > 0 && (
+            <div className="dupe">
+              <strong>This caller already has a booking.</strong>
+              <ul>
+                {booking.possible_duplicates.map((d) => (
+                  <li key={d.job_id}>
+                    {d.customer} \u00B7 {d.when} \u00B7 {d.what}
+                  </li>
+                ))}
+              </ul>
+              Booking below creates a <strong>second job</strong> for them; to change
+              the existing one, open it on the calendar and edit it there.
+            </div>
+          )}
+
+          {pendingDuplicate && (
+            <div className="dupe dupe--confirm">
+              <p>{pendingDuplicate.message}</p>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void take(
+                    pendingDuplicate.date,
+                    pendingDuplicate.arrival,
+                    pendingDuplicate.quotedTotal,
+                    pendingDuplicate.note,
+                    pendingDuplicate.crewIds,
+                    true,
+                  )
+                }
+              >
+                Book anyway - it's a second job
+              </button>
+              <button disabled={busy} onClick={() => setPendingDuplicate(null)}>
+                Never mind
+              </button>
+            </div>
+          )}
+
           {booking.crew_ask && (
             <div className="crewask">
               {/* The call does not end with "no" - it ends with "let me check and
@@ -431,6 +502,7 @@ export function NotePanel({
                         slot.arrival,
                         slot.quote_total,
                         [slot.reason, slot.crew_reason].filter(Boolean).join(" \u00B7 "),
+                        slot.crew_ids,
                       )
                     }
                   >

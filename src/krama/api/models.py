@@ -293,6 +293,10 @@ class BookRequest(Api):
     #: The pressed slot's own explanation (reason + crew_reason), stored on the job
     #: so "why Marcus, why Tuesday" survives the slot card it was written on.
     booking_note: str = ""
+    #: A human said "yes, this caller really wants a SECOND job" - required when
+    #: an active booking already carries the same phone or address, because the
+    #: alternative was two silent Jameses on one Monday.
+    allow_duplicate: bool = False
     #: The quoted crew, pinned for THIS booking's own commit only. Later re-plans
     #: stay free to reshuffle crews inside promises - that flexibility is a feature
     #: - but the plan the customer's confirmation is read against must match the
@@ -372,6 +376,17 @@ class VanConfig(Api):
     label: str = ""
 
 
+class DuplicateView(Api):
+    """An active booking that looks like the same caller - same digits, or the
+    same door. Surfaced, never auto-merged: a customer with two broken windows is
+    two jobs, and only a person can tell an edit from an addition."""
+
+    job_id: str
+    customer: str
+    when: str
+    what: str
+
+
 class IntakeView(Api):
     draft: DraftView
     bookable: bool
@@ -396,6 +411,10 @@ class IntakeView(Api):
     #: Margins stripped for a dispatcher session (quotes stay - the dispatcher
     #: reads prices aloud; what we KEEP is the owner's business).
     redacted: bool = False
+    #: Active bookings that share this caller's phone or address. The dispatcher
+    #: sees them BEFORE quoting; booking over one requires an explicit "it's a
+    #: second job" from a human.
+    possible_duplicates: list[DuplicateView] = Field(default_factory=list)
     repairs: int = 0
     note: str = ""
 

@@ -185,6 +185,7 @@ export interface Candidate {
 
 
 export interface Slot {
+  crew_ids: string[];
   needs_overtime: boolean;
   outside_preference: boolean;
   quote_total: number;
@@ -223,8 +224,16 @@ export interface UnavailableDay {
   reason: string;
 }
 
+export interface Duplicate {
+  job_id: string;
+  customer: string;
+  when: string;
+  what: string;
+}
+
 export interface Intake {
   redacted: boolean;
+  possible_duplicates: Duplicate[];
   draft: Draft;
   bookable: boolean;
   missing: string[];

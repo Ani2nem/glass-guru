@@ -1275,7 +1275,17 @@ def test_every_stop_says_where_its_drive_began(client: TestClient, monkeypatch):
         }
 
     client.post("/api/book", json={"draft": draft("First"), "date": monday, "arrival": "09:00"})
-    client.post("/api/book", json={"draft": draft("Second"), "date": monday, "arrival": "11:00"})
+    # Same phone on purpose - a genuine second job, so the duplicate gate needs
+    # the human's explicit yes.
+    client.post(
+        "/api/book",
+        json={
+            "draft": draft("Second"),
+            "date": monday,
+            "arrival": "11:00",
+            "allow_duplicate": True,
+        },
+    )
 
     plan = client.get("/api/plan").json()
     labels = {
@@ -1620,3 +1630,69 @@ def test_a_promise_beyond_the_horizon_still_has_a_tile_to_draw(client: TestClien
     assert job["window_start"].startswith(far.isoformat())
     assert job["window_end"] > job["window_start"]
     assert job["commitment_state"] == "confirmed"
+
+
+def test_the_same_caller_cannot_be_double_booked_by_accident(client: TestClient, monkeypatch):
+    """Two Jameses on one Monday, from one dispatcher reading one call twice. The
+    phone number is a checkable fact, so the gate is deterministic - and it is a
+    GATE, not a merge, because a customer with two broken windows is two jobs and
+    only a person can tell an edit from an addition."""
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    draft = {
+        "customer_name": "James",
+        "phone": "9132952960",
+        "address": "11100 Dunlavin Ct, Haslet, TX 76052",
+        "service_type": "residential_window_replacement",
+        "duration_minutes": 120,
+        "duration_confidence": 60,
+        "crew_size": 1,
+        "certifications": ["residential_glazing"],
+        "commitment_cost": 0,
+        "lat": 32.93,
+        "lon": -97.366,
+    }
+    first = client.post(
+        "/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "08:00"}
+    ).json()
+    assert first["status"] == "scheduled"
+
+    # the exact rebook that produced two Jameses, refused with the existing
+    # booking named
+    second = client.post(
+        "/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "10:00"}
+    )
+    assert second.status_code == 409
+    body = second.json()["detail"]
+    assert body["error"] == "PossibleDuplicate"
+    assert "James" in body["detail"]
+    assert "second job" in body["remedy"]
+
+    # formatted differently, same digits - still caught
+    reformatted = {**draft, "phone": "(913) 295-2960", "address": "somewhere else"}
+    assert (
+        client.post(
+            "/api/book", json={"draft": reformatted, "date": _next_monday(), "arrival": "13:00"}
+        ).status_code
+        == 409
+    )
+
+    # the human says it really is a second job - allowed, distinct id
+    second_job = client.post(
+        "/api/book",
+        json={
+            "draft": draft,
+            "date": _next_monday(),
+            "arrival": "10:00",
+            "allow_duplicate": True,
+        },
+    ).json()
+    assert second_job["job_id"] != first["job_id"]
+    assert second_job["status"] == "scheduled"
+
+    # a cancelled booking is not a duplicate - rebooking after a cancel is routine
+    client.post(f"/api/jobs/{second_job['job_id']}/cancel")
+    client.post(f"/api/jobs/{first['job_id']}/cancel")
+    again = client.post(
+        "/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "09:00"}
+    ).json()
+    assert again["status"] == "scheduled"

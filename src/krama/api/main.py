@@ -39,6 +39,7 @@ from krama.api.models import (
     BookRequest,
     CrewAskSuggestion,
     DepotMoveRequest,
+    DuplicateView,
     EventRequest,
     IntakeView,
     MessageView,
@@ -185,6 +186,31 @@ def _strip_margins(view: IntakeView, request: Request) -> IntakeView:
             "flexible_slots": [scrub(s) for s in view.flexible_slots],
         }
     )
+
+
+def _digits(phone: str) -> str:
+    return "".join(ch for ch in phone if ch.isdigit())
+
+
+def _active_duplicates(world: WorldState, phone: str, address: str) -> list[Job]:
+    """Active bookings that look like the same caller.
+
+    Deterministic on purpose: "this phone number already has a booking" is a
+    checkable fact, so it does not go to a model - and it is only ever a WARNING,
+    because a customer with two broken windows is legitimately two jobs. The
+    model's opinion would add nothing but a way to be wrong in both directions.
+    """
+    wanted_phone = _digits(phone)
+    wanted_address = address.strip().lower()
+    out = []
+    for job in world.active_jobs():
+        same_phone = bool(wanted_phone) and _digits(job.phone) == wanted_phone
+        same_address = bool(wanted_address) and job.location.address.strip().lower() == (
+            wanted_address
+        )
+        if same_phone or same_address:
+            out.append(job)
+    return out
 
 
 def _owner_only(request: Request) -> None:
@@ -1125,6 +1151,19 @@ def run_intake(request: TextRequest) -> IntakeView:
             asked_for_speed=bool(_URGENCY_NOT_ARRANGEMENT.search(request.text)),
             crew_ask=crew_ask,
             not_offered=result.not_offered,
+            possible_duplicates=[
+                DuplicateView(
+                    job_id=j.id,
+                    customer=j.customer_name,
+                    when=(
+                        f"{j.windows[0].start.astimezone(svc.tz):%a %d %b, %-I:%M %p}"
+                        if j.windows
+                        else "unscheduled"
+                    ),
+                    what=j.service_type.value.replace("_", " "),
+                )
+                for j in _active_duplicates(world, draft.phone, draft.address)
+            ],
         )
 
 
@@ -1149,6 +1188,26 @@ def book_slot(request: BookRequest) -> dict[str, str]:
 
     svc = service()
     draft = request.draft
+    if not request.allow_duplicate:
+        existing = _active_duplicates(svc.world(), draft.phone, draft.address)
+        if existing:
+            twins = "; ".join(
+                f"{j.customer_name} ({j.windows[0].start.astimezone(svc.tz):%a %d %b, %-I:%M %p})"
+                if j.windows
+                else j.customer_name
+                for j in existing[:3]
+            )
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "error": "PossibleDuplicate",
+                    "detail": f"this caller already has a booking: {twins}",
+                    "remedy": (
+                        "if it is a second job, book again with allow_duplicate; "
+                        "if it is a change, edit the existing booking instead"
+                    ),
+                },
+            )
     if draft.lat is None or draft.lon is None:
         raise HTTPException(
             status_code=422,

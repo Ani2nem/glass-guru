@@ -1252,3 +1252,16 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   color: #43337e;
 }
 .block--ghost .block__when { color: #6a5bab; }
+
+/* The same-caller warning: amber, specific, and a question rather than a wall. */
+.dupe {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn, #f0a13a);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--warn, #f0a13a);
+}
+.dupe ul { margin: 6px 0; padding-left: 18px; color: var(--muted); }
+.dupe--confirm button { margin: 6px 8px 0 0; font-size: 12px; padding: 4px 12px; }
+.dupe--confirm p { margin: 0 0 4px; }
