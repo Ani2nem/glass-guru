@@ -373,17 +373,13 @@ export default function App() {
                         <span className="muted"> · then {selectedStop.next_label}</span>
                       )}
                     </dd>
-                    <dt>Why then</dt>
+                    <dt>The run</dt>
                     <dd>
-                      {(() => {
-                        const note = world?.jobs.find(
-                          (j) => j.id === selectedStop.job_id,
-                        )?.booking_note;
-                        // Labelled as quote-time truth: a later re-plan may
-                        // legitimately have chosen a different crew than the card
-                        // predicted, and pretending otherwise is how trust dies.
-                        return note ? `${note} (when quoted)` : "-";
-                      })()}
+                      {/* Live, recomputed from the committed plan on every read -
+                          a booking, a crew swap or a cancellation changes this
+                          line the moment it changes the plan. The quote-time note
+                          lives under "Show the call" with the other history. */}
+                      {selectedStop.run_note || "-"}
                     </dd>
                     <dt>Crew</dt>
                     <dd>
@@ -406,10 +402,22 @@ export default function App() {
                     <dd><code>{selectedStop.job_id}</code></dd>
                   </dl>
                   {showTranscript && (
-                    <p className="jobcard__transcript">
-                      {world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ||
-                        "(no transcript stored)"}
-                    </p>
+                    <div className="jobcard__transcript">
+                      <p>
+                        {world?.jobs.find((j) => j.id === selectedStop.job_id)?.transcript ||
+                          "(no transcript stored)"}
+                      </p>
+                      {(() => {
+                        const note = world?.jobs.find(
+                          (j) => j.id === selectedStop.job_id,
+                        )?.booking_note;
+                        return note ? (
+                          <p className="jobcard__quotednote">
+                            Quoted as: {note} (as things stood when booked)
+                          </p>
+                        ) : null;
+                      })()}
+                    </div>
                   )}
 
                   {editing && (

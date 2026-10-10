@@ -46,6 +46,12 @@ class StopView(Api):
     #: shop". With both ends on the card, a stop reads as a link in the day's
     #: chain instead of an isolated trip.
     next_label: str = ""
+    #: The day's shape as it stands NOW - "a dedicated trip out and back" or
+    #: "one of 3 stops on this run, with James's and Ani's". Recomputed from the
+    #: committed plan on every read, because the quote-time note went stale the
+    #: moment a later booking joined the run and the card kept calling a
+    #: three-stop morning a dedicated trip.
+    run_note: str = ""
 
 
 class RouteView(Api):

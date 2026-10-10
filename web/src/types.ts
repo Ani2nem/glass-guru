@@ -18,6 +18,7 @@ export interface Stop {
   past_shift: boolean;
   from_label: string;
   next_label: string;
+  run_note: string;
   lat: number;
   lon: number;
 }

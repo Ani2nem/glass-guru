@@ -63,6 +63,15 @@ def route_view(
     for upcoming in route.stops:
         upcoming_job = world.jobs.get(upcoming.job_id)
         names_after.append(f"{upcoming_job.customer_name}'s" if upcoming_job else "the next stop")
+
+    def run_note_for(index: int) -> str:
+        if len(route.stops) == 1:
+            return "a dedicated trip out and back"
+        others = [name for i, name in enumerate(names_after) if i != index]
+        more = f" (+{len(others) - 2} more)" if len(others) > 2 else ""
+        listed = " and ".join(others[:2]) + more
+        return f"one of {len(route.stops)} stops on this run, with {listed}"
+
     for index, stop in enumerate(route.stops):
         job = world.jobs.get(stop.job_id)
         gap = 0
@@ -92,6 +101,7 @@ def route_view(
                 next_label=(
                     names_after[index + 1] if index + 1 < len(names_after) else "back to the shop"
                 ),
+                run_note=run_note_for(index),
             )
         )
         previous_name = f"{job.customer_name}'s" if job else previous_name
