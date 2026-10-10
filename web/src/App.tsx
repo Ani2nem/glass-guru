@@ -45,7 +45,11 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [week, setWeek] = useState<Week | null>(null);
-  const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
+  const [prefill, setPrefill] = useState<{
+    text: string;
+    nonce: number;
+    run?: boolean;
+  } | null>(null);
   const [configuring, setConfiguring] = useState(false);
   const [rotaStart, setRotaStart] = useState<string | null>(null);
   const [session, setSession] = useState<{ owner_pin_set: boolean; owner: boolean } | null>(null);
@@ -235,18 +239,20 @@ export default function App() {
                 <div className="asks__what">
                   <strong>{ask.customer || "A caller"}</strong>
                   {ask.phone && <span className="muted"> · {ask.phone}</span>}
-                  <span> needs {ask.day} until {ask.until_label} - </span>
-                  <span className="asks__who">
-                    {ask.candidates
-                      .filter((c) => !ask.extended.includes(c.name))
-                      .map((c) => c.name)
-                      .join(", ") || "everyone asked"}{" "}
-                    {ask.extended.length === ask.candidates.length
-                      ? "all said yes"
-                      : "still to ask"}
-                  </span>
+                  <span> needs {ask.day} until {ask.until_label}</span>
                   {ask.extended.length > 0 && (
-                    <span className="ok"> · {ask.extended.join(", ")} said yes</span>
+                    <span className="ok"> · {ask.extended.join(" and ")} said yes</span>
+                  )}
+                  {ask.candidates.some((c) => !ask.extended.includes(c.name)) ? (
+                    <span className="asks__who">
+                      {" "}· still to ask:{" "}
+                      {ask.candidates
+                        .filter((c) => !ask.extended.includes(c.name))
+                        .map((c) => c.name)
+                        .join(", ")}
+                    </span>
+                  ) : (
+                    <span className="ok"> - ready to book</span>
                   )}
                 </div>
                 <div className="asks__actions">
@@ -274,8 +280,10 @@ export default function App() {
                     ))}
                   <button
                     disabled={busy}
-                    title="bring the customer's words back into the call box to book them"
-                    onClick={() => setPrefill({ text: ask.transcript, nonce: Date.now() })}
+                    title="re-price their call with the agreed overtime - the slots land in the call box on the left"
+                    onClick={() =>
+                      setPrefill({ text: ask.transcript, nonce: Date.now(), run: true })
+                    }
                   >
                     Book them
                   </button>

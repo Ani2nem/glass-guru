@@ -1192,7 +1192,7 @@ def book_slot(request: BookRequest) -> dict[str, str]:
     is what makes it expensive to move later - a promise, not a pencil mark.
     """
     from krama.domain.enums import Certification, CommitmentState, ServiceType
-    from krama.domain.events import JobConfirmed, JobRequested
+    from krama.domain.events import CrewAskClosed, JobConfirmed, JobRequested
     from krama.domain.models import GlassSpec, Location, Provenance, TimeWindow
 
     svc = service()
@@ -1295,26 +1295,40 @@ def book_slot(request: BookRequest) -> dict[str, str]:
             ),
         )
 
-        svc.apply_events(
-            [
-                JobRequested(
-                    event_id=new_dispatch_id("job"),
-                    occurred_at=now,
-                    recorded_at=now,
-                    dispatch_id="web",
-                    job=job,
-                ),
-                JobConfirmed(
-                    event_id=new_dispatch_id("confirm"),
-                    occurred_at=now,
-                    recorded_at=now,
-                    dispatch_id="web",
-                    job_id=job_id,
-                    window=job.windows[0],
-                    commitment_cost=draft.commitment_cost,
-                ),
-            ]
+        events: list[CrewAskClosed | JobConfirmed | JobRequested] = [
+            JobRequested(
+                event_id=new_dispatch_id("job"),
+                occurred_at=now,
+                recorded_at=now,
+                dispatch_id="web",
+                job=job,
+            ),
+            JobConfirmed(
+                event_id=new_dispatch_id("confirm"),
+                occurred_at=now,
+                recorded_at=now,
+                dispatch_id="web",
+                job_id=job_id,
+                window=job.windows[0],
+                commitment_cost=draft.commitment_cost,
+            ),
+        ]
+        # Booking IS the resolution of a crew ask. The red strip is a promise to
+        # call the customer back; once they are in the diary, leaving it lit until
+        # someone also finds the Resolve button is a chore that reads as a bug.
+        events.extend(
+            CrewAskClosed(
+                event_id=new_dispatch_id("askc"),
+                occurred_at=now,
+                recorded_at=now,
+                dispatch_id="web",
+                ask_id=ask_id,
+                outcome="booked",
+            )
+            for ask_id, ask in world.crew_asks.items()
+            if _digits(ask.phone) and _digits(ask.phone) == _digits(draft.phone)
         )
+        svc.apply_events(events)
         # Re-plan and commit, so the job is on the calendar the moment it is booked.
         # Recording the events alone left it in the world and invisible on the board,
         # which reads as the button having done nothing at all - the single worst

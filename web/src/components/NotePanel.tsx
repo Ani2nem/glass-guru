@@ -46,8 +46,10 @@ export function NotePanel({
   onChanged: () => void;
   /** A reschedule hands back the original transcript, so nobody retypes a call they
    * already took. The nonce distinguishes "reschedule the same job again" from
-   * "nothing new". */
-  prefill: { text: string; nonce: number } | null;
+   * "nothing new". With run, the call is read immediately - "Book them" on a crew
+   * ask used to paste the text and silently wait for a second click on Read it,
+   * which read as the button doing nothing at all. */
+  prefill: { text: string; nonce: number; run?: boolean } | null;
 }) {
   const [text, setText] = useState("");
   const [note, setNote] = useState<Note | null>(null);
@@ -92,8 +94,14 @@ export function NotePanel({
     if (prefill) {
       setText(prefill.text);
       setNote(null);
-      setBooked("Rescheduling - their original call is below. Add what changed, then Read it.");
+      if (prefill.run) {
+        setBooked(null);
+        void run(undefined, prefill.text);
+      } else {
+        setBooked("Rescheduling - their original call is below. Add what changed, then Read it.");
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
   const [busy, setBusy] = useState(false);
   const [held, setHeld] = useState(false);
@@ -107,14 +115,14 @@ export function NotePanel({
   } | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
 
-  async function run(kind?: "booking" | "disruption") {
+  async function run(kind?: "booking" | "disruption", spoken: string = text) {
     setBusy(true);
     setError(null);
     setBooked(null);
     try {
       setSlotTab(null); // a fresh call decides its own leading order
       setHeld(false);
-      setNote(await api.note(text, kind));
+      setNote(await api.note(spoken, kind));
     } catch (exc) {
       setError(exc as ApiError);
       setNote(null);
