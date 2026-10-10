@@ -1860,3 +1860,75 @@ def test_the_rota_walks_weeks_like_the_calendar(client: TestClient):
     assert all(d["available"] for d in dan_now["days"] if d["shift"] != "off"), (
         "and nowhere near this week"
     )
+
+
+def test_booking_the_caller_resolves_their_crew_ask(client: TestClient, monkeypatch):
+    """The red strip is a promise to call the customer back. Booking them IS the
+    call-back, so the strip must clear itself - leaving it lit until someone also
+    finds the Resolve button made the whole flow read as broken ("said yes and
+    nothing happened"). Phone digits match the ask to the booking; formatting
+    differences between the two entries must not keep the strip alive."""
+    from datetime import date as _date
+
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    monday = _date.fromisoformat(_next_monday())
+    opened = client.post(
+        "/api/asks",
+        json={
+            "customer_name": "Jimmy",
+            "phone": "(817) 576-8492",
+            "transcript": "walmart glass broke, come at 5pm",
+            "on_date": monday.isoformat(),
+            "until": "20:45",
+            "candidate_ids": ["w-marcus", "w-priya"],
+            "detail": "check with Marcus and Priya",
+        },
+    ).json()
+    ask_id = opened["ask_id"]
+
+    draft = {
+        "customer_name": "Jimmy",
+        "phone": "8175768492",
+        "address": "walmart haslet",
+        "service_type": "storefront_glass",
+        "duration_minutes": 120,
+        "duration_confidence": 60,
+        "crew_size": 1,
+        "certifications": ["commercial_storefront"],
+        "commitment_cost": 0,
+        "lat": 32.99,
+        "lon": -97.36,
+    }
+    booked = client.post(
+        "/api/book",
+        json={"draft": draft, "date": monday.isoformat(), "arrival": "10:00"},
+    ).json()
+    assert booked["job_id"], "the booking itself succeeded"
+
+    asks = client.get("/api/world").json()["crew_asks"]
+    assert all(a["ask_id"] != ask_id for a in asks), "booking the caller cleared their strip"
+
+    # A different caller's booking must not resolve someone else's promise.
+    other = client.post(
+        "/api/asks",
+        json={
+            "customer_name": "Rosa",
+            "phone": "8175550000",
+            "transcript": "come late please",
+            "on_date": monday.isoformat(),
+            "until": "19:00",
+            "candidate_ids": ["w-marcus"],
+            "detail": "check with Marcus",
+        },
+    ).json()
+    client.post(
+        "/api/book",
+        json={
+            "draft": {**draft, "customer_name": "Someone else", "phone": "8170001111"},
+            "date": monday.isoformat(),
+            "arrival": "13:00",
+            "allow_duplicate": True,
+        },
+    )
+    asks = client.get("/api/world").json()["crew_asks"]
+    assert any(a["ask_id"] == other["ask_id"] for a in asks), "Rosa is still owed her call-back"
