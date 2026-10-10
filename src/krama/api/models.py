@@ -254,6 +254,11 @@ class SlotView(Api):
     #: Worker ids behind ``crew`` - the booking pins these so the committed plan
     #: cannot quietly differ from the card the dispatcher just read aloud.
     crew_ids: list[str] = Field(default_factory=list)
+    #: Where the drive begins and what it costs - on the card, not just the detail
+    #: popup after booking.
+    from_label: str = "the shop"
+    leg_minutes: int = 0
+    leg_miles: float = 0.0
     crew_reason: str
     reason: str
 

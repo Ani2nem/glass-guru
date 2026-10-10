@@ -61,6 +61,13 @@ class SlotSuggestion:
     #: Minutes this placement pushes a crew past its shift. Charged at the after-hours
     #: rate, because it is paid at the overtime rate.
     overtime_minutes: int = 0
+    #: Where this job's own drive begins in the trial route - "the shop", or the
+    #: previous customer's name - plus that leg's minutes and miles. The detail
+    #: card already said it after booking; the owner wanted it BEFORE, on every
+    #: card, which is fair: the drive is part of what is being sold.
+    from_label: str = "the shop"
+    leg_minutes: int = 0
+    leg_miles: float = 0.0
 
     def describe(self, tz: tzinfo) -> str:
         start = self.quoted_window.start.astimezone(tz)
@@ -319,6 +326,9 @@ def suggest_booking_slots(
             continue
 
         route, stop = placement
+        before = route.stops[: list(route.stops).index(stop)]
+        previous = candidate_world.jobs.get(before[-1].job_id) if before else None
+        from_label = f"{previous.customer_name}'s" if previous else "the shop"
         trial_costs = [cost_route(r, candidate_world, business, tz) for r in trial.routes]
         trial_cost = sum(_route_operating_cost(c) for c in trial_costs)
         trial_overtime = sum(c.overtime_minutes for c in trial_costs)
@@ -353,6 +363,9 @@ def suggest_booking_slots(
                     world.workers[w].name for w in route.worker_ids if w in world.workers
                 ),
                 worker_ids=tuple(route.worker_ids),
+                from_label=from_label,
+                leg_minutes=stop.travel_minutes_from_prev,
+                leg_miles=round(stop.travel_miles_from_prev, 2),
                 added_travel_minutes=added_minutes,
                 added_travel_miles=added_miles,
                 reason=_reason_for(added_minutes, added_miles, neighbours, dedicated),
