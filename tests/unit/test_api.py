@@ -1308,6 +1308,38 @@ def test_every_stop_says_where_its_drive_began(client: TestClient, monkeypatch):
     assert nexts.get("First") == "Second's", nexts
     assert nexts.get("Second") == "back to the shop", nexts
 
+    # The run description is LIVE: before the second booking the card called
+    # First's visit a dedicated trip; now both stops say they share the run.
+    # (The stale quote-time note read "a dedicated trip" forever on a three-stop
+    # morning, and the owner caught it on the screen.)
+    runs = {
+        s["customer_name"]: s["run_note"]
+        for r in plan["routes"]
+        if r["date"] == monday
+        for s in r["stops"]
+    }
+    assert "2 stops" in runs.get("First", ""), runs
+    assert "Second's" in runs.get("First", ""), runs
+    assert "First's" in runs.get("Second", ""), runs
+
+    # and a cancellation updates it right back to a dedicated trip
+    second_id = next(
+        s["job_id"]
+        for r in plan["routes"]
+        if r["date"] == monday
+        for s in r["stops"]
+        if s["customer_name"] == "Second"
+    )
+    client.post(f"/api/jobs/{second_id}/cancel")
+    plan = client.get("/api/plan").json()
+    runs = {
+        s["customer_name"]: s["run_note"]
+        for r in plan["routes"]
+        if r["date"] == monday
+        for s in r["stops"]
+    }
+    assert runs.get("First") == "a dedicated trip out and back", runs
+
 
 def test_moving_the_shop_is_guarded_and_total(client: TestClient, monkeypatch):
     """The depot is the most consequential coordinate in the system - it was once
