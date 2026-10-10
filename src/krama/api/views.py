@@ -59,7 +59,11 @@ def route_view(
     shift_close = min(closes) if closes else 24 * 60
 
     previous_name = "the shop"
-    for stop in route.stops:
+    names_after: list[str] = []
+    for upcoming in route.stops:
+        upcoming_job = world.jobs.get(upcoming.job_id)
+        names_after.append(f"{upcoming_job.customer_name}'s" if upcoming_job else "the next stop")
+    for index, stop in enumerate(route.stops):
         job = world.jobs.get(stop.job_id)
         gap = 0
         if previous_departure is not None:
@@ -85,6 +89,9 @@ def route_view(
                 lon=job.location.lon if job else 0.0,
                 past_shift=_minute_of_day(stop.departure, tz) > shift_close,
                 from_label=previous_name,
+                next_label=(
+                    names_after[index + 1] if index + 1 < len(names_after) else "back to the shop"
+                ),
             )
         )
         previous_name = f"{job.customer_name}'s" if job else previous_name
