@@ -367,9 +367,10 @@ export default function App() {
                     </dd>
                     <dt>Drive there</dt>
                     <dd>
+                      <strong>from {selectedStop.from_label || "the shop"}</strong> ·{" "}
                       {selectedStop.travel_minutes} min · {selectedStop.travel_miles} mi
-                      {selectedStop.from_label && (
-                        <span className="muted"> from {selectedStop.from_label}</span>
+                      {selectedStop.next_label && (
+                        <span className="muted"> · then {selectedStop.next_label}</span>
                       )}
                     </dd>
                     <dt>Why then</dt>

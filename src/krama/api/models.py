@@ -42,6 +42,10 @@ class StopView(Api):
     #: the last job or doubled back to the depot - a question the data always knew
     #: the answer to and the screen never said.
     from_label: str = ""
+    #: And where the van goes afterwards - the next customer, or "back to the
+    #: shop". With both ends on the card, a stop reads as a link in the day's
+    #: chain instead of an isolated trip.
+    next_label: str = ""
 
 
 class RouteView(Api):

@@ -495,12 +495,18 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
    wherever on the week you opened it. position: absolute scrolled away with the
    grid; sticky would have shoved the calendar down, which is the original sin this
    card exists to avoid. */
+/* Vertically centred on the viewport, so the card grows symmetrically when the
+   edit section unfolds instead of marching off the bottom; past viewport height
+   it scrolls inside itself. */
 .detail--overlay {
   position: fixed;
-  top: 76px;
+  top: 50%;
+  transform: translateY(-50%);
   right: 22px;
   z-index: 40;
   width: min(400px, calc(100vw - 44px));
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
   margin-bottom: 0;
   box-shadow: 0 16px 44px rgb(10 10 20 / 0.35);
 }

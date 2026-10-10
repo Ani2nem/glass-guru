@@ -1297,6 +1297,17 @@ def test_every_stop_says_where_its_drive_began(client: TestClient, monkeypatch):
     assert labels.get("First") == "the shop", labels
     assert labels.get("Second") == "First's", labels
 
+    # and each stop names where the van goes NEXT, so the popup reads the whole
+    # chain: shop -> First -> Second -> back to the shop.
+    nexts = {
+        s["customer_name"]: s["next_label"]
+        for r in plan["routes"]
+        if r["date"] == monday
+        for s in r["stops"]
+    }
+    assert nexts.get("First") == "Second's", nexts
+    assert nexts.get("Second") == "back to the shop", nexts
+
 
 def test_moving_the_shop_is_guarded_and_total(client: TestClient, monkeypatch):
     """The depot is the most consequential coordinate in the system - it was once
