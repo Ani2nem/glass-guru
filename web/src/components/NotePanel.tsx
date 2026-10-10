@@ -54,11 +54,11 @@ export function NotePanel({
   const [text, setText] = useState("");
   const [note, setNote] = useState<Note | null>(null);
   const [booked, setBooked] = useState<string | null>(null);
-  /** Which ordering leads. "cheapest" unless the caller used urgency words - a
-   * caller who named no hurry was being led with the overtime slot whenever the
-   * soonest day happened to be the priciest, which is selling urgency nobody asked
-   * for. "soonest" when they did ask. "flexible" is the outside-their-hours tab. */
-  const [slotTab, setSlotTab] = useState<"cheapest" | "soonest" | "flexible" | null>(null);
+  /** Which list shows: what they asked for, or the cheaper days outside their
+   * stated hours. The ordering of the asked-for list is not a choice any more -
+   * cheapest leads unless the caller used urgency words, and the two sort
+   * buttons that exposed it were two decisions nobody ever wanted to make. */
+  const [slotTab, setSlotTab] = useState<"asked" | "flexible" | null>(null);
   const [listening, setListening] = useState(false);
   const [interim, setInterim] = useState("");
   const dictation = useRef<Dictation | null>(null);
@@ -191,16 +191,17 @@ export function NotePanel({
 
   const draft = note?.booking?.draft;
   const booking = note?.booking;
-  const activeTab = slotTab ?? (booking?.asked_for_speed ? "soonest" : "cheapest");
+  const activeTab = slotTab ?? "asked";
   const orderedSlots = (() => {
     if (!booking) return [];
     if (activeTab === "flexible") return booking.flexible_slots;
     const copy = [...booking.slots];
-    if (activeTab === "cheapest") {
+    if (booking.asked_for_speed) {
+      // They asked for speed: the calendar leads, price breaks ties.
+      copy.sort((a, b) => a.date.localeCompare(b.date) || a.quote_total - b.quote_total);
+    } else {
       // Money first, then the calendar: among equally priced days the earlier wins.
       copy.sort((a, b) => a.quote_total - b.quote_total || a.date.localeCompare(b.date));
-    } else {
-      copy.sort((a, b) => a.date.localeCompare(b.date) || a.quote_total - b.quote_total);
     }
     return copy;
   })();
@@ -457,31 +458,23 @@ export function NotePanel({
                   ? "."
                   : "; underneath is what we keep once the glass, wages and driving are paid."}
               </p>
-              <div className="slots__tabs">
-                <button
-                  className={activeTab === "cheapest" ? "on" : ""}
-                  onClick={() => setSlotTab("cheapest")}
-                  title="lowest quote first; overtime days sink to the bottom on price"
-                >
-                  Cheapest first
-                </button>
-                <button
-                  className={activeTab === "soonest" ? "on" : ""}
-                  onClick={() => setSlotTab("soonest")}
-                  title="earliest day first, even when that day needs overtime"
-                >
-                  Soonest first
-                </button>
-                {booking.flexible_slots.length > 0 && (
+              {booking.flexible_slots.length > 0 && (
+                <div className="slots__tabs">
+                  <button
+                    className={activeTab === "asked" ? "on" : ""}
+                    onClick={() => setSlotTab("asked")}
+                  >
+                    Their hours
+                  </button>
                   <button
                     className={activeTab === "flexible" ? "on" : ""}
                     onClick={() => setSlotTab("flexible")}
                   >
                     Cheaper outside their hours ({booking.flexible_slots.length})
                   </button>
-                )}
-              </div>
-              {booking.asked_for_speed && activeTab === "soonest" && (
+                </div>
+              )}
+              {booking.asked_for_speed && activeTab === "asked" && (
                 <p className="muted">They asked for speed, so the earliest day leads.</p>
               )}
               {orderedSlots.map((slot, index) => (

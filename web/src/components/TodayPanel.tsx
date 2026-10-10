@@ -25,6 +25,27 @@ const CERT_BADGES: Record<string, { icon: string; label: string }> = {
   shower_door: { icon: "\u{1F6BF}", label: "shower door" },
 };
 
+/** "12" from "2026-10-12" - the rota header shows real dates, because "Mon"
+ * alone stops meaning anything the moment the week arrows exist. */
+function dayOfMonth(iso: string): number {
+  return Number(iso.slice(8, 10));
+}
+
+/** "12 - 16 Oct" for the bar, so the week on display is never a guess. */
+function weekLabel(days: { date: string }[]): string {
+  const head = days[0];
+  const tail = days[days.length - 1];
+  if (!head || !tail) return "";
+  const first = new Date(`${head.date}T12:00:00`);
+  const last = new Date(`${tail.date}T12:00:00`);
+  const month = last.toLocaleDateString(undefined, { month: "short" });
+  if (first.getMonth() === last.getMonth()) {
+    return `${first.getDate()} - ${last.getDate()} ${month}`;
+  }
+  const firstMonth = first.toLocaleDateString(undefined, { month: "short" });
+  return `${first.getDate()} ${firstMonth} - ${last.getDate()} ${month}`;
+}
+
 function shiftWeek(fromIso: string | null, weeks: number): string {
   const base = fromIso ? new Date(`${fromIso}T12:00:00`) : new Date();
   base.setDate(base.getDate() + weeks * 7);
@@ -77,7 +98,20 @@ export function TodayPanel({
     setBusy(true);
     try {
       const result = await api.recordEvent(event);
-      setNote(result.note ?? "");
+      let message = result.note ?? "";
+      // The committed plan is stale the moment availability changes, and the next
+      // thing a dispatcher did was hunt for the red banner's Rebuild button. Run
+      // the same rebuild here: mark someone out - or bring them back - and the
+      // board re-solves in the same click, promises binding as always.
+      if (plan) {
+        try {
+          await api.commit();
+          message = message ? `${message} - schedule rebuilt around it` : "schedule rebuilt";
+        } catch (exc) {
+          message = `${message ? `${message} - ` : ""}could not rebuild: ${(exc as Error).message}`;
+        }
+      }
+      setNote(message);
       onChanged();
     } finally {
       setBusy(false);
@@ -118,6 +152,7 @@ export function TodayPanel({
       <div className="rota__left">
       <div className="crewcard__bar">
         <h2>Crew availability</h2>
+        <span className="crewcard__range">{weekLabel(days)}</span>
         <span className="crewcard__nav">
           <button className="cal__arrow" onClick={() => onWeek(shiftWeek(rotaStart, -1))}>
             {"\u2039"}
@@ -146,7 +181,9 @@ export function TodayPanel({
             <tr>
               <th>fitter</th>
               {days.map((d) => (
-                <th key={d.date}>{d.day}</th>
+                <th key={d.date}>
+                  {d.day} <span className="rota__date">{dayOfMonth(d.date)}</span>
+                </th>
               ))}
             </tr>
           </thead>
