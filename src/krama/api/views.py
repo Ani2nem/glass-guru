@@ -7,7 +7,7 @@ leaks into the model the solver reasons about.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, tzinfo
+from datetime import date, datetime, timedelta, tzinfo
 
 from krama.api.models import (
     CandidateView,
@@ -169,7 +169,11 @@ def _window_text(job: Job, tz: tzinfo) -> str:
 
 
 def _worker_week(
-    worker: Worker, world: WorldState, business: BusinessParams, tz: tzinfo
+    worker: Worker,
+    world: WorldState,
+    business: BusinessParams,
+    tz: tzinfo,
+    rota_start: date | None = None,
 ) -> list[WorkerDayView]:
     """The week ahead for one fitter, as a dispatcher reads it.
 
@@ -179,7 +183,9 @@ def _worker_week(
     becomes a rota anyone can read.
     """
     overtime = int(business.labor.overtime_max_minutes.value)
-    start = datetime.now(tz).date()
+    # The rota used to start at today, always - so holiday three weeks out had no
+    # cell to click. A caller may ask for any week; today stays the default.
+    start = rota_start or datetime.now(tz).date()
     days: list[WorkerDayView] = []
     rostered = {h.weekday for w in world.workers.values() for h in w.working_hours}
     cursor = start
@@ -225,7 +231,12 @@ def _offer_arrival(job_id: str, world: WorldState, tz: tzinfo) -> str:
     return clock(job.windows[0].start.astimezone(tz))
 
 
-def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> WorldView:
+def world_view(
+    world: WorldState,
+    business: BusinessParams,
+    tz: tzinfo,
+    rota_start: date | None = None,
+) -> WorldView:
     # The wall clock, not world.as_of. The fold clock is the LAST EVENT'S time, so a
     # board quiet since Tuesday would judge "available now" as of Tuesday - the same
     # stale-clock family as the resurrected cancellation. "Now" means now.
@@ -247,7 +258,7 @@ def world_view(world: WorldState, business: BusinessParams, tz: tzinfo) -> World
                 shift_start=(f"{h0.start:%H:%M}" if (h0 := w.hours_for(0)) else ""),
                 shift_end=(f"{h0.end:%H:%M}" if h0 else ""),
                 phone=w.phone,
-                days=_worker_week(w, world, business, tz),
+                days=_worker_week(w, world, business, tz, rota_start),
             )
             for w in sorted(world.workers.values(), key=lambda w: w.id)
         ],

@@ -1739,3 +1739,124 @@ def test_the_same_caller_cannot_be_double_booked_by_accident(client: TestClient,
         "/api/book", json={"draft": draft, "date": _next_monday(), "arrival": "09:00"}
     ).json()
     assert again["status"] == "scheduled"
+
+
+def test_van_stock_is_visible_and_editable(client: TestClient):
+    """The fleet trim that retired van-3 took the business's only shower kits with
+    it, and nothing on the board could even show that. Stock is now on the world
+    view and editable per van: counts land, zeros are stripped rather than stored,
+    and nonsense counts are refused."""
+    vans = {v["id"]: v for v in client.get("/api/world").json()["vans"]}
+    assert vans["van-3"]["stock"].get("shower_kit") == 2, "the fixture's only shower kits"
+
+    saved = client.post(
+        "/api/config/van",
+        json={"id": "van-1", "stock": {"annealed_std": 6, "shower_kit": 3, "screen_kit": 0}},
+    ).json()
+    assert saved["status"] == "saved"
+    van_1 = next(v for v in client.get("/api/world").json()["vans"] if v["id"] == "van-1")
+    assert van_1["stock"]["shower_kit"] == 3
+    assert "screen_kit" not in van_1["stock"], "a zero is an absence, not a stored zero"
+
+    # Omitting stock edits the label without touching the racks.
+    client.post("/api/config/van", json={"id": "van-1", "label": "Big red"})
+    van_1 = next(v for v in client.get("/api/world").json()["vans"] if v["id"] == "van-1")
+    assert van_1["stock"]["shower_kit"] == 3
+
+    for bad in ({"shower_kit": -1}, {"shower_kit": 100}):
+        refused = client.post("/api/config/van", json={"id": "van-1", "stock": bad})
+        assert refused.status_code == 422, f"{bad} is not a shelf count"
+
+
+def test_a_stranded_part_names_its_fix_and_restocking_cures_it(client: TestClient, monkeypatch):
+    """ "No van stocks 1x shower_kit", five days running, was true and useless - the
+    dispatcher's next question is always "so what do I do". The refusal now names
+    the remedy, and performing it (restock any van in Configure) actually cures the
+    refusal: the same draft starts getting slots."""
+    from datetime import date as _date
+    from datetime import datetime as _datetime
+    from datetime import time as _time
+
+    from krama.api.main import _with_remedy, service
+    from krama.domain.enums import Certification, ServiceType
+    from krama.domain.models import Job, Location, Material, TimeWindow
+
+    monkeypatch.setenv("KRAMA_TRAVEL", "synthetic")
+    # The user's fleet trim: retire the one van that carried shower kits.
+    assert client.delete("/api/config/van/van-3").json()["status"] == "removed"
+
+    svc = service()
+    monday = _date.fromisoformat(_next_monday())
+    days = [_date.fromordinal(monday.toordinal() + i) for i in range(5)]
+    draft = Job(
+        id="draft",
+        customer_id="c-draft",
+        customer_name="Maria",
+        location=Location(lat=32.99, lon=-97.36, address="aquarium house"),
+        service_type=ServiceType.SHOWER_DOOR_INSTALL,
+        required_certifications=frozenset({Certification.SHOWER_DOOR}),
+        crew_size=1,
+        estimated_duration_min=120,
+        revenue=900.0,
+        materials=(Material(part_code="shower_kit", quantity=1, in_stock=True),),
+        windows=tuple(
+            TimeWindow(
+                start=_datetime.combine(d, _time(8), tzinfo=svc.tz),
+                end=_datetime.combine(d, _time(17), tzinfo=svc.tz),
+            )
+            for d in days
+        ),
+        requested_at=_datetime.combine(monday, _time(7), tzinfo=svc.tz),
+    )
+
+    stranded = svc.booking_slots(draft, monday)
+    assert stranded.slots == (), "no van carries the part, so no day may be offered"
+    detail = next(u.detail for u in stranded.unavailable)
+    assert "no van stocks 1x shower_kit" in detail
+    assert "restock a van in Configure" in _with_remedy(detail), "the refusal names its fix"
+
+    restocked = client.post(
+        "/api/config/van",
+        json={"id": "van-1", "stock": {"annealed_std": 6, "tempered_std": 4, "shower_kit": 2}},
+    )
+    assert restocked.json()["status"] == "saved"
+    cured = service().booking_slots(draft, monday)
+    assert cured.slots, "the remedy the message names actually works"
+
+
+def test_the_rota_walks_weeks_like_the_calendar(client: TestClient):
+    """Holiday lives in the future. The rota used to render the five days from
+    today, always - a fitter's day off three weeks out had no cell to click. The
+    world view now takes a start date and deals the week from there."""
+    from datetime import timedelta as _timedelta
+
+    today_days = [d["date"] for d in client.get("/api/world").json()["workers"][0]["days"]]
+    start = _business_today() + _timedelta(days=21)
+    ahead = client.get(f"/api/world?rota_start={start.isoformat()}").json()
+    future_days = [d["date"] for d in ahead["workers"][0]["days"]]
+
+    assert len(future_days) == 5, "a working week, wherever it starts"
+    assert future_days[0] >= start.isoformat(), "the week dealt is the week asked for"
+    assert set(future_days).isdisjoint(today_days), "three weeks out shares no day with now"
+
+    # A mark-out on a future-week day lands on that day, visible when that week is dealt.
+    dan_future = next(w for w in ahead["workers"] if w["name"] == "Dan")
+    target = next(d["date"] for d in dan_future["days"] if d["shift"] != "off")
+    client.post(
+        "/api/events",
+        json={
+            "kind": "worker-unavailable",
+            "target": "w-dan",
+            "window_start": f"{target}T00:00",
+            "until": f"{target}T23:59",
+        },
+    )
+    ahead = client.get(f"/api/world?rota_start={start.isoformat()}").json()
+    dan = next(w for w in ahead["workers"] if w["name"] == "Dan")
+    cell = next(d for d in dan["days"] if d["date"] == target)
+    assert cell["available"] is False, "the future holiday is on its cell"
+    near = client.get("/api/world").json()
+    dan_now = next(w for w in near["workers"] if w["name"] == "Dan")
+    assert all(d["available"] for d in dan_now["days"] if d["shift"] != "off"), (
+        "and nowhere near this week"
+    )
