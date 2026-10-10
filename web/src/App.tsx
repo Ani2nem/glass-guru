@@ -558,7 +558,12 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <Calendar plan={plan} selected={selected} onSelect={setSelected} />
+              <Calendar
+                plan={plan}
+                jobs={world?.jobs ?? []}
+                selected={selected}
+                onSelect={setSelected}
+              />
             </>
           )}
           {plan && view === "map" && <RouteMap plan={plan} day={day} />}

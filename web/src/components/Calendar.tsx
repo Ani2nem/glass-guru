@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { Plan, Route, Stop } from "../types";
+import type { Job, Plan, Route, Stop } from "../types";
 
 /**
  * The week, as a calendar: days across, time down.
@@ -227,12 +227,17 @@ function Block({
 
 export function Calendar({
   plan,
+  jobs,
   selected,
   onSelect,
 }: {
   /** Null before anything is committed. An empty diary still has a week in it, and a
    * blank panel is the least useful thing to show somebody whose diary is empty. */
   plan: Plan | null;
+  /** Every active job - so a confirmed booking whose week no committed plan has
+   * reached yet still draws, as a ghost, inside its promised window. A promise
+   * with no tile is a promise someone will forget. */
+  jobs: Job[];
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -271,6 +276,11 @@ export function Calendar({
   const weekOptions = mondaysOf(anchor.getFullYear(), anchor.getMonth());
   const today = isoDate(new Date());
   const routes = (plan?.routes ?? []).filter((r) => dates.includes(r.date));
+  const planned = new Set(routes.flatMap((r) => r.stops.map((s) => s.job_id)));
+  const ghosts = jobs.filter((j) => {
+    if (j.commitment_state !== "confirmed" || planned.has(j.id) || !j.window_start) return false;
+    return dates.includes(j.window_start.slice(0, 10));
+  });
   const [start, end] = gridBounds(routes);
   const hours: number[] = [];
   for (let h = Math.ceil(start / 60) * 60; h <= end; h += 60) hours.push(h);
@@ -367,6 +377,30 @@ export function Calendar({
             {hours.map((h) => (
               <div key={h} className="cal__line" style={{ top: `${(h - start) * SCALE}px` }} />
             ))}
+            {ghosts
+              .filter((g) => g.window_start.slice(0, 10) === date)
+              .map((g) => {
+                const startMin =
+                  Number(g.window_start.slice(11, 13)) * 60 + Number(g.window_start.slice(14, 16));
+                const endMin =
+                  Number(g.window_end.slice(11, 13)) * 60 + Number(g.window_end.slice(14, 16));
+                return (
+                  <div
+                    key={g.id}
+                    className="block block--ghost"
+                    style={{
+                      top: `${(startMin - start) * SCALE}px`,
+                      height: `${Math.max(30, (endMin - startMin) * SCALE)}px`,
+                      left: "2px",
+                      width: "calc(100% - 4px)",
+                    }}
+                    title={`${g.customer_name} - promised, not yet on a committed plan`}
+                  >
+                    <span className="block__what">{g.customer_name}</span>
+                    <span className="block__when">promised · awaiting schedule</span>
+                  </div>
+                );
+              })}
             {layout(byDate.get(date) ?? []).map((placed) => (
               <Block
                 key={placed.stop.job_id}
