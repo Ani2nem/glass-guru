@@ -48,8 +48,6 @@ export default function App() {
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [configuring, setConfiguring] = useState(false);
   const [session, setSession] = useState<{ owner_pin_set: boolean; owner: boolean } | null>(null);
-  const [unlocking, setUnlocking] = useState(false);
-  const [pin, setPin] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState(false);
@@ -153,53 +151,22 @@ export default function App() {
               estimated costs
             </span>
           )}
-          {session?.owner_pin_set &&
-            (session.owner ? (
-              <button
-                className="ownerchip"
-                title="lock the owner view - margins and the rate card disappear again"
-                onClick={async () => {
-                  setOwnerKey("");
-                  await refresh();
-                }}
-              >
-                Owner · lock
-              </button>
-            ) : unlocking ? (
-              <span className="ownerunlock">
-                <input
-                  type="password"
-                  autoFocus
-                  placeholder="owner PIN"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  onKeyDown={async (e) => {
-                    if (e.key === "Escape") {
-                      setUnlocking(false);
-                      setPin("");
-                    }
-                    if (e.key === "Enter") {
-                      setOwnerKey(pin);
-                      setPin("");
-                      setUnlocking(false);
-                      const who = await api.session();
-                      if (!who.owner) {
-                        setOwnerKey("");
-                        setError(new ApiError("wrong PIN", "owner numbers stay hidden"));
-                      }
-                      await refresh();
-                    }
-                  }}
-                />
-              </span>
-            ) : (
-              <button
-                title="unlock the owner's numbers - margins, week cost, the rate card, moving the shop"
-                onClick={() => setUnlocking(true)}
-              >
-                Owner controls
-              </button>
-            ))}
+          {/* Unlocking lives in ONE place - the Owner controls section inside
+              Configure. Out here only the unlocked state shows: an indicator that
+              the owner's numbers are currently visible, and the one-click way to
+              put them away before stepping off the desk. */}
+          {session?.owner_pin_set && session.owner && (
+            <button
+              className="ownerchip"
+              title="lock the owner view - margins and the rate card disappear again"
+              onClick={async () => {
+                setOwnerKey("");
+                await refresh();
+              }}
+            >
+              Owner · lock
+            </button>
+          )}
           <button disabled={busy} onClick={() => setConfiguring(true)}>
             Configure
           </button>
