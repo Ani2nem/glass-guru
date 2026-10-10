@@ -63,6 +63,18 @@ interface RateField {
   max: number;
 }
 
+/** What a van can carry, in the words the business uses. The fleet trim that
+ * retired van-3 quietly took the only shower kits with it, and the board had no
+ * way to even see that - "no van stocks 1x shower_kit" with nothing to click.
+ * (auto_windshield is dead stock from the fixture; we fit buildings, not cars.) */
+const PART_LABELS: Record<string, string> = {
+  annealed_std: "annealed glass",
+  tempered_std: "tempered glass",
+  screen_kit: "screen kits",
+  shower_kit: "shower kits",
+  board_up_kit: "board-up kits",
+};
+
 const RATE_LABELS: Record<string, string> = {
   labour_rate_per_hour: "labour, per fitter-hour",
   call_out_fee: "call-out fee",
@@ -119,6 +131,56 @@ export function ConfigPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [owner]);
   const [newDepot, setNewDepot] = useState("");
+  // Per-van stock drafts, keyed van id -> part -> typed text. Seeded from the
+  // world so the numbers on screen are the numbers the solver sees.
+  const [stockDrafts, setStockDrafts] = useState<Record<string, Record<string, string>>>(
+    () => Object.fromEntries(
+      world.vans.map((v) => [
+        v.id,
+        Object.fromEntries(
+          Object.keys(PART_LABELS).map((part) => [part, String(v.stock[part] ?? 0)]),
+        ),
+      ]),
+    ),
+  );
+
+  function editStock(vanId: string, part: string, value: string) {
+    // A van added after the sheet opened has no draft yet; seed it from the live
+    // van so editing one part cannot silently zero the others on save.
+    const van = world.vans.find((v) => v.id === vanId);
+    const seeded = Object.fromEntries(
+      Object.keys(PART_LABELS).map((k) => [k, String(van?.stock[k] ?? 0)]),
+    );
+    setStockDrafts((old) => ({
+      ...old,
+      [vanId]: { ...seeded, ...(old[vanId] ?? {}), [part]: value },
+    }));
+  }
+
+  function stockDirty(vanId: string): boolean {
+    const draft = stockDrafts[vanId];
+    if (!draft) return false;
+    const van = world.vans.find((v) => v.id === vanId);
+    if (!van) return false;
+    return Object.keys(PART_LABELS).some(
+      (part) => (parseInt(draft[part] ?? "", 10) || 0) !== (van.stock[part] ?? 0),
+    );
+  }
+
+  async function saveStock(vanId: string) {
+    const draft = stockDrafts[vanId] ?? {};
+    const stock = Object.fromEntries(
+      Object.keys(PART_LABELS).map((part) => [
+        part,
+        Math.max(0, parseInt(draft[part] ?? "", 10) || 0),
+      ]),
+    );
+    await run(
+      () => api.configVan({ id: vanId, stock }),
+      `${vanId} restocked`,
+    );
+  }
+
   const [confirmDepot, setConfirmDepot] = useState("");
 
   function edit(index: number, patch: Partial<Row>) {
@@ -252,11 +314,37 @@ export function ConfigPanel({
           + Add a fitter
         </button>
 
-        <h3 className="config__vanshead">Vans</h3>
-        <div className="config__vans">
+        <h3 className="config__vanshead">Vans and what they carry</h3>
+        <p className="config__hint">
+          A job is only offered when some van carries its parts - zero shower kits
+          across the fleet means every shower call is refused until a van is
+          restocked here.
+        </p>
+        <div className="config__vanlist">
           {world.vans.map((van) => (
-            <span key={van.id}>
-              {van.id}
+            <div className="config__vanrow" key={van.id}>
+              <span className="config__vanid">{van.id}</span>
+              <span className="config__stock">
+                {Object.entries(PART_LABELS).map(([part, label]) => (
+                  <label className="config__part" key={part}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      value={stockDrafts[van.id]?.[part] ?? String(van.stock[part] ?? 0)}
+                      disabled={busy}
+                      onChange={(e) => editStock(van.id, part, e.target.value)}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </span>
+              <button
+                disabled={busy || !stockDirty(van.id)}
+                onClick={() => void saveStock(van.id)}
+              >
+                Save stock
+              </button>
               <button
                 className="danger"
                 disabled={busy || world.vans.length <= 1}
@@ -265,7 +353,7 @@ export function ConfigPanel({
               >
                 Remove
               </button>
-            </span>
+            </div>
           ))}
           <button
             disabled={busy}

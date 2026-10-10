@@ -25,13 +25,29 @@ const CERT_BADGES: Record<string, { icon: string; label: string }> = {
   shower_door: { icon: "\u{1F6BF}", label: "shower door" },
 };
 
+function shiftWeek(fromIso: string | null, weeks: number): string {
+  const base = fromIso ? new Date(`${fromIso}T12:00:00`) : new Date();
+  base.setDate(base.getDate() + weeks * 7);
+  return [
+    base.getFullYear(),
+    String(base.getMonth() + 1).padStart(2, "0"),
+    String(base.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 export function TodayPanel({
   world,
   plan,
+  rotaStart,
+  onWeek,
   onChanged,
 }: {
   world: World;
   plan: Plan | null;
+  /** First day of the rota week on display; null means "from today". Holiday
+   * lives in the future, so the rota walks weeks like the calendar does. */
+  rotaStart: string | null;
+  onWeek: (start: string | null) => void;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -100,7 +116,23 @@ export function TodayPanel({
     <section className="crewcard">
       <div className="rota__split">
       <div className="rota__left">
-      <h2>Crew availability</h2>
+      <div className="crewcard__bar">
+        <h2>Crew availability</h2>
+        <span className="crewcard__nav">
+          <button className="cal__arrow" onClick={() => onWeek(shiftWeek(rotaStart, -1))}>
+            {"\u2039"}
+          </button>
+          <button
+            className={`cal__today${rotaStart === null ? " on" : ""}`}
+            onClick={() => onWeek(null)}
+          >
+            This week
+          </button>
+          <button className="cal__arrow" onClick={() => onWeek(shiftWeek(rotaStart, 1))}>
+            {"\u203A"}
+          </button>
+        </span>
+      </div>
       {note && <p className="rota__healed">{note}</p>}
       <p className="panel__hint">
         Click a day to mark someone out for that day; click it again to bring them

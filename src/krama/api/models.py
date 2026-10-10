@@ -389,6 +389,10 @@ class DepotMoveRequest(Api):
 class VanConfig(Api):
     id: str = ""  # blank = new van
     label: str = ""
+    #: What the van carries, by part code. None keeps what it has; a dict replaces
+    #: it. Editable because the fleet trim quietly stranded two whole service
+    #: types - the only shower kits in the business retired with van-3.
+    stock: dict[str, int] | None = None
 
 
 class DuplicateView(Api):

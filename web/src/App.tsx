@@ -47,6 +47,7 @@ export default function App() {
   const [week, setWeek] = useState<Week | null>(null);
   const [prefill, setPrefill] = useState<{ text: string; nonce: number } | null>(null);
   const [configuring, setConfiguring] = useState(false);
+  const [rotaStart, setRotaStart] = useState<string | null>(null);
   const [session, setSession] = useState<{ owner_pin_set: boolean; owner: boolean } | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
@@ -89,7 +90,7 @@ export default function App() {
   const refresh = useCallback(async () => {
     try {
       const [nextWorld, nextPlan, nextWeek, nextSession] = await Promise.all([
-        api.world(),
+        api.world(rotaStart ?? undefined),
         api.plan(),
         api.week(),
         api.session(),
@@ -102,7 +103,7 @@ export default function App() {
     } catch (exc) {
       setError(exc as ApiError);
     }
-  }, []);
+  }, [rotaStart]);
 
   useEffect(() => {
     void refresh();
@@ -544,7 +545,13 @@ export default function App() {
           )}
           {plan && view === "map" && <RouteMap plan={plan} day={day} />}
           {world && view === "crew" && (
-            <TodayPanel world={world} plan={plan} onChanged={() => void refresh()} />
+            <TodayPanel
+              world={world}
+              plan={plan}
+              rotaStart={rotaStart}
+              onWeek={setRotaStart}
+              onChanged={() => void refresh()}
+            />
           )}
 
           {plan && plan.unserved.length > 0 && (

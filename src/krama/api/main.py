@@ -166,7 +166,7 @@ def _strip_money(view: PlanView | None, request: Request) -> PlanView | None:
     return view.model_copy(
         update={
             "redacted": True,
-            "cost": view.cost.model_copy(update={key: 0.0 for key in view.cost.model_fields}),
+            "cost": view.cost.model_copy(update={key: 0.0 for key in type(view.cost).model_fields}),
         }
     )
 
@@ -432,10 +432,11 @@ def ready() -> JSONResponse:
 
 
 @app.get("/api/world", response_model=WorldView)
-def get_world() -> WorldView:
+def get_world(rota_start: str | None = Query(default=None)) -> WorldView:
     svc = service()
+    start = date.fromisoformat(rota_start) if rota_start else None
     try:
-        return views.world_view(svc.world(), svc.business, svc.tz)
+        return views.world_view(svc.world(), svc.business, svc.tz, rota_start=start)
     except ServiceError as exc:
         raise _fail(exc, 409, "run `krama init` to create a workspace") from exc
 
@@ -1123,15 +1124,17 @@ def run_intake(request: TextRequest) -> IntakeView:
             unavailable = [
                 UnavailableDayView(
                     day=f"{u.on_date:%a %d %b}",
-                    reason=_bottleneck_or(
-                        u.detail,
-                        world,
-                        svc.head(),
-                        result.draft,
-                        u.on_date,
-                        earliest or 8,
-                        overtime,
-                        svc.tz,
+                    reason=_with_remedy(
+                        _bottleneck_or(
+                            u.detail,
+                            world,
+                            svc.head(),
+                            result.draft,
+                            u.on_date,
+                            earliest or 8,
+                            overtime,
+                            svc.tz,
+                        )
                     ),
                 )
                 for u in options.unavailable
@@ -1354,6 +1357,14 @@ def book_slot(request: BookRequest) -> dict[str, str]:
         }
 
 
+def _with_remedy(reason: str) -> str:
+    """A refusal that names its own fix. "No van stocks 1x shower_kit" is true and
+    useless alone - the dispatcher's next question is always "so what do I do"."""
+    if "no van stocks" in reason:
+        return reason + " - restock a van in Configure"
+    return reason
+
+
 def _suggest_crew_ask(
     svc: DispatchService,
     world: WorldState,
@@ -1536,12 +1547,24 @@ def configure_van(request: VanConfig) -> dict[str, str]:
             raise HTTPException(
                 409, detail={"error": "NoDepot", "detail": "no van to copy a depot from"}
             )
+        if request.stock is not None:
+            bad = {k: v for k, v in request.stock.items() if v < 0 or v > 99}
+            if bad:
+                raise HTTPException(
+                    422,
+                    detail={"error": "BadStock", "detail": f"counts must be 0..99, got {bad}"},
+                )
         now = datetime.now(svc.tz)
+        base_stock = dict(existing.stock) if existing else dict(template.stock)
         van = Van(
             id=van_id,
             label=request.label.strip() or van_id,
             rack_slots=template.rack_slots,
-            stock=dict(template.stock),
+            stock=(
+                {k: v for k, v in request.stock.items() if v > 0}
+                if request.stock is not None
+                else base_stock
+            ),
             home_depot=template.home_depot,
             cost_per_mile=template.cost_per_mile,
         )

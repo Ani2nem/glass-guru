@@ -60,7 +60,8 @@ const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
 
 export const api = {
-  world: () => request<World>("/api/world"),
+  world: (rotaStart?: string) =>
+    request<World>(`/api/world${rotaStart ? `?rota_start=${rotaStart}` : ""}`),
   week: () => request<Week>("/api/week"),
   plan: () => request<Plan | null>("/api/plan"),
   commit: () => post<Plan>("/api/plan/commit"),
