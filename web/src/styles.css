@@ -1025,7 +1025,8 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   color: var(--accent);
   background: rgb(31 186 214 / 0.12);
 }
-.config__head { position: relative; margin-bottom: 12px; }
+.config__head { position: relative; margin-bottom: 18px; padding-right: 96px; }
+.config__head h2 { margin-bottom: 6px; }
 .config__close { position: absolute; top: 0; right: 0; }
 .config__add { margin-top: 10px; font-size: 13px; }
 .config__vanshead { margin: 18px 0 8px; font-size: 14px; }
@@ -1255,7 +1256,7 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
 
 /* The same-caller warning: amber, specific, and a question rather than a wall. */
 .dupe {
-  margin-top: 12px;
+  margin: 12px 0 18px;
   padding: 10px 12px;
   border: 1px solid var(--warn, #f0a13a);
   border-radius: 10px;
@@ -1326,3 +1327,7 @@ button.link:hover:not(:disabled) { color: #6fd6e8; }
   border-radius: 10px;
 }
 .dupemodal__cancel:hover:not(:disabled) { background: #f3f3f8; color: #16161d; }
+
+.config__unlock { display: inline-flex; gap: 8px; align-items: center; }
+.config__unlock input { width: 140px; margin: 0; }
+.config__unlock em { font-style: normal; font-size: 12px; }
