@@ -186,6 +186,9 @@ export interface Candidate {
 
 export interface Slot {
   crew_ids: string[];
+  from_label: string;
+  leg_minutes: number;
+  leg_miles: number;
   needs_overtime: boolean;
   outside_preference: boolean;
   quote_total: number;

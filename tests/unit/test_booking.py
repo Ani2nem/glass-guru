@@ -242,3 +242,15 @@ def test_a_fitter_held_for_a_day_is_not_offered_that_day(world, travel, params, 
         assert "Dan" not in by_day[monday], "a held fitter must not be booked"
     other_days = [names for day, names in by_day.items() if day != monday]
     assert other_days, "the rest of the week is unaffected by a one-day hold"
+
+
+def test_every_slot_names_where_its_drive_begins(world, travel, params, business):
+    """The drive is part of what is being sold, so the card says where it starts
+    and what it costs - before booking, not only on the detail popup after."""
+    options = quote(world, travel, params, business, draft_at(world, "j-402"))
+    assert options.slots
+    for slot in options.slots:
+        assert slot.from_label, "every drive has a door it leaves from"
+        assert slot.leg_minutes >= 0 and slot.leg_miles >= 0
+    labels = {s.from_label for s in options.slots}
+    assert "the shop" in labels or any(label.endswith("'s") for label in labels)

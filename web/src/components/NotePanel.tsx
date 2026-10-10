@@ -509,6 +509,9 @@ export function NotePanel({
                     arrive about <strong>{slot.arrival}</strong>
                     <span className="muted"> · promise {slot.window}</span>
                   </div>
+                  <div className="slot__leg muted">
+                    drive: {slot.leg_minutes} min · {slot.leg_miles} mi from {slot.from_label}
+                  </div>
                   {!booking.redacted && (
                     <div className="slot__margin">
                       we keep <strong>${slot.margin.toFixed(2)}</strong>
