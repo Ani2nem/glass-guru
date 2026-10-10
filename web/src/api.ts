@@ -108,6 +108,8 @@ export const api = {
     transcript = "",
     quotedTotal = 0,
     bookingNote = "",
+    crewIds: string[] = [],
+    allowDuplicate = false,
   ) =>
     post<{ job_id: string; customer: string; when: string; status: string }>("/api/book", {
       draft,
@@ -116,6 +118,8 @@ export const api = {
       transcript,
       quoted_total: quotedTotal,
       booking_note: bookingNote,
+      crew_ids: crewIds,
+      allow_duplicate: allowDuplicate,
     }),
   crewOptions: (jobId: string) =>
     request<{
