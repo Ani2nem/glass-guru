@@ -349,26 +349,55 @@ export function NotePanel({
           )}
 
           {pendingDuplicate && (
-            <div className="dupe dupe--confirm">
-              <p>{pendingDuplicate.message}</p>
-              <button
-                disabled={busy}
-                onClick={() =>
-                  void take(
-                    pendingDuplicate.date,
-                    pendingDuplicate.arrival,
-                    pendingDuplicate.quotedTotal,
-                    pendingDuplicate.note,
-                    pendingDuplicate.crewIds,
-                    true,
-                  )
-                }
-              >
-                Book anyway - it's a second job
-              </button>
-              <button disabled={busy} onClick={() => setPendingDuplicate(null)}>
-                Never mind
-              </button>
+            /* A modal, not a line of red text: the gate fired on a real decision -
+               second job, or an edit of the one that exists - and a decision
+               deserves the centre of the screen. Backdrop click means never mind. */
+            <div
+              className="dupemodal"
+              onMouseDown={(e) => {
+                if (e.target === e.currentTarget) setPendingDuplicate(null);
+              }}
+            >
+              <div className="dupemodal__card">
+                <h3>Already booked?</h3>
+                <p className="dupemodal__msg">{pendingDuplicate.message}.</p>
+                {booking.possible_duplicates.length > 0 && (
+                  <ul className="dupemodal__list">
+                    {booking.possible_duplicates.map((d) => (
+                      <li key={d.job_id}>
+                        <strong>{d.customer}</strong> \u00B7 {d.when} \u00B7 {d.what}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="dupemodal__hint">
+                  To change the existing booking instead, close this and edit it on
+                  the calendar.
+                </p>
+                <button
+                  className="dupemodal__primary"
+                  disabled={busy}
+                  onClick={() =>
+                    void take(
+                      pendingDuplicate.date,
+                      pendingDuplicate.arrival,
+                      pendingDuplicate.quotedTotal,
+                      pendingDuplicate.note,
+                      pendingDuplicate.crewIds,
+                      true,
+                    )
+                  }
+                >
+                  Book anyway - it's a second job
+                </button>
+                <button
+                  className="dupemodal__cancel"
+                  disabled={busy}
+                  onClick={() => setPendingDuplicate(null)}
+                >
+                  Never mind
+                </button>
+              </div>
             </div>
           )}
 
